@@ -1,0 +1,415 @@
+﻿@page "/forms"
+@layout CMSLayout
+@using System.Text.Json
+@implements IDisposable
+
+<PageTitle>@L["FormSubmissions_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["FormSubmissions_Title"]</h1>
+    <p>@L["FormSubmissions_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="FormSubmissionResponse"
+             Data="_submissions"
+             Loading="_loading"
+             Title="@L["FormSubmissions_Title"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["FormSubmissions_Empty"]"
+             PageSize="20" />
+
+@* ── Submission workspace ────────────────────────────────────────────────────
+   One window, two panes: what the visitor sent on the left, the reply being
+   written on the right. They used to be separate modals, which meant closing the
+   message to answer it and then reopening it to check a detail — the two things an
+   operator needs at the same moment were the two things they could not see
+   together. The reply pane is omitted entirely for users without the permission,
+   so for them this is still just the detail view. *@
+<CmsModal Title="@L["FormSubmissions_DetailTitle"]" IsVisible="_showDetail" OnClose="CloseWorkspace" Size="@(_canReply ? "xl" : "sm")">
+    <Body>
+        @if (_detailTarget is not null)
+        {
+            <div class="fs-workspace @(_canReply ? "" : "fs-workspace-single")">
+
+                @* ── Left: what was submitted ── *@
+                <section class="fs-pane">
+                    <h6 class="fs-pane-title"><i class="bi bi-inbox"></i> @L["FormSubmissions_PaneSubmission"]</h6>
+
+                    <div style="margin-bottom:12px;font-size:13px;color:var(--cms-text-muted)">
+                        <div><strong>@_detailTarget.PageTitle</strong> <code>/@_detailTarget.PageFullSlug</code></div>
+                        <div>@_detailTarget.SubmittedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+                    </div>
+
+                    <table style="width:100%;border-collapse:collapse">
+                        <tbody>
+                            @foreach ((string key, string value) in ParseFields(_detailTarget.FieldsJson))
+                            {
+                                <tr style="border-bottom:1px solid var(--cms-border)">
+                                    <td style="padding:6px 8px;font-weight:600;font-size:13px;white-space:nowrap;vertical-align:top">@key</td>
+                                    <td style="padding:6px 8px;font-size:13px;word-break:break-word">@value</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+
+                    @* The visitor's files. A real link, opened by the browser — see
+                       FormAttachmentEndpoints for why not an interop download. *@
+                    @if (_detailTarget.Attachments.Count > 0)
+                    {
+                        <div class="fs-attachments">
+                            <div class="fs-attachments-title"><i class="bi bi-paperclip"></i> @L["FormSubmissions_Attachments"]</div>
+                            @foreach (FormAttachmentSummary a in _detailTarget.Attachments)
+                            {
+                                <a class="fs-attachment" href="/forms/attachments/@a.Id" target="_blank" rel="noopener" download="@a.FileName">
+                                    <i class="bi bi-download"></i>
+                                    <span class="fs-attachment-name">@a.FileName</span>
+                                    <span class="fs-attachment-meta">@FormatSize(a.Size) · @a.FieldName</span>
+                                </a>
+                            }
+                        </div>
+                    }
+
+                    @if (_detailTarget.RepliedAtUtc is { } repliedAt)
+                    {
+                        <div class="diff-status" style="margin-top:14px;display:block">
+                            <div>
+                                <i class="bi bi-reply"></i>
+                                @string.Format(L["FormSubmissions_RepliedInfo"],
+                                    repliedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm"),
+                                    _detailTarget.RepliedByUserName ?? "—",
+                                    _detailTarget.ReplyToEmail ?? "—")
+                            </div>
+                            <div style="margin-top:8px;font-weight:600">@_detailTarget.ReplySubject</div>
+                            @* Rendered as markup, not escaped text: replies are HTML and
+                               are written here by CMS users who already hold
+                               Forms.ManageActions. Escaping it showed the operator raw
+                               tags instead of the mail the visitor actually received. *@
+                            <div class="fs-sent-body">@((MarkupString)(_detailTarget.ReplyBody ?? ""))</div>
+                        </div>
+                    }
+                </section>
+
+                @* ── Right: the reply being written ── *@
+                @if (_canReply)
+                {
+                    <section class="fs-pane fs-pane-reply">
+                        <h6 class="fs-pane-title"><i class="bi bi-reply"></i> @L["FormSubmissions_PaneReply"]</h6>
+
+                        @if (_templates.Count == 0)
+                        {
+                            <p class="profile-hint">@L["FormSubmissions_NoTemplates"]</p>
+                        }
+                        else
+                        {
+                            <div class="form-group">
+                                <label class="cms-label" for="rp-template">@L["FormSubmissions_ReplyTemplate"]</label>
+                                <select id="rp-template" class="cms-input" @onchange="ApplyTemplate">
+                                    <option value="">@L["FormSubmissions_ReplyTemplateNone"]</option>
+                                    @foreach (FormReplyTemplateResponse t in _templates)
+                                    {
+                                        <option value="@t.Id">@t.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        <div class="form-group">
+                            <label class="cms-label" for="rp-to">@L["FormSubmissions_ReplyTo"]</label>
+                            <input id="rp-to" class="cms-input" @bind="_replyTo" @bind:event="oninput" maxlength="256" />
+                            <p class="profile-hint">@L["FormSubmissions_ReplyToHint"]</p>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="cms-label" for="rp-subject">@L["FormSubmissions_ReplySubject"]</label>
+                            <input id="rp-subject" class="cms-input" @bind="_replySubject" @bind:event="oninput" maxlength="300" />
+                        </div>
+
+                        <div class="form-group">
+                            <label class="cms-label">@L["FormSubmissions_ReplyBody"]</label>
+                            <HtmlEditor @ref="_replyEditor" ElementId="rp-body" @bind-Value="_replyBody" />
+                        </div>
+                    </section>
+                }
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseWorkspace">@L["FormSubmissions_DetailClose"]</button>
+        @if (_canReply)
+        {
+            <button class="btn-cms btn-primary-cms" @onclick="SendReply" disabled="@_sending">
+                @if (_sending)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                @L["FormSubmissions_ReplySend"]
+            </button>
+        }
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<FormSubmissionResponse> _submissions = [];
+    private bool _loading = true;
+    private bool _showDetail;
+    private FormSubmissionResponse? _detailTarget;
+
+    private bool _canReply;
+    private bool _sending;
+    private List<FormReplyTemplateResponse> _templates = [];
+    private string _replyTo = "";
+    private string _replySubject = "";
+    private string? _replyBody = "";
+    private HtmlEditor? _replyEditor;
+
+    private CancellationTokenSource? _loadCts;
+
+    private List<GridColumnDef<FormSubmissionResponse>> _columns = [];
+    private RenderFragment<FormSubmissionResponse>? _actionTemplate;
+
+    protected override void OnInitialized()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.FormsViewSubmissions))
+            Nav.NavigateTo("/", replace: true);
+
+        _canReply = UserContext.HasPermission(PermissionKeys.FormsManageActions);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && UserContext.HasPermission(PermissionKeys.FormsViewSubmissions))
+        {
+            BuildGridColumns();
+            await LoadSubmissions();
+            await LoadTemplates();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<FormSubmissionResponse>
+            {
+                PropertyName  = "PageTitle",
+                Title         = L["FormSubmissions_ColPage"],
+                PropertyType  = typeof(string),
+                ValueAccessor = s => s.PageTitle,
+                CellTemplate  = PageTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<FormSubmissionResponse>
+            {
+                PropertyName  = "FormName",
+                Title         = L["FormSubmissions_ColFormName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = s => (object?)s.FormName ?? L["FormSubmissions_NoFormName"],
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "180px",
+            },
+            new GridColumnDef<FormSubmissionResponse>
+            {
+                PropertyName  = "RepliedAtUtc",
+                Title         = L["FormSubmissions_ColStatus"],
+                PropertyType  = typeof(string),
+                ValueAccessor = s => s.RepliedAtUtc is null ? L["FormSubmissions_StatusNew"] : L["FormSubmissions_StatusReplied"],
+                CellTemplate  = StatusTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "150px",
+            },
+            new GridColumnDef<FormSubmissionResponse>
+            {
+                PropertyName  = "SubmittedAtUtc",
+                Title         = L["FormSubmissions_ColDate"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = s => (object?)s.SubmittedAtUtc,
+                CellTemplate  = DateTemplate,
+                Sortable      = true,
+                Width         = "180px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private static RenderFragment<FormSubmissionResponse> PageTemplate => s => __builder =>
+    {
+        <div>
+            <div style="font-weight:600;font-size:13.5px">@s.PageTitle</div>
+            <code style="font-size:11.5px;background:var(--cms-bg);padding:2px 6px;border-radius:4px;color:var(--cms-accent)">/@s.PageFullSlug</code>
+        </div>
+    };
+
+    private static RenderFragment<FormSubmissionResponse> DateTemplate => s => __builder =>
+    {
+        <span style="font-size:13px;color:var(--cms-text-muted)">@s.SubmittedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+    };
+
+    private RenderFragment<FormSubmissionResponse> StatusTemplate => s => __builder =>
+    {
+        <span class="badge-cms @(s.RepliedAtUtc is null ? "badge-warning" : "badge-success")">
+            @(s.RepliedAtUtc is null ? L["FormSubmissions_StatusNew"] : L["FormSubmissions_StatusReplied"])
+        </span>
+    };
+
+    @* One button, because there is now one window. "Görüntüle / Yanıtla" used to be
+       two, which asked the operator to decide up front whether they were reading or
+       answering — a decision they can only really make after reading. *@
+    private RenderFragment<FormSubmissionResponse> ActionButtons => s => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms @(_canReply ? "btn-primary-cms" : "btn-ghost") btn-sm-cms" @onclick="() => OpenWorkspace(s)">
+                <i class="bi @(_canReply ? "bi-reply" : "bi-eye")"></i>
+                @(_canReply ? L["FormSubmissions_OpenBtn"] : L["FormSubmissions_DetailBtn"])
+            </button>
+        </div>
+    };
+
+    /// <summary>
+    /// Opens the workspace and primes the reply pane from the submission itself —
+    /// the recipient is guessed from whichever field looks like an e-mail address, so
+    /// the common case needs no typing at all.
+    /// </summary>
+    private void OpenWorkspace(FormSubmissionResponse s)
+    {
+        _detailTarget = s;
+
+        if (_canReply)
+        {
+            Dictionary<string, string> fields = ReplyPlaceholders.ParseFields(s.FieldsJson);
+            _replyTo = ReplyPlaceholders.GuessReplyToAddress(fields) ?? "";
+            _replySubject = "";
+            _replyBody = "";
+        }
+
+        _showDetail = true;
+    }
+
+    private void CloseWorkspace()
+    {
+        _showDetail = false;
+        _detailTarget = null;
+    }
+
+    private async Task LoadTemplates()
+    {
+        if (!_canReply) return;
+
+        try
+        {
+            (await Sender.Send(new GetFormReplyTemplatesQuery(ActiveOnly: true)))
+                .Match(list => _templates = list, _ => { /* the reply box still works without templates */ });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    private void ApplyTemplate(ChangeEventArgs e)
+    {
+        if (_detailTarget is null) return;
+
+        if (!int.TryParse(e.Value?.ToString(), out int id))
+            return;
+
+        FormReplyTemplateResponse? template = _templates.FirstOrDefault(t => t.Id == id);
+        if (template is null) return;
+
+        // The template is a starting point — filled in with this submission's own
+        // values, then left editable so the operator can adjust before sending.
+        Dictionary<string, string> fields = ReplyPlaceholders.ParseFields(_detailTarget.FieldsJson);
+        _replySubject = ReplyPlaceholders.Fill(template.Subject, fields);
+        _replyBody = ReplyPlaceholders.Fill(template.Body, fields);
+    }
+
+    private async Task SendReply()
+    {
+        if (_detailTarget is null) return;
+        _sending = true;
+        try
+        {
+            // Straight from the editor rather than the bound field: CKEditor's change
+            // event can lag the final keystroke, and a reply that arrives missing its
+            // last sentence is the kind of bug nobody reports and everybody notices.
+            string body = (_replyEditor is not null
+                ? await _replyEditor.GetCurrentHtmlAsync()
+                : _replyBody) ?? "";
+
+            bool ok = false;
+            (await Sender.Send(new ReplyToFormSubmissionCommand(_detailTarget.Id, _replyTo, _replySubject, body)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["FormSubmissions_ReplySent"]);
+                CloseWorkspace();
+                await LoadSubmissions(forceReload: true);
+            }
+        }
+        finally { _sending = false; }
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#} KB" : $"{bytes / (1024.0 * 1024.0):0.#} MB";
+
+    private static IEnumerable<(string, string)> ParseFields(string fieldsJson)
+    {
+        Dictionary<string, string>? fields;
+        try
+        {
+            fields = JsonSerializer.Deserialize<Dictionary<string, string>>(fieldsJson);
+        }
+        catch (JsonException)
+        {
+            fields = null;
+        }
+
+        return fields is null ? [] : fields.Select(kv => (kv.Key, kv.Value));
+    }
+
+    private async Task LoadSubmissions(bool forceReload = false)
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        if (!forceReload && _submissions.Count > 0)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            Result<PagedResult<FormSubmissionResponse>> result = await Sender.Send(new GetFormSubmissionsQuery(1, 200), ct);
+            result.Match(
+                success => { _submissions = [.. success.Items]; },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            // request was cancelled - nothing to do
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(L["FormSubmissions_ErrorLoad"]); }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+    }
+}

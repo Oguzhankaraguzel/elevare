@@ -1,0 +1,646 @@
+﻿@page "/admin/redirects"
+@layout CMSLayout
+@inject IJSRuntime JS
+@using Application.Features.Commands.Redirects.CreateRedirect
+@using Application.Features.Commands.Redirects.DeleteRedirect
+@using Application.Features.Commands.Redirects.UpdateRedirect
+@using Application.Features.Queries.Redirects.GetRedirects
+@using Domain.Entities.Redirects
+
+<PageTitle>@L["Redirects_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Redirects_PageTitle"]</h1>
+    <p>@L["Redirects_PageSubtitle"]</p>
+</div>
+
+@* ── Health summary ─────────────────────────────────────────────────────────
+   Counts first, list second. The reason this screen exists is that nobody goes
+   looking for a broken redirect — it has to announce itself. Each tile is a
+   filter, so noticing a problem and looking at it are the same click. *@
+<div class="rd-summary">
+    <button type="button" class="rd-tile @(_healthFilter == RedirectHealth.None ? "is-on" : "")"
+            @onclick="() => ApplyHealthFilter(RedirectHealth.None)">
+        <span class="rd-tile-n">@_all.Count</span>
+        <span class="rd-tile-l">@L["Redirects_Tile_All"]</span>
+    </button>
+    <button type="button" class="rd-tile rd-danger @(_healthFilter == RedirectHealth.BrokenTarget ? "is-on" : "")"
+            @onclick="() => ApplyHealthFilter(RedirectHealth.BrokenTarget)">
+        <span class="rd-tile-n">@Count(RedirectHealth.BrokenTarget)</span>
+        <span class="rd-tile-l">@L["Redirects_Tile_Broken"]</span>
+    </button>
+    <button type="button" class="rd-tile rd-danger @(_healthFilter == RedirectHealth.Loop ? "is-on" : "")"
+            @onclick="() => ApplyHealthFilter(RedirectHealth.Loop)">
+        <span class="rd-tile-n">@Count(RedirectHealth.Loop)</span>
+        <span class="rd-tile-l">@L["Redirects_Tile_Loop"]</span>
+    </button>
+    <button type="button" class="rd-tile rd-warn @(_healthFilter == RedirectHealth.Chained ? "is-on" : "")"
+            @onclick="() => ApplyHealthFilter(RedirectHealth.Chained)">
+        <span class="rd-tile-n">@Count(RedirectHealth.Chained)</span>
+        <span class="rd-tile-l">@L["Redirects_Tile_Chained"]</span>
+    </button>
+    <button type="button" class="rd-tile @(_healthFilter == RedirectHealth.Gone ? "is-on" : "")"
+            @onclick="() => ApplyHealthFilter(RedirectHealth.Gone)">
+        <span class="rd-tile-n">@Count(RedirectHealth.Gone)</span>
+        <span class="rd-tile-l">@L["Redirects_Tile_Gone"]</span>
+    </button>
+</div>
+
+<ElevareGrid TItem="RedirectListItemResponse"
+             Data="_items"
+             Columns="_columns"
+             Loading="_loading"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             EmptyText="@L["Redirects_Empty"]"
+             PageSize="20"
+             Title="@L["Redirects_GridTitle"]">
+    <ToolbarEnd>
+        <select class="cms-input rd-reason-filter" @bind="_reasonFilter" @bind:after="ReloadAsync">
+            <option value="">@L["Redirects_Reason_Any"]</option>
+            <option value="@nameof(RedirectReason.Manual)">@L["Redirects_Reason_Manual"]</option>
+            <option value="@nameof(RedirectReason.SlugChanged)">@L["Redirects_Reason_SlugChanged"]</option>
+            <option value="@nameof(RedirectReason.PageDeleted)">@L["Redirects_Reason_PageDeleted"]</option>
+            <option value="@nameof(RedirectReason.PageArchived)">@L["Redirects_Reason_PageArchived"]</option>
+        </select>
+        @if (CanManage)
+        {
+            <button class="btn-cms btn-ghost" @onclick="OpenImport">
+                <i class="bi bi-file-earmark-arrow-up"></i> @L["Redirects_Import"]
+            </button>
+            <button class="btn-cms btn-primary-cms" @onclick="OpenCreate">
+                <i class="bi bi-plus-lg"></i> @L["Redirects_New"]
+            </button>
+        }
+    </ToolbarEnd>
+</ElevareGrid>
+
+<CmsModal Title="@(_editId.HasValue ? L["Redirects_EditTitle"] : L["Redirects_NewTitle"])"
+          IsVisible="_showForm" OnClose="CloseForm" Size="md">
+    <Body>
+            <div class="form-group">
+                <label class="cms-label" for="rd-old">@L["Redirects_OldPath"]</label>
+                <input id="rd-old" class="cms-input" @bind="_formOldPath" placeholder="@L["Redirects_OldPathPlaceholder"]" />
+                <small class="cms-hint">@L["Redirects_OldPath_Hint"]</small>
+            </div>
+            <div class="form-group">
+                <label class="cms-label" for="rd-new">@L["Redirects_NewPath"]</label>
+                <input id="rd-new" class="cms-input" @bind="_formNewPath" placeholder="@L["Redirects_NewPathPlaceholder"]" />
+                <small class="cms-hint">@L["Redirects_NewPath_Hint"]</small>
+            </div>
+            @if (_editId.HasValue && _editBoundToPage)
+            {
+                @* Saying this before the click, not after: the rule currently follows a
+                   page automatically, and hand-editing it gives that up permanently. *@
+                <div class="rd-notice">
+                    <i class="bi bi-info-circle"></i> @L["Redirects_UnbindWarning"]
+                </div>
+            }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseForm">@L["Common_Cancel"]</button>
+        <button class="btn-cms btn-primary-cms" disabled="@_saving" @onclick="SaveAsync">@L["Common_Save"]</button>
+    </Footer>
+</CmsModal>
+
+<CmsModal Title="@L["Redirects_DeleteTitle"]" IsVisible="@(_deleteTarget is not null)"
+          OnClose="() => _deleteTarget = null" Size="sm">
+    <Body>
+        @if (_deleteTarget is { } target)
+        {
+            <p>@string.Format(L["Redirects_DeleteConfirm"], target.OldPath)</p>
+            <p class="cms-hint">@L["Redirects_DeleteHint"]</p>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _deleteTarget = null">@L["Common_Cancel"]</button>
+        <button class="btn-cms btn-danger-cms" disabled="@_saving" @onclick="ConfirmDeleteAsync">@L["Common_Delete"]</button>
+    </Footer>
+</CmsModal>
+
+<CmsModal Title="@L["Redirects_ImportTitle"]" IsVisible="_showImport" OnClose="CloseImport" Size="md">
+    <Body>
+        <div class="cms-card" style="padding:12px 14px;margin-bottom:14px;border:1px solid var(--cms-info);background:color-mix(in srgb, var(--cms-info) 8%, transparent)">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+                <i class="bi bi-info-circle-fill" style="color:var(--cms-info);font-size:15px;margin-top:2px;flex-shrink:0"></i>
+                <div style="flex:1;min-width:0">
+                    <p style="margin:0;font-size:12.5px;color:var(--cms-text)">@L["Redirects_ImportIntro"]</p>
+                    <a href="/admin/knowledge-base#redirects-import" target="_blank" style="font-size:12.5px">@L["Redirects_ImportMoreInfo"]</a>
+                </div>
+            </div>
+        </div>
+
+        <button type="button" class="btn-cms btn-ghost" style="margin-bottom:14px" @onclick="DownloadImportTemplate">
+            <i class="bi bi-download"></i> @L["Redirects_ImportDownloadTemplate"]
+        </button>
+
+        <div style="position:relative;border:2px dashed var(--cms-border);border-radius:var(--radius);padding:22px;text-align:center;margin-bottom:14px;cursor:pointer">
+            @if (_importFile is null)
+            {
+                <span style="font-size:13px;color:var(--cms-text-muted)"><i class="bi bi-file-earmark-spreadsheet"></i> @L["Redirects_ImportPickFile"]</span>
+            }
+            else
+            {
+                <span style="font-size:13px;font-weight:600"><i class="bi bi-file-earmark-spreadsheet"></i> @_importFile.Name</span>
+            }
+            <InputFile OnChange="HandleImportFileSelected" accept=".csv"
+                       style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" />
+        </div>
+
+        @if (_importResult is not null)
+        {
+            <div class="cms-card" style="padding:10px 12px;border:1px solid @(_importResult.Failed.Count > 0 ? "var(--cms-warning)" : "var(--cms-success)")">
+                <p style="margin:0;font-size:12.5px">@string.Format(L["Redirects_ImportSummary"], _importResult.Created, _importResult.Failed.Count)</p>
+                @if (_importResult.Failed.Count > 0)
+                {
+                    <ul style="margin:8px 0 0;padding-left:18px;font-size:11.5px;color:var(--cms-text-muted);max-height:150px;overflow-y:auto">
+                        @foreach (ImportRowError row in _importResult.Failed)
+                        {
+                            <li>@row.OldPath — @row.Error</li>
+                        }
+                    </ul>
+                }
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseImport">@L["Common_Cancel"]</button>
+        <button class="btn-cms btn-primary-cms" disabled="@(_importFile is null || _importing)" @onclick="RunImportAsync">
+            @if (_importing) { <span class="spin" style="display:inline-block;margin-right:6px">↻</span> }
+            @L["Redirects_ImportBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+<style>
+    .rd-summary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        margin-bottom: 18px;
+    }
+
+    .rd-tile {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 12px 14px;
+        border: 1px solid var(--cms-border);
+        border-radius: 10px;
+        /* Was var(--cms-surface) — a token that was never defined anywhere in the
+           theme, so this button had a transparent background and its number fell
+           back to the browser's own default button text color instead of the
+           theme's. That default happens to be dark, which read as barely-there on
+           the old near-black dark theme and outright invisible on the new, darker
+           navy one. */
+        background: var(--cms-card);
+        color: var(--cms-text);
+        cursor: pointer;
+        text-align: left;
+        transition: border-color .15s ease, background .15s ease;
+    }
+
+    .rd-tile:hover { border-color: var(--cms-accent); }
+    .rd-tile.is-on { border-color: var(--cms-accent); background: color-mix(in srgb, var(--cms-accent) 10%, transparent); }
+    .rd-tile-n { font-size: 22px; font-weight: 600; line-height: 1.1; color: var(--cms-text); }
+    .rd-tile-l { font-size: 12px; color: var(--cms-text-muted); }
+    .rd-danger .rd-tile-n { color: var(--cms-danger); }
+    .rd-warn .rd-tile-n { color: var(--cms-warning); }
+
+    .rd-reason-filter { max-width: 200px; }
+
+    .rd-path {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12.5px;
+        word-break: break-all;
+    }
+
+    .rd-arrow { color: var(--cms-text-dim); margin: 0 6px; }
+
+    .rd-notice {
+        display: flex;
+        gap: 8px;
+        align-items: flex-start;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 13px;
+        background: color-mix(in srgb, var(--cms-warning) 12%, transparent);
+        color: var(--cms-warning);
+    }
+</style>
+
+@code {
+    private List<RedirectListItemResponse> _all = [];
+    private List<RedirectListItemResponse> _items = [];
+    private List<GridColumnDef<RedirectListItemResponse>> _columns = [];
+    private bool _loading = true;
+    private bool _saving;
+
+    private RedirectHealth _healthFilter = RedirectHealth.None;
+    private string _reasonFilter = "";
+
+    private bool _showForm;
+    private int? _editId;
+    private bool _editBoundToPage;
+    private string _formOldPath = "";
+    private string _formNewPath = "";
+
+    private RedirectListItemResponse? _deleteTarget;
+    private RenderFragment<RedirectListItemResponse>? _actionTemplate;
+
+    private bool CanManage => UserContext.HasPermission(PermissionKeys.RedirectsManage);
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildColumns();
+        _actionTemplate = RowActions;
+        await ReloadAsync();
+    }
+
+    private int Count(RedirectHealth flag) => _all.Count(i => (i.Health & flag) == flag);
+
+    private async Task ApplyHealthFilter(RedirectHealth flag)
+    {
+        // Clicking the active tile clears it — otherwise the only way back to the
+        // full list is the "All" tile, which reads as a separate action rather than
+        // as switching the same filter off.
+        _healthFilter = _healthFilter == flag ? RedirectHealth.None : flag;
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        try
+        {
+            RedirectReason? reason = Enum.TryParse(_reasonFilter, out RedirectReason parsed) ? parsed : null;
+
+            // Two queries: the unfiltered one keeps the summary counts honest while a
+            // filter is on, so the tiles never disagree with each other.
+            (await Sender.Send(new GetRedirectsQuery())).Match(
+                all => _all = all,
+                error => Toast.Error(L.Error(error)));
+
+            (await Sender.Send(new GetRedirectsQuery(Reason: reason, RequiredHealth: _healthFilter))).Match(
+                items => _items = items,
+                error => Toast.Error(L.Error(error)));
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void BuildColumns() => _columns =
+    [
+        new GridColumnDef<RedirectListItemResponse>
+        {
+            PropertyName = "OldPath",
+            Title = L["Redirects_ColRule"],
+            PropertyType = typeof(string),
+            ValueAccessor = r => r.OldPath,
+            CellTemplate = RuleTemplate,
+            Sortable = true,
+            Filterable = true,
+        },
+        new GridColumnDef<RedirectListItemResponse>
+        {
+            PropertyName = "Health",
+            Title = L["Redirects_ColHealth"],
+            PropertyType = typeof(string),
+            ValueAccessor = r => r.Health.ToString(),
+            CellTemplate = HealthTemplate,
+            Width = "220px",
+        },
+        new GridColumnDef<RedirectListItemResponse>
+        {
+            PropertyName = "Reason",
+            Title = L["Redirects_ColReason"],
+            PropertyType = typeof(string),
+            ValueAccessor = r => ReasonLabel(r.Reason),
+            CellTemplate = ReasonTemplate,
+            Sortable = true,
+            Width = "150px",
+        },
+        new GridColumnDef<RedirectListItemResponse>
+        {
+            PropertyName = "UpdateDate",
+            Title = L["Redirects_ColUpdated"],
+            PropertyType = typeof(DateTime),
+            ValueAccessor = r => (object?)(r.UpdateDate ?? r.CreateDate),
+            CellTemplate = UpdatedTemplate,
+            Sortable = true,
+            Width = "150px",
+        },
+    ];
+
+    private RenderFragment<RedirectListItemResponse> RuleTemplate => item => __builder =>
+    {
+        <div>
+            <div class="rd-path">
+                <span>/@item.OldPath</span>
+                <i class="bi bi-arrow-right rd-arrow"></i>
+                @if (item.ResolvedTarget is { } target)
+                {
+                    <span>@target</span>
+                }
+                else
+                {
+                    <span style="color:var(--cms-text-dim)">@L["Redirects_GoneTarget"]</span>
+                }
+            </div>
+            @if (item.SourcePageId is int pageId)
+            {
+                @* Shown because it changes what editing this rule means: it follows
+                   the page, so the target above is live rather than stored. *@
+                <a class="cms-hint" href="/pages/edit/@pageId" style="display:inline-flex;gap:5px;align-items:center;margin-top:3px">
+                    <i class="bi bi-link-45deg"></i>
+                    @(item.SourcePageTitle ?? L["Redirects_BoundPage"])
+                </a>
+            }
+        </div>
+    };
+
+    private RenderFragment<RedirectListItemResponse> HealthTemplate => item => __builder =>
+    {
+        <div style="display:flex;gap:5px;flex-wrap:wrap">
+            @if (item.Health == RedirectHealth.None)
+            {
+                <span class="badge-cms badge-success"><i class="bi bi-check-lg"></i> @L["Redirects_Health_Ok"]</span>
+            }
+            @if (item.Health.HasFlag(RedirectHealth.Loop))
+            {
+                <span class="badge-cms badge-danger" title="@L["Redirects_Health_Loop_Hint"]">
+                    <i class="bi bi-arrow-repeat"></i> @L["Redirects_Health_Loop"]
+                </span>
+            }
+            @if (item.Health.HasFlag(RedirectHealth.BrokenTarget))
+            {
+                <span class="badge-cms badge-danger" title="@L["Redirects_Health_Broken_Hint"]">
+                    <i class="bi bi-exclamation-triangle"></i> @L["Redirects_Health_Broken"]
+                </span>
+            }
+            @if (item.Health.HasFlag(RedirectHealth.Chained))
+            {
+                <span class="badge-cms badge-warning" title="@L["Redirects_Health_Chained_Hint"]">
+                    <i class="bi bi-diagram-3"></i> @string.Format(L["Redirects_Health_Chained"], item.ChainLength)
+                </span>
+            }
+            @if (item.Health.HasFlag(RedirectHealth.Gone))
+            {
+                <span class="badge-cms badge-neutral" title="@L["Redirects_Health_Gone_Hint"]">410</span>
+            }
+            @if (item.Health.HasFlag(RedirectHealth.External))
+            {
+                <span class="badge-cms badge-neutral" title="@L["Redirects_Health_External_Hint"]">
+                    <i class="bi bi-box-arrow-up-right"></i> @L["Redirects_Health_External"]
+                </span>
+            }
+        </div>
+    };
+
+    private RenderFragment<RedirectListItemResponse> ReasonTemplate => item => __builder =>
+    {
+        <span class="badge-cms badge-neutral">@ReasonLabel(item.Reason)</span>
+    };
+
+    private static RenderFragment<RedirectListItemResponse> UpdatedTemplate => item => __builder =>
+    {
+        <span style="font-size:13px;color:var(--cms-text-muted)">
+            @((item.UpdateDate ?? item.CreateDate).ToLocalTime().ToString("dd.MM.yyyy HH:mm"))
+        </span>
+    };
+
+    private RenderFragment<RedirectListItemResponse> RowActions => item => __builder =>
+    {
+        @if (CanManage)
+        {
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]" @onclick="() => OpenEdit(item)">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Delete"]" @onclick="() => _deleteTarget = item">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            </div>
+        }
+    };
+
+    private string ReasonLabel(RedirectReason reason) => reason switch
+    {
+        RedirectReason.SlugChanged => L["Redirects_Reason_SlugChanged"],
+        RedirectReason.PageDeleted => L["Redirects_Reason_PageDeleted"],
+        RedirectReason.PageArchived => L["Redirects_Reason_PageArchived"],
+        _ => L["Redirects_Reason_Manual"],
+    };
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        _editBoundToPage = false;
+        _formOldPath = "";
+        _formNewPath = "";
+        _showForm = true;
+    }
+
+    private void OpenEdit(RedirectListItemResponse item)
+    {
+        _editId = item.Id;
+        _editBoundToPage = item.SourcePageId is not null;
+        _formOldPath = item.OldPath;
+        _formNewPath = item.NewPath ?? "";
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editId = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_formOldPath))
+        {
+            Toast.Error(L["Redirects_Validation_OldPath"]);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            string? newPath = string.IsNullOrWhiteSpace(_formNewPath) ? null : _formNewPath;
+            bool ok = false;
+
+            if (_editId is int id)
+            {
+                (await Sender.Send(new UpdateRedirectCommand(id, _formOldPath, newPath)))
+                    .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+            }
+            else
+            {
+                (await Sender.Send(new CreateRedirectCommand(_formOldPath, newPath)))
+                    .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
+            }
+
+            if (ok)
+            {
+                Toast.Success(L["Redirects_Toast_Saved"]);
+                CloseForm();
+                await ReloadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_deleteTarget is null) return;
+
+        _saving = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeleteRedirectCommand(_deleteTarget.Id)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Redirects_Toast_Deleted"]);
+                _deleteTarget = null;
+                await ReloadAsync();
+            }
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ── Import from spreadsheet ──────────────────────────────────────────────
+    // CSV rather than a real .xlsx: it needs no new library, and it is exactly what
+    // the grid's own "export as CSV" already produces — an operator round-tripping
+    // through Excel (Save As → CSV) gets the same format on both sides.
+    private bool _showImport;
+    private IBrowserFile? _importFile;
+    private bool _importing;
+    private ImportSummary? _importResult;
+
+    private sealed record ImportRowError(string OldPath, string Error);
+    private sealed record ImportSummary(int Created, List<ImportRowError> Failed);
+
+    private void OpenImport()
+    {
+        _showImport = true;
+        _importFile = null;
+        _importResult = null;
+    }
+
+    private void CloseImport()
+    {
+        _showImport = false;
+        _importFile = null;
+        _importResult = null;
+    }
+
+    private void HandleImportFileSelected(InputFileChangeEventArgs e)
+    {
+        _importFile = e.File;
+        _importResult = null;
+    }
+
+    private async Task DownloadImportTemplate()
+    {
+        string csv = $"{L["Redirects_ImportColOld"]};{L["Redirects_ImportColNew"]}\r\n/eski-sayfa;/yeni-sayfa\r\n/kaldirilan-urun;\r\n";
+        byte[] bom = [0xEF, 0xBB, 0xBF];
+        byte[] content = [.. bom, .. System.Text.Encoding.UTF8.GetBytes(csv)];
+        await JS.InvokeVoidAsync("cmsJs.downloadFile", "yonlendirme-sablonu.csv", "text/csv;charset=utf-8", content);
+    }
+
+    private async Task RunImportAsync()
+    {
+        if (_importFile is null) return;
+
+        _importing = true;
+        try
+        {
+            const long maxFileSize = 5 * 1024 * 1024;
+            string content;
+#pragma warning disable S5693 // Content length verified with constant
+            using (StreamReader reader = new(_importFile.OpenReadStream(maxFileSize)))
+#pragma warning restore S5693
+            {
+                content = await reader.ReadToEndAsync();
+            }
+
+            string[] lines = content.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length < 2)
+            {
+                Toast.Error(L["Redirects_ImportNoRows"]);
+                return;
+            }
+
+            int created = 0;
+            List<ImportRowError> failed = [];
+
+            // Row 0 is the header and is not data — skip it.
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string[] cols = ParseImportLine(lines[i]);
+                string oldPath = cols.Length > 0 ? cols[0].Trim() : "";
+                if (oldPath.Length == 0) continue;
+
+                string? newPath = cols.Length > 1 && !string.IsNullOrWhiteSpace(cols[1]) ? cols[1].Trim() : null;
+
+                bool ok = false;
+                (await Sender.Send(new CreateRedirectCommand(oldPath, newPath)))
+                    .Match(_ => ok = true, error => failed.Add(new ImportRowError(oldPath, L.Error(error))));
+
+                if (ok) created++;
+            }
+
+            _importResult = new ImportSummary(created, failed);
+            if (created > 0) await ReloadAsync();
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Common_LoadError"]);
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    // Same quote-aware, semicolon-delimited parsing ElevareGrid's own CSV export and
+    // import use, kept local since this screen's import is its own small dialog
+    // rather than the grid's generic one (see RunImportAsync).
+    private static string[] ParseImportLine(string line)
+    {
+        List<string> result = [];
+        bool inQuotes = false;
+        System.Text.StringBuilder current = new();
+
+        foreach (char c in line)
+        {
+            if (inQuotes)
+            {
+                if (c == '"') inQuotes = false;
+                else current.Append(c);
+            }
+            else
+            {
+                if (c == '"') inQuotes = true;
+                else if (c == ';') { result.Add(current.ToString()); current.Clear(); }
+                else current.Append(c);
+            }
+        }
+        result.Add(current.ToString());
+        return [.. result];
+    }
+}

@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+		<PackageReference Include="Hangfire.Core" />
+		<PackageReference Include="SpectraUtils" />
+		<PackageReference Include="AWSSDK.S3" />
+		<PackageReference Include="SkiaSharp" />
+		<PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+		<PackageReference Include="Npgsql" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Cms.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
+	  <ProjectReference Include="..\..\Core\Application\Application.csproj" />
+	</ItemGroup>
+</Project>

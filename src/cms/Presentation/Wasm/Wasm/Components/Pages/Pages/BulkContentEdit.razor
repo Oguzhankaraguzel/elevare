@@ -1,0 +1,349 @@
+﻿@page "/pages/bulk-edit"
+@layout CMSLayout
+
+<PageTitle>@L["BulkEdit_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>@L["BulkEdit_Title"]</h1>
+        <p>@L["BulkEdit_Subtitle"]</p>
+    </div>
+</div>
+
+<div class="bce-tabs">
+    <button class="btn-cms btn-sm-cms @(_tab == BceTab.Search ? "btn-primary-cms" : "btn-ghost")" @onclick="() => _tab = BceTab.Search">
+        <i class="bi bi-search"></i> @L["BulkEdit_TabSearch"]
+    </button>
+    <button class="btn-cms btn-sm-cms @(_tab == BceTab.History ? "btn-primary-cms" : "btn-ghost")" @onclick="SwitchToHistory">
+        <i class="bi bi-clock-history"></i> @L["BulkEdit_TabHistory"]
+    </button>
+</div>
+
+@if (_tab == BceTab.Search)
+{
+    <div class="cms-card" style="padding:20px;margin-bottom:20px">
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["BulkEdit_SearchLabel"]</label>
+                <input @bind="_searchText" @bind:event="oninput" class="cms-input" placeholder="@L["BulkEdit_SearchPlaceholder"]" />
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end">
+                <button class="btn-cms btn-primary-cms" @onclick="Search" disabled="@(_searching || _searchText.IsNullOrWhiteSpace())">
+                    @if (_searching) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-search"></i> }
+                    @L["BulkEdit_SearchBtn"]
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @if (_searched)
+    {
+        <div class="cms-card" style="overflow:hidden;margin-bottom:20px">
+            <div style="padding:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
+                <span style="font-size:13px;font-weight:600;color:var(--cms-text-muted)">
+                    <i class="bi bi-file-earmark-text"></i> @L["BulkEdit_ResultsTitle"]
+                </span>
+                @if (_matches.Count > 0)
+                {
+                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:400">
+                        <input type="checkbox" checked="@_allSelected" @onchange="ToggleSelectAll" />
+                        @L["BulkEdit_SelectAll"]
+                    </label>
+                }
+            </div>
+
+            @if (_matches.Count == 0)
+            {
+                <div style="padding:32px;text-align:center;color:var(--cms-text-muted)">@L["BulkEdit_NoResults"]</div>
+            }
+            else
+            {
+                <table style="width:100%;border-collapse:collapse">
+                    <thead>
+                        <tr style="text-align:left;border-bottom:1px solid var(--cms-border);color:var(--cms-text-muted);font-size:13px">
+                            <th style="padding:8px 16px;width:36px"></th>
+                            <th style="padding:8px 16px">@L["BulkEdit_ColPage"]</th>
+                            <th style="padding:8px 16px;width:140px">@L["BulkEdit_ColLanguage"]</th>
+                            <th style="padding:8px 16px;width:100px;text-align:right">@L["BulkEdit_ColMatches"]</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (PageContentMatchResponse m in _matches)
+                        {
+                            <tr style="border-bottom:1px solid var(--cms-border)">
+                                <td style="padding:8px 16px">
+                                    <input type="checkbox" checked="@_selected.Contains(m.PageInfoId)" @onchange="e => ToggleSelected(m.PageInfoId, e.Value)" />
+                                </td>
+                                <td style="padding:8px 16px">
+                                    <div style="font-weight:600;font-size:13.5px">@m.Title</div>
+                                    <code style="font-size:11.5px;background:var(--cms-bg);padding:2px 6px;border-radius:4px;color:var(--cms-accent)">/@m.FullSlug</code>
+                                </td>
+                                <td style="padding:8px 16px;font-size:13px;color:var(--cms-text-muted)">@m.LanguageName</td>
+                                <td style="padding:8px 16px;text-align:right;font-weight:600">@m.MatchCount</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+
+                <div style="padding:16px;border-top:1px solid var(--cms-border);display:flex;gap:14px;align-items:flex-end;flex-wrap:wrap">
+                    <div class="form-group" style="flex:1;min-width:220px;margin-bottom:0">
+                        <label class="cms-label">@L["BulkEdit_ReplaceLabel"]</label>
+                        <input @bind="_replaceText" @bind:event="oninput" class="cms-input" placeholder="@L["BulkEdit_ReplacePlaceholder"]" />
+                    </div>
+                    <button class="btn-cms btn-primary-cms" @onclick="OpenConfirm" disabled="@(_selected.Count == 0)">
+                        <i class="bi bi-arrow-repeat"></i> @L["BulkEdit_UpdateBtn"]
+                    </button>
+                </div>
+            }
+        </div>
+    }
+}
+else
+{
+    <div class="cms-card" style="overflow:hidden">
+        @if (_historyLoading)
+        {
+            <div style="padding:32px;text-align:center;color:var(--cms-text-muted)"><i class="bi bi-arrow-clockwise spin"></i></div>
+        }
+        else if (_history.Count == 0)
+        {
+            <div style="padding:32px;text-align:center;color:var(--cms-text-muted)">@L["BulkEdit_HistoryEmpty"]</div>
+        }
+        else
+        {
+            <table style="width:100%;border-collapse:collapse">
+                <thead>
+                    <tr style="text-align:left;border-bottom:1px solid var(--cms-border);color:var(--cms-text-muted);font-size:13px">
+                        <th style="padding:10px 16px">@L["BulkEdit_HistoryColChange"]</th>
+                        <th style="padding:10px 16px;width:100px">@L["BulkEdit_HistoryColPages"]</th>
+                        <th style="padding:10px 16px;width:160px">@L["BulkEdit_HistoryColDate"]</th>
+                        <th style="padding:10px 16px;width:120px">@L["BulkEdit_HistoryColStatus"]</th>
+                        <th style="padding:10px 16px;width:120px"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (ContentBulkEditHistoryItemResponse h in _history)
+                    {
+                        <tr style="border-bottom:1px solid var(--cms-border);vertical-align:top">
+                            <td style="padding:10px 16px">
+                                <div style="font-size:13px">
+                                    @if (h.Kind == ContentBulkEditKind.StructuredDataRefresh)
+                                    {
+                                        @* A refresh has no search term — showing an empty
+                                           find/replace pair would read as a broken row. *@
+                                        <span><i class="bi bi-arrow-repeat"></i> @L["BulkEdit_KindStructuredDataRefresh"]</span>
+                                    }
+                                    else
+                                    {
+                                        <code style="background:var(--cms-bg);padding:2px 6px;border-radius:4px">@Truncate(h.SearchText)</code>
+                                        <i class="bi bi-arrow-right" style="margin:0 4px;color:var(--cms-text-muted)"></i>
+                                        <code style="background:var(--cms-bg);padding:2px 6px;border-radius:4px">@Truncate(h.ReplaceText)</code>
+                                    }
+                                </div>
+                                <details style="margin-top:6px">
+                                    <summary style="font-size:12px;color:var(--cms-text-muted);cursor:pointer">@L["BulkEdit_AffectedPagesTitle"] (@h.AffectedPages.Count)</summary>
+                                    <ul style="margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--cms-text-muted)">
+                                        @foreach (ContentBulkEditAffectedPageResponse p in h.AffectedPages)
+                                        {
+                                            <li>@p.PageTitleSnapshot <code>/@p.PageFullSlugSnapshot</code> — @p.MatchCount</li>
+                                        }
+                                    </ul>
+                                </details>
+                            </td>
+                            <td style="padding:10px 16px;font-weight:600">@h.AffectedPageCount</td>
+                            <td style="padding:10px 16px;font-size:13px;color:var(--cms-text-muted)">@h.CreateDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                            <td style="padding:10px 16px">
+                                @if (h.IsReverted)
+                                {
+                                    <span class="badge-cms badge-neutral">@L["BulkEdit_StatusReverted"]</span>
+                                }
+                                else
+                                {
+                                    <span class="badge-cms badge-success">@L["BulkEdit_StatusActive"]</span>
+                                }
+                            </td>
+                            <td style="padding:10px 16px">
+                                @if (!h.IsReverted)
+                                {
+                                    <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => OpenRevertConfirm(h)" disabled="@_reverting">
+                                        <i class="bi bi-arrow-counterclockwise"></i> @L["BulkEdit_RevertBtn"]
+                                    </button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@* ── Confirm bulk update ─────────────────────────────────────────── *@
+<CmsModal Title="@L["BulkEdit_ConfirmTitle"]" IsVisible="_showConfirm" OnClose="() => _showConfirm = false" Size="sm">
+    <Body>
+        <p>@string.Format(L["BulkEdit_ConfirmBody"], _selected.Count, _searchText, _replaceText)</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showConfirm = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ApplyUpdate" disabled="@_applying">
+            @if (_applying) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-check2"></i> }
+            @L["BulkEdit_UpdateBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Confirm revert ──────────────────────────────────────────────── *@
+<CmsModal Title="@L["BulkEdit_RevertConfirmTitle"]" IsVisible="_showRevertConfirm" OnClose="() => _showRevertConfirm = false" Size="sm">
+    <Body>
+        @if (_revertTarget is not null)
+        {
+            <p>@string.Format(L["BulkEdit_RevertConfirmBody"], _revertTarget.AffectedPageCount)</p>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showRevertConfirm = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmRevert" disabled="@_reverting">
+            @if (_reverting) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-arrow-counterclockwise"></i> }
+            @L["BulkEdit_RevertBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+<style>
+    .bce-tabs {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 20px;
+    }
+</style>
+
+@code {
+    protected override void OnInitialized()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.BulkEditApply))
+            Nav.NavigateTo("/", replace: true);
+    }
+
+    private enum BceTab { Search, History }
+
+    private BceTab _tab = BceTab.Search;
+
+    private string _searchText = "";
+    private string _replaceText = "";
+    private bool _searching;
+    private bool _searched;
+    private List<PageContentMatchResponse> _matches = [];
+    private HashSet<int> _selected = [];
+    private bool _allSelected;
+    private bool _showConfirm;
+    private bool _applying;
+
+    private bool _historyLoading;
+    private List<ContentBulkEditHistoryItemResponse> _history = [];
+    private ContentBulkEditHistoryItemResponse? _revertTarget;
+    private bool _showRevertConfirm;
+    private bool _reverting;
+
+    private async Task Search()
+    {
+        if (_searchText.IsNullOrWhiteSpace()) return;
+        _searching = true;
+        try
+        {
+            (await Sender.Send(new SearchPagesByContentQuery(_searchText.Trim()))).Match(
+                results =>
+                {
+                    _matches = results;
+                    _selected = [.. results.Select(r => r.PageInfoId)];
+                    _allSelected = true;
+                },
+                error => Toast.Error(L.Error(error)));
+            _searched = true;
+        }
+        finally { _searching = false; }
+    }
+
+    private void ToggleSelectAll(ChangeEventArgs e)
+    {
+        bool check = e.Value is bool b && b;
+        _allSelected = check;
+        _selected = check ? [.. _matches.Select(m => m.PageInfoId)] : [];
+    }
+
+    private void ToggleSelected(int pageId, object? value)
+    {
+        bool check = value is bool b && b;
+        if (check) _selected.Add(pageId);
+        else _selected.Remove(pageId);
+        _allSelected = _selected.Count == _matches.Count;
+    }
+
+    private void OpenConfirm() => _showConfirm = true;
+
+    private async Task ApplyUpdate()
+    {
+        _applying = true;
+        try
+        {
+            (await Sender.Send(new ApplyContentBulkEditCommand(_searchText.Trim(), _replaceText, [.. _selected]))).Match(
+                result =>
+                {
+                    Toast.Success(string.Format(L["BulkEdit_UpdateSuccess"], result.AffectedPageCount));
+                    _showConfirm = false;
+                    _searched = false;
+                    _matches = [];
+                    _selected = [];
+                    _searchText = "";
+                    _replaceText = "";
+                },
+                error => Toast.Error(L.Error(error)));
+        }
+        finally { _applying = false; }
+    }
+
+    private async Task SwitchToHistory()
+    {
+        _tab = BceTab.History;
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        _historyLoading = true;
+        try
+        {
+            (await Sender.Send(new GetContentBulkEditHistoryQuery())).Match(
+                items => _history = items,
+                error => Toast.Error(L.Error(error)));
+        }
+        finally { _historyLoading = false; }
+    }
+
+    private void OpenRevertConfirm(ContentBulkEditHistoryItemResponse item)
+    {
+        _revertTarget = item;
+        _showRevertConfirm = true;
+    }
+
+    private async Task ConfirmRevert()
+    {
+        if (_revertTarget is null) return;
+        _reverting = true;
+        try
+        {
+            (await Sender.Send(new RevertContentBulkEditCommand(_revertTarget.Id))).Match(
+                () => Toast.Success(L["BulkEdit_RevertSuccess"]),
+                error => Toast.Error(L.Error(error)));
+            _showRevertConfirm = false;
+            _revertTarget = null;
+            await LoadHistory();
+        }
+        finally { _reverting = false; }
+    }
+
+    private static string Truncate(string? value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        return value.Length > 60 ? value[..60] + "…" : value;
+    }
+}

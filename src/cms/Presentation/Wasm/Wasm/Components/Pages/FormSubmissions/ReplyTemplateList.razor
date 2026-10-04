@@ -1,0 +1,281 @@
+﻿@page "/forms/reply-templates"
+@layout CMSLayout
+
+<PageTitle>@L["ReplyTemplates_Title"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["ReplyTemplates_Title"]</h1>
+    <p>@L["ReplyTemplates_Subtitle"]</p>
+</div>
+
+@if (_canManage)
+{
+    <div style="margin-bottom:12px">
+        <button class="btn-cms btn-primary-cms" @onclick="() => OpenEditor(null)">
+            <i class="bi bi-plus-lg"></i> @L["ReplyTemplates_NewBtn"]
+        </button>
+    </div>
+}
+
+<ElevareGrid TItem="FormReplyTemplateResponse"
+             Data="_templates"
+             Loading="_loading"
+             Title="@L["ReplyTemplates_Title"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="false"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["ReplyTemplates_Empty"]"
+             PageSize="20" />
+
+<CmsModal Title="@L["ReplyTemplates_EditTitle"]" IsVisible="_showEditor" OnClose="() => _showEditor = false" Size="lg">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label" for="rt-name">@L["ReplyTemplates_Name"]</label>
+            <input id="rt-name" class="cms-input" @bind="_name" @bind:event="oninput" maxlength="200" />
+            <p class="profile-hint">@L["ReplyTemplates_NameHint"]</p>
+        </div>
+
+        <div class="form-group">
+            <label class="cms-label" for="rt-subject">@L["ReplyTemplates_Subject"]</label>
+            <input id="rt-subject" class="cms-input" @bind="_subject" @bind:event="oninput" maxlength="300" />
+        </div>
+
+        @* Same editor as the reply composer — a template that could only hold plain
+           text would produce plain-text replies no matter what the composer allows. *@
+        <div class="form-group">
+            <label class="cms-label">@L["ReplyTemplates_Body"]</label>
+            <HtmlEditor @ref="_bodyEditor" ElementId="rt-body" @bind-Value="_body" />
+            <p class="profile-hint">@L["ReplyTemplates_BodyHint"]</p>
+        </div>
+
+        <div class="profile-row">
+            <div class="form-group">
+                <label class="cms-label" for="rt-order">@L["ReplyTemplates_ColOrder"]</label>
+                <input id="rt-order" type="number" class="cms-input" @bind="_sortOrder" />
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end">
+                <label class="diff-toggle">
+                    <input type="checkbox" @bind="_isActive" />
+                    @L["ReplyTemplates_Active"]
+                </label>
+            </div>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showEditor = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="SaveTemplate" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            @L["Settings_SaveBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete confirmation ──────────────────────────────────────────────────── *@
+<CmsModal Title="@L["ReplyTemplates_EditTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["ReplyTemplates_DeleteConfirm"], _deleteTarget?.Name ?? "")</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_deleting">
+            @if (_deleting)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            <i class="bi bi-trash"></i>
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<FormReplyTemplateResponse> _templates = [];
+    private bool _showDelete;
+    private bool _deleting;
+    private FormReplyTemplateResponse? _deleteTarget;
+    private bool _loading = true;
+    private bool _canManage;
+
+    private bool _showEditor;
+    private bool _saving;
+    private int? _editingId;
+    private string _name = "";
+    private string _subject = "";
+    private string? _body = "";
+    private HtmlEditor? _bodyEditor;
+    private int _sortOrder;
+    private bool _isActive = true;
+
+    private List<GridColumnDef<FormReplyTemplateResponse>> _columns = [];
+    private RenderFragment<FormReplyTemplateResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.FormsViewSubmissions))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        _canManage = UserContext.HasPermission(PermissionKeys.FormsManageActions);
+        BuildGridColumns();
+        await LoadTemplates();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<FormReplyTemplateResponse>
+            {
+                PropertyName  = "Name",
+                Title         = L["ReplyTemplates_ColName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => t.Name,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<FormReplyTemplateResponse>
+            {
+                PropertyName  = "Subject",
+                Title         = L["ReplyTemplates_ColSubject"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => t.Subject,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<FormReplyTemplateResponse>
+            {
+                PropertyName  = "SortOrder",
+                Title         = L["ReplyTemplates_ColOrder"],
+                PropertyType  = typeof(int),
+                ValueAccessor = t => (object?)t.SortOrder,
+                Sortable      = true,
+                Width         = "90px",
+            },
+            new GridColumnDef<FormReplyTemplateResponse>
+            {
+                PropertyName  = "IsActive",
+                Title         = L["ReplyTemplates_ColActive"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => t.IsActive ? L["Status_Active"] : L["Status_Inactive"],
+                CellTemplate  = ActiveTemplate,
+                Sortable      = true,
+                Width         = "120px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private RenderFragment<FormReplyTemplateResponse> ActiveTemplate => t => __builder =>
+    {
+        <span class="badge-cms @(t.IsActive ? "badge-success" : "badge-neutral")">
+            @(t.IsActive ? L["Status_Active"] : L["Status_Inactive"])
+        </span>
+    };
+
+    private RenderFragment<FormReplyTemplateResponse> ActionButtons => t => __builder =>
+    {
+        @if (_canManage)
+        {
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+                <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => OpenEditor(t)">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-cms btn-danger-cms btn-sm-cms" @onclick="() => DeleteTemplate(t)">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+        }
+    };
+
+    private void OpenEditor(FormReplyTemplateResponse? template)
+    {
+        _editingId = template?.Id;
+        _name = template?.Name ?? "";
+        _subject = template?.Subject ?? "";
+        _body = template?.Body ?? "";
+        // A new template goes to the end of the list rather than fighting for the
+        // top slot with whatever is already there.
+        _sortOrder = template?.SortOrder ?? (_templates.Count == 0 ? 1 : _templates.Max(t => t.SortOrder) + 1);
+        _isActive = template?.IsActive ?? true;
+        _showEditor = true;
+    }
+
+    private async Task LoadTemplates()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetFormReplyTemplatesQuery())).Match(
+                list => _templates = list,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["ReplyTemplates_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveTemplate()
+    {
+        _saving = true;
+        try
+        {
+            // Read the editor directly — its change event can lag the last keystroke.
+            string body = (_bodyEditor is not null
+                ? await _bodyEditor.GetCurrentHtmlAsync()
+                : _body) ?? "";
+
+            bool ok = false;
+            (await Sender.Send(new SaveFormReplyTemplateCommand(_editingId, _name, _subject, body, _isActive, _sortOrder)))
+                .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["ReplyTemplates_Saved"]);
+                _showEditor = false;
+                await LoadTemplates();
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private void DeleteTemplate(FormReplyTemplateResponse template)
+    {
+        _deleteTarget = template;
+        _showDelete = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeleteFormReplyTemplateCommand(_deleteTarget.Id)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["ReplyTemplates_Deleted"]);
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadTemplates();
+            }
+        }
+        finally { _deleting = false; }
+    }
+}

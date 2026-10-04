@@ -1,0 +1,215 @@
+﻿@page "/admin/backups"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Backups"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Backups"]</h1>
+    <p>@L["Backups_Subtitle"]</p>
+</div>
+
+@* ── Off-site warning ──────────────────────────────────────────────────────────
+   Stated plainly and permanently, not as a one-time hint: these files sit on the
+   same machine as the database, so they survive a bad deployment or a dropped
+   table but NOT the disk itself. Anyone reading this page should know that. *@
+<div class="cms-card" style="padding:14px 18px;max-width:1000px;margin-bottom:16px;border-left:3px solid var(--cms-warning)">
+    <div style="font-weight:600;margin-bottom:4px">
+        <i class="bi bi-info-circle" style="color:var(--cms-warning)"></i> @L["Backups_OffsiteTitle"]
+    </div>
+    <div style="font-size:13px;color:var(--cms-text-muted)">@L["Backups_OffsiteExplanation"]</div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="cms-card" style="padding:16px;max-width:1000px;margin-bottom:16px;border:1px solid var(--cms-danger);background:color-mix(in srgb, var(--cms-danger) 8%, transparent)">
+        <div style="font-weight:600;color:var(--cms-danger);margin-bottom:6px">
+            <i class="bi bi-exclamation-triangle-fill"></i> @L["Backups_ErrorTitle"]
+        </div>
+        @* The raw SQL Server message: "Access is denied", a full disk and a missing
+           permission are only distinguishable from this text. *@
+        <pre style="margin:0;padding:10px;background:var(--cms-bg);border-radius:6px;font-size:12px;white-space:pre-wrap;word-break:break-word">@_error</pre>
+    </div>
+}
+
+<ElevareGrid TItem="DatabaseBackupInfo"
+             Data="_backups"
+             Loading="_loading"
+             Title="@L["Nav_Backups"]"
+             Columns="_columns"
+             ShowGroupPanel="false"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Backups_Empty"]"
+             PageSize="20">
+    <ToolbarEnd>
+        <button class="btn-cms btn-ghost btn-sm-cms" @onclick="LoadBackups" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise @(_loading ? "spin" : "")"></i> @L["Backups_RefreshBtn"]
+        </button>
+        @if (_canCreate)
+        {
+            <button class="btn-cms btn-primary-cms btn-sm-cms" @onclick="StartBackup" disabled="@_queueing">
+                @if (_queueing)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                else
+                {
+                    <i class="bi bi-download"></i>
+                }
+                @L["Backups_CreateBtn"]
+            </button>
+        }
+    </ToolbarEnd>
+</ElevareGrid>
+
+@code {
+    private List<DatabaseBackupInfo> _backups = [];
+    private List<GridColumnDef<DatabaseBackupInfo>> _columns = [];
+    private bool _loading = true;
+    private bool _queueing;
+    private bool _canCreate;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Viewing the list is gated on Backup.Create as well: the file names reveal
+        // the database name and the server's folder layout, which is not something
+        // every signed-in editor needs to see.
+        if (!UserContext.HasPermission(PermissionKeys.BackupCreate))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        _canCreate = true;
+        BuildGridColumns();
+        await LoadBackups();
+    }
+
+    private void BuildGridColumns() =>
+        _columns =
+        [
+            new GridColumnDef<DatabaseBackupInfo>
+            {
+                PropertyName  = "FileName",
+                Title         = L["Backups_ColFile"],
+                PropertyType  = typeof(string),
+                ValueAccessor = b => b.FileName,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<DatabaseBackupInfo>
+            {
+                PropertyName  = "CreatedAtUtc",
+                Title         = L["Backups_ColCreatedAt"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = b => (object?)b.CreatedAtUtc,
+                CellTemplate  = CreatedAtTemplate,
+                Sortable      = true,
+                Width         = "180px",
+            },
+            new GridColumnDef<DatabaseBackupInfo>
+            {
+                PropertyName  = "SizeBytes",
+                Title         = L["Backups_ColSize"],
+                PropertyType  = typeof(long),
+                ValueAccessor = b => (object?)b.SizeBytes,
+                CellTemplate  = SizeTemplate,
+                Sortable      = true,
+                Width         = "130px",
+            },
+            new GridColumnDef<DatabaseBackupInfo>
+            {
+                PropertyName  = "DurationSeconds",
+                Title         = L["Backups_ColDuration"],
+                PropertyType  = typeof(int),
+                ValueAccessor = b => (object?)b.DurationSeconds,
+                CellTemplate  = DurationTemplate,
+                Sortable      = true,
+                Width         = "130px",
+            },
+            new GridColumnDef<DatabaseBackupInfo>
+            {
+                PropertyName  = "FilePath",
+                Title         = L["Backups_ColPath"],
+                PropertyType  = typeof(string),
+                ValueAccessor = b => b.FilePath,
+                CellTemplate  = PathTemplate,
+                Sortable      = false,
+                Filterable    = false,
+            },
+        ];
+
+    private static RenderFragment<DatabaseBackupInfo> CreatedAtTemplate => b => __builder =>
+    {
+        <span>@b.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+    };
+
+    private static RenderFragment<DatabaseBackupInfo> SizeTemplate => b => __builder =>
+    {
+        <span>@FormatSize(b.SizeBytes)</span>
+    };
+
+    private RenderFragment<DatabaseBackupInfo> DurationTemplate => b => __builder =>
+    {
+        @if (b.DurationSeconds is { } seconds)
+        {
+            <span>@seconds @L["Backups_SecondsSuffix"]</span>
+        }
+        else
+        {
+            <span style="color:var(--cms-text-muted)">—</span>
+        }
+    };
+
+    private static RenderFragment<DatabaseBackupInfo> PathTemplate => b => __builder =>
+    {
+        <span style="color:var(--cms-text-muted);font-size:12px;word-break:break-all">@b.FilePath</span>
+    };
+
+    private static string FormatSize(long bytes)
+    {
+        const double Kilobyte = 1024;
+        double megabytes = bytes / Kilobyte / Kilobyte;
+
+        return megabytes >= Kilobyte
+            ? $"{megabytes / Kilobyte:0.##} GB"
+            : $"{megabytes:0.##} MB";
+    }
+
+    private async Task LoadBackups()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetDatabaseBackupsQuery())).Match(
+                backups => { _backups = backups; _error = null; },
+                error => { _backups = []; _error = L.Error(error); });
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _backups = [];
+            _error = $"{ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task StartBackup()
+    {
+        _queueing = true;
+        try
+        {
+            (await Sender.Send(new CreateDatabaseBackupCommand())).Match(
+                _ => Toast.Info(L["Backups_QueuedMessage"]),
+                error => { string message = L.Error(error); _error = message; Toast.Error(message); });
+        }
+        finally
+        {
+            _queueing = false;
+        }
+    }
+}

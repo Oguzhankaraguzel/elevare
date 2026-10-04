@@ -1,0 +1,10 @@
+# This subdomain is the admin panel. Nothing on it is meant for search results.
+#
+# Uploaded media used to be the one exception, because pages embedded images by
+# their CMS address and blocking those would have hidden them from image search.
+# Media is now embedded site-relative and served by the public site from the same
+# files (see MediaPickerAsset), so the copies reachable here are duplicates of
+# URLs that are already crawlable where they belong — and the exception would now
+# do nothing but split the same image across two hostnames.
+User-agent: *
+Disallow: /

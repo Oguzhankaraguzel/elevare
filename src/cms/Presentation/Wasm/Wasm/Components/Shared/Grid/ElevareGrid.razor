@@ -1,0 +1,618 @@
+@typeparam TItem
+
+<div class="eg-grid @DensityClass">
+    @* ── Toolbar ── *@
+    @if (ShowToolbar)
+    {
+        <div class="eg-toolbar">
+            <div class="eg-toolbar-start">
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <h3 class="eg-title">@Title</h3>
+                }
+                @ToolbarStart
+                @if (ShowGlobalSearch)
+                {
+                    <div class="eg-search">
+                        <i class="bi bi-search"></i>
+                        <input type="text" placeholder="@L["Grid_SearchPlaceholder"]" value="@_globalSearch" @oninput="OnGlobalSearchInput" />
+                        @if (!string.IsNullOrWhiteSpace(_globalSearch))
+                        {
+                            <button class="eg-search-clear" @onclick="ClearSearch"><i class="bi bi-x-lg"></i></button>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="eg-toolbar-end">
+                @if (HasActiveFilters)
+                {
+                    <button class="eg-tbtn eg-tbtn-badge" @onclick="ClearAllFilters" title="@L["Grid_ClearFilters"]">
+                        <i class="bi bi-funnel-fill"></i>
+                        <span class="eg-badge">@ActiveFilterCount</span>
+                    </button>
+                }
+
+                <button class="eg-tbtn @(_showFilterRow ? "eg-tbtn-active" : "")" @onclick="() => _showFilterRow = !_showFilterRow" title="@L["Grid_ColumnFilters"]">
+                    <i class="bi bi-funnel"></i>
+                </button>
+
+                @if (ShowDensityToggle)
+                {
+                    <button class="eg-tbtn" @onclick="CycleDensity" title="@L["Grid_RowDensity"]">
+                        <i class="bi @DensityIcon"></i>
+                    </button>
+                }
+
+                @if (ShowColumnToggle)
+                {
+                    <div class="eg-dropdown-wrap">
+                        <button class="eg-tbtn @(_showColumnMenu ? "eg-tbtn-active" : "")" @onclick="() => _showColumnMenu = !_showColumnMenu" title="@L["Grid_ColumnVisibility"]">
+                            <i class="bi bi-layout-three-columns"></i>
+                        </button>
+                        @if (_showColumnMenu)
+                        {
+                            <div class="eg-backdrop" @onclick="() => _showColumnMenu = false"></div>
+                            <div class="eg-dropdown-panel" @onclick:stopPropagation="true">
+                                <div class="eg-dropdown-title">@L["Grid_Columns"]</div>
+                                @foreach (var col in _columns)
+                                {
+                                    <label class="eg-dropdown-item">
+                                        <input type="checkbox" checked="@col.Visible" @onchange="() => ToggleColumnVisibility(col)" />
+                                        <span>@col.Title</span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+
+                @if (ShowExport)
+                {
+                    <button class="eg-tbtn" @onclick="ExportToCsv" title="@L["Grid_ExportCsv"]">
+                        <i class="bi bi-file-earmark-arrow-down"></i>
+                    </button>
+                }
+
+                @if (ShowImport)
+                {
+                    <label class="eg-tbtn" title="@L["Grid_ImportCsv"]" style="cursor:pointer">
+                        <i class="bi bi-file-earmark-arrow-up"></i>
+                        <InputFile OnChange="OnImportFile" style="display:none" accept=".csv,.txt" />
+                    </label>
+                }
+
+                @if (AllowInlineEdit && HasPendingChanges)
+                {
+                    <span class="eg-pending-badge">
+                        <i class="bi bi-pencil-square"></i>
+                        @string.Format(L["Grid_PendingChanges"], PendingChangeCount)
+                    </span>
+                    <button class="eg-tbtn eg-tbtn-save" @onclick="SaveAllChanges" title="@L["Grid_SaveChanges"]">
+                        <i class="bi bi-check-lg"></i>
+                    </button>
+                    <button class="eg-tbtn eg-tbtn-discard" @onclick="DiscardAllChanges" title="@L["Grid_DiscardChanges"]">
+                        <i class="bi bi-arrow-counterclockwise"></i>
+                    </button>
+                }
+
+                @ToolbarEnd
+            </div>
+        </div>
+    }
+
+    @* ── Group Panel ── *@
+    @if (ShowGroupPanel && _groupByColumns.Count > 0)
+    {
+        <div class="eg-group-panel">
+            <i class="bi bi-collection" style="opacity:.5"></i>
+            @foreach (string gp in _groupByColumns)
+            {
+                var col = _columns.Find(c => c.PropertyName == gp);
+                <span class="eg-group-chip">
+                    @(col?.Title ?? gp)
+                    <button @onclick="() => RemoveGroupColumn(gp)"><i class="bi bi-x"></i></button>
+                </span>
+            }
+            <button class="eg-group-clear" @onclick="ClearGroups">@L["Grid_ClearGroups"]</button>
+        </div>
+    }
+
+    @* ── Table ── *@
+    <div class="eg-table-wrap" style="@(Height is not null ? $"max-height:{Height};overflow-y:auto" : "")">
+        @if (Loading)
+        {
+            <div class="eg-loading">
+                <i class="bi bi-arrow-clockwise spin"></i>
+                <span>@LoadingText</span>
+            </div>
+        }
+        else
+        {
+            <table class="@TableClasses">
+                <thead>
+                    @* ── Header Row ── *@
+                    <tr>
+                        @if (SelectionMode != SelectionMode.None)
+                        {
+                            <th class="eg-th-check">
+                                @if (SelectionMode == SelectionMode.Multiple)
+                                {
+                                    <input type="checkbox" checked="@IsAllSelected" @onchange="ToggleSelectAll" />
+                                }
+                            </th>
+                        }
+                        @if (RowDetail is not null)
+                        {
+                            <th class="eg-th-expand"></th>
+                        }
+                        @if (ShowRowNumbers)
+                        {
+                            <th class="eg-th-num">#</th>
+                        }
+                        @foreach (var col in _columns.Where(c => c.Visible))
+                        {
+                            <th class="@AlignCls(col.Align)" style="@((col.Width is not null ? $"width:{col.Width};" : "") + GetStickyStyle(col))">
+                                <div class="eg-th-inner">
+                                    @if (col.Sortable)
+                                    {
+                                        <button class="eg-sort-btn @(GetSortDir(col.PropertyName) != SortDirection.None ? "active" : "")"
+                                                @onclick="@(e => OnColumnSort(col.PropertyName, e.ShiftKey))">
+                                            <span>@col.Title</span>
+                                            <i class="bi @SortIcon(GetSortDir(col.PropertyName))"></i>
+                                            @if (_sorts.Count > 1 && GetSortIdx(col.PropertyName) >= 0)
+                                            {
+                                                <span class="eg-sort-idx">@(GetSortIdx(col.PropertyName) + 1)</span>
+                                            }
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span>@col.Title</span>
+                                    }
+                                    @if (col.Groupable && ShowGroupPanel)
+                                    {
+                                        <button class="eg-grp-btn @(_groupByColumns.Contains(col.PropertyName) ? "active" : "")"
+                                                @onclick="() => ToggleGroupColumn(col.PropertyName)"
+                                                title="@L["Grid_GroupBy"]: @col.Title">
+                                            <i class="bi bi-collection"></i>
+                                        </button>
+                                    }
+                                </div>
+                            </th>
+                        }
+                        @if (ActionTemplate is not null || AllowInlineEdit)
+                        {
+                            <th class="eg-th-actions"></th>
+                        }
+                    </tr>
+
+                    @* ── Filter Row ── *@
+                    @if (_showFilterRow)
+                    {
+                        <tr class="eg-filter-row">
+                            @if (SelectionMode != SelectionMode.None) { <th></th> }
+                            @if (RowDetail is not null) { <th></th> }
+                            @if (ShowRowNumbers) { <th></th> }
+                            @foreach (var col in _columns.Where(c => c.Visible))
+                            {
+                            <th style="@GetStickyStyle(col)">
+                                    @if (col.Filterable)
+                                    {
+                                        @if (IsBoolType(col.PropertyType))
+                                        {
+                                            <select class="eg-finput" @onchange="e => OnColumnFilterChanged(col.PropertyName, e)">
+                                                <option value="">—</option>
+                                                <option value="True" selected="@(GetFilterValue(col.PropertyName) == "True")">@L["Grid_FilterYes"]</option>
+                                                <option value="False" selected="@(GetFilterValue(col.PropertyName) == "False")">@L["Grid_FilterNo"]</option>
+                                            </select>
+                                        }
+                                        else if (IsEnumType(col.PropertyType))
+                                        {
+                                            <select class="eg-finput" @onchange="e => OnColumnFilterChanged(col.PropertyName, e)">
+                                                <option value="">—</option>
+                                                @foreach (string name in Enum.GetNames(BaseType(col.PropertyType)))
+                                                {
+                                                    <option value="@name" selected="@(GetFilterValue(col.PropertyName) == name)">@name</option>
+                                                }
+                                            </select>
+                                        }
+                                        else if (IsDateType(col.PropertyType))
+                                        {
+                                            <input type="date" class="eg-finput"
+                                                   value="@GetFilterValue(col.PropertyName)"
+                                                   @onchange="e => OnColumnFilterChanged(col.PropertyName, e)" />
+                                        }
+                                        else if (IsNumericType(BaseType(col.PropertyType)))
+                                        {
+                                            <input type="number" class="eg-finput" placeholder="..."
+                                                   value="@GetFilterValue(col.PropertyName)"
+                                                   @onchange="e => OnColumnFilterChanged(col.PropertyName, e)" />
+                                        }
+                                        else
+                                        {
+                                            <input type="text" class="eg-finput" placeholder="..."
+                                                   value="@GetFilterValue(col.PropertyName)"
+                                                   @onchange="e => OnColumnFilterChanged(col.PropertyName, e)" />
+                                        }
+                                    }
+                                </th>
+                            }
+                            @if (ActionTemplate is not null || AllowInlineEdit)
+                            {
+                                <th class="eg-th-actions"></th>
+                            }
+                        </tr>
+                    }
+                </thead>
+
+                <tbody>
+                    @* ── Grouped Rows ── *@
+                    @if (_flatRows.Count > 0)
+                    {
+                        int dataIdx = 0;
+                        @foreach (var row in _flatRows)
+                        {
+                            if (row.IsGroupHeader)
+                            {
+                                <tr class="eg-group-row" @onclick="() => ToggleGroupCollapse(row.GroupId)">
+                                    <td colspan="@VisibleColumnCount">
+                                        <div class="eg-group-cell" style="padding-left:@(row.Level * 24 + 8)px">
+                                            <i class="bi @(_collapsedGroups.Contains(row.GroupId) ? "bi-chevron-right" : "bi-chevron-down") eg-group-icon"></i>
+                                            <span class="eg-group-label">@row.GroupTitle:</span>
+                                            <strong>@row.GroupKey</strong>
+                                            <span class="eg-group-count">(@row.GroupCount)</span>
+                                            @{
+                                                var numCols = _columns.Where(c => c.Visible && IsNumericType(BaseType(c.PropertyType))).ToList();
+                                            }
+                                            @if (row.NumericAggregates.Length > 0)
+                                            {
+                                                <span class="eg-group-agg">
+                                                    @for (int ai = 0; ai < numCols.Count && ai < row.NumericAggregates.Length; ai++)
+                                                    {
+                                                        if (ai > 0) { <span>|</span> }
+                                                        <span>Σ @numCols[ai].Title: @row.NumericAggregates[ai].ToString("N0")</span>
+                                                    }
+                                                </span>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else if (row.Item is not null)
+                            {
+                                var item = row.Item;
+                                int ridx = dataIdx++;
+                                <tr class="eg-data-row @(IsSelected(item) ? "eg-selected" : "") @(AllowInlineEdit && IsEditing(item) ? "eg-editing" : "") @(AllowInlineEdit && IsRowModified(item) && !IsEditing(item) ? "eg-modified" : "") @(RowCssClass?.Invoke(item) ?? "")"
+                                    @onclick="() => OnRowClick.InvokeAsync(item)"
+                                    @ondblclick="() => OnRowDoubleClick.InvokeAsync(item)">
+                                    @if (SelectionMode != SelectionMode.None)
+                                    {
+                                        <td class="eg-td-check" @onclick:stopPropagation="true">
+                                            <input type="checkbox" checked="@IsSelected(item)" @onchange="() => ToggleSelect(item)" />
+                                        </td>
+                                    }
+                                    @if (RowDetail is not null)
+                                    {
+                                        <td class="eg-td-expand" @onclick:stopPropagation="true">
+                                            <button class="eg-expand-btn" @onclick="() => ToggleRowDetail(ridx)">
+                                                <i class="bi @(_expandedDetailRows.Contains(ridx) ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                            </button>
+                                        </td>
+                                    }
+                                    @if (ShowRowNumbers)
+                                    {
+                                        <td class="eg-td-num">@(ridx + 1)</td>
+                                    }
+                                    @foreach (var col in _columns.Where(c => c.Visible))
+                                    {
+                                <td class="@AlignCls(col.Align)" style="@GetStickyStyle(col)">
+                                            @if (AllowInlineEdit && IsEditing(item) && col.Editable)
+                                            {
+                                                @if (col.EditTemplate is not null)
+                                                {
+                                                    @col.EditTemplate(new CellEditContext<TItem>
+                                                    {
+                                                        Item = item,
+                                                        PropertyName = col.PropertyName,
+                                                        Value = GetEditValue(item, col.PropertyName),
+                                                        ValueChanged = val => SetEditValue(item, col.PropertyName, val)
+                                                    })
+                                                }
+                                                else if (IsBoolType(col.PropertyType))
+                                                {
+                                                    <label class="eg-edit-toggle">
+                                                        <input type="checkbox" checked="@(GetEditValue(item, col.PropertyName) is true)"
+                                                               @onchange="e => SetEditValue(item, col.PropertyName, e.Value)" />
+                                                    </label>
+                                                }
+                                                else if (IsEnumType(col.PropertyType))
+                                                {
+                                                    var ev = GetEditValue(item, col.PropertyName);
+                                                    <select class="eg-edit-input" @onchange="e => SetEditValue(item, col.PropertyName, e.Value?.ToString())">
+                                                        @foreach (string name in Enum.GetNames(BaseType(col.PropertyType)))
+                                                        {
+                                                            <option value="@name" selected="@(ev?.ToString() == name)">@name</option>
+                                                        }
+                                                    </select>
+                                                }
+                                                else if (IsDateType(col.PropertyType))
+                                                {
+                                                    var ev = GetEditValue(item, col.PropertyName);
+                                                    <input type="date" class="eg-edit-input"
+                                                           value="@(ev is DateTime dt ? dt.ToString("yyyy-MM-dd") : "")"
+                                                           @onchange="e => SetEditValue(item, col.PropertyName, ParseDateOrDefault(e.Value?.ToString(), ev))" />
+                                                }
+                                                else if (IsNumericType(BaseType(col.PropertyType)))
+                                                {
+                                                    <input type="number" class="eg-edit-input"
+                                                           value="@GetEditValue(item, col.PropertyName)"
+                                                           @onchange="e => SetEditValue(item, col.PropertyName, ConvertValue(e.Value?.ToString() ?? string.Empty, col.PropertyType))" />
+                                                }
+                                                else
+                                                {
+                                                    <input type="text" class="eg-edit-input"
+                                                           value="@(GetEditValue(item, col.PropertyName)?.ToString() ?? string.Empty)"
+                                                           @onchange="e => SetEditValue(item, col.PropertyName, e.Value?.ToString())" />
+                                                }
+                                            }
+                                            else if (col.CellTemplate is not null)
+                                            {
+                                                @col.CellTemplate(item)
+                                            }
+                                            else
+                                            {
+                                                @FormatValue(col, item)
+                                            }
+                                        </td>
+                                    }
+                                    @if (ActionTemplate is not null || AllowInlineEdit)
+                                    {
+                                        <td class="eg-td-actions" @onclick:stopPropagation="true">
+                                            @if (AllowInlineEdit)
+                                            {
+                                                @if (IsEditing(item))
+                                                {
+                                                    <button class="eg-edit-btn eg-edit-done" @onclick="() => FinishRowEdit(item)" title="@L["Grid_DoneEdit"]">
+                                                        <i class="bi bi-check-lg"></i>
+                                                    </button>
+                                                    <button class="eg-edit-btn eg-edit-cancel" @onclick="() => CancelRowEdit(item)" title="@L["Grid_CancelEdit"]">
+                                                        <i class="bi bi-x-lg"></i>
+                                                    </button>
+                                                }
+                                                else
+                                                {
+                                                    <button class="eg-edit-btn" @onclick="() => StartRowEdit(item)" title="@L["Grid_EditRow"]">
+                                                        <i class="bi bi-pencil"></i>
+                                                    </button>
+                                                }
+                                            }
+                                            @if (ActionTemplate is not null)
+                                            {
+                                                @ActionTemplate(item)
+                                            }
+                                        </td>
+                                    }
+                                </tr>
+                                @if (RowDetail is not null && _expandedDetailRows.Contains(ridx))
+                                {
+                                    <tr class="eg-detail-row">
+                                        <td colspan="@VisibleColumnCount">
+                                            @RowDetail(item)
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        }
+                    }
+                    @* ── Normal (ungrouped) Rows ── *@
+                    else if (_pagedData.Count > 0)
+                    {
+                        @for (int i = 0; i < _pagedData.Count; i++)
+                        {
+                            var item = _pagedData[i];
+                            int ridx = FirstRowIndex + i - 1;
+                            <tr @key="item"
+                                class="eg-data-row @(IsSelected(item) ? "eg-selected" : "") @(AllowInlineEdit && IsEditing(item) ? "eg-editing" : "") @(AllowInlineEdit && IsRowModified(item) && !IsEditing(item) ? "eg-modified" : "") @(RowCssClass?.Invoke(item) ?? "")"
+                                @onclick="() => OnRowClick.InvokeAsync(item)"
+                                @ondblclick="() => OnRowDoubleClick.InvokeAsync(item)">
+                                @if (SelectionMode != SelectionMode.None)
+                                {
+                                    <td class="eg-td-check" @onclick:stopPropagation="true">
+                                        <input type="checkbox" checked="@IsSelected(item)" @onchange="() => ToggleSelect(item)" />
+                                    </td>
+                                }
+                                @if (RowDetail is not null)
+                                {
+                                    <td class="eg-td-expand" @onclick:stopPropagation="true">
+                                        <button class="eg-expand-btn" @onclick="() => ToggleRowDetail(ridx)">
+                                            <i class="bi @(_expandedDetailRows.Contains(ridx) ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                        </button>
+                                    </td>
+                                }
+                                @if (ShowRowNumbers)
+                                {
+                                    <td class="eg-td-num">@(ridx + 1)</td>
+                                }
+                                @foreach (var col in _columns.Where(c => c.Visible))
+                                {
+                                    <td class="@AlignCls(col.Align)">
+                                        @if (AllowInlineEdit && IsEditing(item) && col.Editable)
+                                        {
+                                            @if (col.EditTemplate is not null)
+                                            {
+                                                @col.EditTemplate(new CellEditContext<TItem>
+                                                {
+                                                    Item = item,
+                                                    PropertyName = col.PropertyName,
+                                                    Value = GetEditValue(item, col.PropertyName),
+                                                    ValueChanged = val => SetEditValue(item, col.PropertyName, val)
+                                                })
+                                            }
+                                            else if (IsBoolType(col.PropertyType))
+                                            {
+                                                <label class="eg-edit-toggle">
+                                                    <input type="checkbox" checked="@(GetEditValue(item, col.PropertyName) is true)"
+                                                           @onchange="e => SetEditValue(item, col.PropertyName, e.Value)" />
+                                                </label>
+                                            }
+                                            else if (IsEnumType(col.PropertyType))
+                                            {
+                                                var ev = GetEditValue(item, col.PropertyName);
+                                                <select class="eg-edit-input" @onchange="e => SetEditValue(item, col.PropertyName, e.Value?.ToString())">
+                                                    @foreach (string name in Enum.GetNames(BaseType(col.PropertyType)))
+                                                    {
+                                                        <option value="@name" selected="@(ev?.ToString() == name)">@name</option>
+                                                    }
+                                                </select>
+                                            }
+                                            else if (IsDateType(col.PropertyType))
+                                            {
+                                                var ev = GetEditValue(item, col.PropertyName);
+                                                <input type="date" class="eg-edit-input"
+                                                       value="@(ev is DateTime dt ? dt.ToString("yyyy-MM-dd") : "")"
+                                                       @onchange="e => SetEditValue(item, col.PropertyName, ParseDateOrDefault(e.Value?.ToString(), ev))" />
+                                            }
+                                            else if (IsNumericType(BaseType(col.PropertyType)))
+                                            {
+                                                <input type="number" class="eg-edit-input"
+                                                       value="@GetEditValue(item, col.PropertyName)"
+                                                       @onchange="e => SetEditValue(item, col.PropertyName, ConvertValue(e.Value?.ToString() ?? string.Empty, col.PropertyType))" />
+                                            }
+                                            else
+                                            {
+                                                <input type="text" class="eg-edit-input"
+                                                       value="@(GetEditValue(item, col.PropertyName)?.ToString() ?? string.Empty)"
+                                                       @onchange="e => SetEditValue(item, col.PropertyName, e.Value?.ToString())" />
+                                            }
+                                        }
+                                        else if (col.CellTemplate is not null)
+                                        {
+                                            @col.CellTemplate(item)
+                                        }
+                                        else
+                                        {
+                                            @FormatValue(col, item)
+                                        }
+                                    </td>
+                                }
+                                @if (ActionTemplate is not null || AllowInlineEdit)
+                                {
+                                    <td class="eg-td-actions" @onclick:stopPropagation="true">
+                                        @if (AllowInlineEdit)
+                                        {
+                                            @if (IsEditing(item))
+                                            {
+                                                <button class="eg-edit-btn eg-edit-done" @onclick="() => FinishRowEdit(item)" title="@L["Grid_DoneEdit"]">
+                                                    <i class="bi bi-check-lg"></i>
+                                                </button>
+                                                <button class="eg-edit-btn eg-edit-cancel" @onclick="() => CancelRowEdit(item)" title="@L["Grid_CancelEdit"]">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button class="eg-edit-btn" @onclick="() => StartRowEdit(item)" title="@L["Grid_EditRow"]">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                            }
+                                        }
+                                        @if (ActionTemplate is not null)
+                                        {
+                                            @ActionTemplate(item)
+                                        }
+                                    </td>
+                                }
+                            </tr>
+                            @if (RowDetail is not null && _expandedDetailRows.Contains(ridx))
+                            {
+                                <tr class="eg-detail-row">
+                                    <td colspan="@VisibleColumnCount">
+                                        @RowDetail(item)
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    }
+                    @* ── Empty State ── *@
+                    else
+                    {
+                        <tr>
+                            <td colspan="@VisibleColumnCount" class="eg-empty">
+                                <div class="eg-empty-inner">
+                                    <i class="bi bi-inbox"></i>
+                                    <span>@EmptyText</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+
+    @* ── Footer / Pagination ── *@
+    @if (ShowPagination && _totalFilteredCount > 0 && _groupByColumns.Count == 0)
+    {
+        <div class="eg-footer">
+            <div class="eg-footer-info">
+                <span>@string.Format(L["Grid_Records"], FirstRowIndex, LastRowIndex, _totalFilteredCount)</span>
+                @if (_selectedItems.Count > 0)
+                {
+                    <span class="eg-sel-count">@string.Format(L["Grid_Selected"], _selectedItems.Count)</span>
+                }
+                @if (_allData.Count != _totalFilteredCount)
+                {
+                    <span class="eg-filtered-hint">
+                        <i class="bi bi-funnel-fill" style="font-size:10px"></i> @string.Format(L["Grid_Filtered"], _totalFilteredCount, _allData.Count)
+                    </span>
+                }
+            </div>
+            <div class="eg-footer-paging">
+                <select class="eg-pagesize" value="@_currentPageSize" @onchange="OnPageSizeChanged">
+                    @foreach (int s in PageSizeOptions)
+                    {
+                        <option value="@s" selected="@(s == _currentPageSize)">@s</option>
+                    }
+                </select>
+                <div class="eg-pages">
+                    <button class="eg-pg" disabled="@(_currentPage <= 1)" @onclick="() => GoToPage(1)" title="@L["Grid_FirstPage"]">
+                        <i class="bi bi-chevron-double-left"></i>
+                    </button>
+                    <button class="eg-pg" disabled="@(_currentPage <= 1)" @onclick="() => GoToPage(_currentPage - 1)">
+                        <i class="bi bi-chevron-left"></i>
+                    </button>
+                    @foreach (int p in PageNumbers())
+                    {
+                        @if (p == -1)
+                        {
+                            <span class="eg-pg-ellipsis">…</span>
+                        }
+                        else
+                        {
+                            int pn = p;
+                            <button class="eg-pg @(pn == _currentPage ? "active" : "")" @onclick="() => GoToPage(pn)">@pn</button>
+                        }
+                    }
+                    <button class="eg-pg" disabled="@(_currentPage >= TotalPages)" @onclick="() => GoToPage(_currentPage + 1)">
+                        <i class="bi bi-chevron-right"></i>
+                    </button>
+                    <button class="eg-pg" disabled="@(_currentPage >= TotalPages)" @onclick="() => GoToPage(TotalPages)" title="@L["Grid_LastPage"]">
+                        <i class="bi bi-chevron-double-right"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    }
+    @if (_groupByColumns.Count > 0 && _totalFilteredCount > 0)
+    {
+        <div class="eg-footer">
+            <div class="eg-footer-info">
+                <span>@string.Format(L["Grid_TotalRecords"], _totalFilteredCount)</span>
+                @if (_selectedItems.Count > 0)
+                {
+                    <span class="eg-sel-count">@string.Format(L["Grid_Selected"], _selectedItems.Count)</span>
+                }
+            </div>
+        </div>
+    }
+</div>

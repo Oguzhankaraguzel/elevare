@@ -1,0 +1,28 @@
+@implements IDisposable
+@inject LoadingService Loading
+@inject CmsLocalizer L
+
+@if (Loading.IsVisible)
+{
+    <div class="cms-modal-overlay cms-loading-overlay" role="dialog" aria-modal="true">
+        <div class="cms-loading-card">
+            <div class="cms-loading-spinner"></div>
+            <p class="cms-loading-text">@(Loading.Message ?? _defaultText)</p>
+        </div>
+    </div>
+}
+
+@code {
+    private Func<Task>? _handler;
+    private string _defaultText = "";
+
+    protected override void OnInitialized()
+    {
+        _defaultText = L["Common_ProcessingRequest"];
+
+        _handler = () => InvokeAsync(StateHasChanged);
+        Loading.OnChange += _handler;
+    }
+
+    public void Dispose() => Loading.OnChange -= _handler;
+}

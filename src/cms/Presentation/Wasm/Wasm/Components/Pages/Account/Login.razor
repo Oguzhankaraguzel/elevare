@@ -1,0 +1,104 @@
+@page "/login"
+@layout AuthLayout
+@attribute [AllowAnonymous]
+
+<PageTitle>@L["Login_PageTitle"]</PageTitle>
+
+<div class="login-page">
+    <div class="login-card">
+        <div class="login-logo">
+            <img class="login-logo__mark" src="img/elevare-mark.png" alt="Elevare" />
+            <h1>Elevare CMS</h1>
+            <p>@L["Login_Subtitle"]</p>
+        </div>
+
+        @if (_errorMessage is not null)
+        {
+            <div style="background:rgba(239,68,68,.12);border:1px solid rgba(239,68,68,.25);border-radius:8px;padding:12px 14px;margin-bottom:20px;font-size:13.5px;color:var(--cms-danger);display:flex;align-items:center;gap:8px">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                @_errorMessage
+            </div>
+        }
+
+        @* Plain HTML form — POSTs to Minimal API endpoint so HttpContext is available for cookie sign-in *@
+        <form method="post" action="/account/login" id="login-form">
+            <input type="hidden" name="returnUrl" value="@_returnUrl" />
+
+            <div class="form-group">
+                <label class="cms-label" for="login-identifier">@L["Login_IdentifierLabel"]</label>
+                <div style="position:relative">
+                    <i class="bi bi-person" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--cms-text-dim)"></i>
+                    @* Deliberately type="text", not type="email": the field accepts a
+                       user name too, and an email input would have the browser refuse
+                       to submit one before the server ever saw it. *@
+                    <input id="login-identifier" name="identifier" type="text" required
+                           class="cms-input" style="padding-left:36px"
+                           placeholder="@L["Login_IdentifierPlaceholder"]" autocomplete="username" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="cms-label">@L["Login_PasswordLabel"]</label>
+                <div style="position:relative">
+                    <i class="bi bi-lock" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--cms-text-dim)"></i>
+                    <input name="password" type="password" required
+                           class="cms-input" style="padding-left:36px"
+                           placeholder="••••••••" autocomplete="current-password" />
+                </div>
+            </div>
+
+            <button type="submit" id="login-submit-btn" data-loading-label="@L["Login_SubmitBtnLoading"]"
+                    class="btn-cms btn-primary-cms w-100" style="justify-content:center;padding:11px;font-size:14px">
+                <i id="login-submit-icon" class="bi bi-box-arrow-in-right"></i>
+                <span id="login-submit-label">@L["Login_SubmitBtn"]</span>
+            </button>
+        </form>
+
+        @* This is a real browser form post (see the comment above) — there is no
+           Blazor event to hook the wait on. The sign-in itself does a handful of
+           sequential database round trips, so the page can sit blank for a moment
+           with nothing telling the user their click registered. Disabling the
+           button inside the submit listener does not block the submission already
+           in flight; it only stops a second click and swaps in a spinner until the
+           redirect (success or "?error=...") replaces this page. The loading label
+           travels through a data attribute rather than being interpolated straight
+           into the script, so a translation is free to contain a quote without
+           breaking the JS string. *@
+        <script>
+            document.getElementById('login-form').addEventListener('submit', function () {
+                var btn = document.getElementById('login-submit-btn');
+                if (btn.disabled) return;
+                btn.disabled = true;
+                document.getElementById('login-submit-icon').className = 'bi bi-arrow-clockwise spin';
+                document.getElementById('login-submit-label').textContent = btn.dataset.loadingLabel;
+            });
+        </script>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:24px">
+            <span style="font-size:12px;color:var(--cms-text-dim)">Elevare CMS &copy; @DateTime.Now.Year</span>
+            <LanguageSwitcher />
+        </div>
+    </div>
+</div>
+
+@code {
+    private string? _errorMessage;
+    private string _returnUrl = "/";
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        _returnUrl = ReturnUrl ?? "/";
+        _errorMessage = Error switch
+        {
+            "invalid" => L["Login_Error_Invalid"],
+            "locked"  => L["Login_Error_Locked"],
+            _         => null
+        };
+    }
+}

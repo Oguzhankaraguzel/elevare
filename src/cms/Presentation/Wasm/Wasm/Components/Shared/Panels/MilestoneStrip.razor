@@ -1,0 +1,37 @@
+﻿@using Application.Features.Queries.Analytics.GetMilestones
+
+@* Renders nothing when there is nothing to celebrate — an empty "Milestones" box
+   every day would train people to stop looking at the one day it matters. *@
+@if (_milestones.Count > 0)
+{
+    <div class="ms-strip">
+        @foreach (MilestoneResponse m in _milestones)
+        {
+            <div class="ms-card @(m.IsFresh ? "ms-fresh" : "")">
+                <span class="ms-icon">
+                    <i class="bi @(m.IsFresh ? "bi-stars" : "bi-trophy-fill")"></i>
+                </span>
+                <span class="ms-body">
+                    <span class="ms-headline">@string.Format(L["Milestones_Reached"], m.Threshold.ToString("N0"))</span>
+                    <span class="ms-page">@m.Title</span>
+                    <span class="ms-meta">@m.AchievedAtUtc.ToLocalTime().ToString("dd.MM.yyyy")</span>
+                </span>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    private List<MilestoneResponse> _milestones = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetMilestonesQuery())).Match(
+                list => _milestones = list,
+                _ => { /* decoration — a failure here is not worth a toast */ });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+}

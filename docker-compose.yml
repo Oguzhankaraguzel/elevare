@@ -1,0 +1,227 @@
+# Elevare — full stack for local use and small deployments.
+#
+#   cp .env.example .env      # fill in the passwords/keys, then:
+#   docker compose up -d
+#
+#   CMS   → http://localhost:5150
+#   Site  → http://localhost:5160
+#
+# Nothing here is required to run the project: `dotnet run` against a Postgres
+# you already have works exactly as before. See README.
+
+name: elevare
+
+services:
+  db:
+    # Pinned to match the postgresql-client major version Debian bookworm (the
+    # cms image's base) ships — pg_dump refuses to dump from a NEWER major server
+    # than itself, so the two must move together.
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-elevare}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${DB_NAME:-ElevareDB}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Without this, a full machine reboot brings cms/web back (they have this
+    # policy) but leaves db/cache stopped: Docker Desktop resumes each container
+    # independently by its own policy on startup, not by re-running `compose up`,
+    # so depends_on's ordering never gets a chance to matter.
+    restart: unless-stopped
+    healthcheck:
+      # The apps run migrations on startup, so they must not start against a
+      # server that is still booting — this gate is what makes `up` reliable.
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-elevare} -d ${DB_NAME:-ElevareDB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  cache:
+    image: redis:7-alpine
+    # Optional: the CMS chooses its cache provider in Site Settings, and the site
+    # serves fine without one. Kept here so the option is a setting change rather
+    # than an infrastructure project.
+    restart: unless-stopped
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  cms:
+    build:
+      context: .
+      dockerfile: src/cms/Presentation/Wasm/Wasm/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      # The admin panel renders stored UTC timestamps (logs, form submissions,
+      # dashboard) with DateTime.ToLocalTime(), which converts to the CONTAINER's
+      # timezone. Unset, a .NET Linux container is UTC — so a Turkish operator saw
+      # every time three hours behind their own clock. Setting the operator's zone
+      # here makes those reads correct; override TZ in .env for a deployment elsewhere.
+      # Reminders are unaffected either way — they convert through the browser's own
+      # offset and compare in UTC — so this only moves the server-rendered displays.
+      TZ: ${TZ:-Europe/Istanbul}
+      # Behind nginx (or any reverse proxy): without this, the app never sees the
+      # original scheme/host from X-Forwarded-* and treats every request as plain
+      # HTTP, which breaks anything gated on IsHttps (secure cookies, redirects).
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ConnectionStrings__DefaultConnection: >-
+        Host=db;Port=5432;Database=${DB_NAME:-ElevareDB};Username=${POSTGRES_USER:-elevare};
+        Password=${POSTGRES_PASSWORD};
+      Jwt__Issuer: ${JWT_ISSUER:-http://localhost:5150}
+      Jwt__Audience: ${JWT_AUDIENCE:-http://localhost:5150}
+      Jwt__SecretKey: ${JWT_SECRET:?set JWT_SECRET in .env}
+      Preview__SigningKey: ${PREVIEW_SIGNING_KEY:?set PREVIEW_SIGNING_KEY in .env}
+      # Keeps admin sessions and antiforgery tokens valid across a recreate.
+      DataProtection__KeyPath: /app/keys
+      Cache__ClearSecret: ${CACHE_CLEAR_SECRET:?set CACHE_CLEAR_SECRET in .env}
+      # Where the CMS reaches the site to clear its cache. The service name on this
+      # network, NOT the public address: a request to the public hostname leaves the
+      # host and comes back in through DNS, the reverse proxy and any CDN or bot
+      # protection in front of the site, all of which can refuse a call that did not
+      # come from a browser — and none of which the two containers need to talk to
+      # each other. See CacheClearOptions.InternalWebBaseUrl.
+      Cache__InternalWebBaseUrl: http://web:8080
+      # Optional: where Seq is, if you run one. Empty (the default) leaves the
+      # console as the only sink, which is what `docker compose logs` reads. The
+      # sink is only registered when this has a value — see Program.cs — because a
+      # Seq address that resolves to nothing fails silently.
+      Serilog__SeqUrl: ${SEQ_URL:-}
+      Serilog__SeqApiKey: ${SEQ_API_KEY:-}
+      # DatabaseBackupService shells out to pg_dump from THIS container (Postgres
+      # has no server-side BACKUP DATABASE equivalent) — so, unlike the old SQL
+      # Server setup, the backup volume mounts here, not on the db service.
+      Backup__Directory: /app/Backups
+      # Keeps admin sessions alive across a restart. Drop this line to fall back to
+      # in-process sessions, which are lost whenever the container is recreated.
+      # database=1: the web app's own cache lives in database 0 on this same Redis
+      # (see its Redis__ConnectionString below) and clears itself with a whole-database
+      # FLUSHDB when an operator clears the site cache — sharing a database with it
+      # would silently sign out every admin session on every cache clear.
+      Redis__ConnectionString: ${REDIS_CONNECTION:-cache:6379},defaultDatabase=1
+      # First-run administrator. Ignored once the account exists.
+      Seed__SuperAdmin__UserName: ${ADMIN_USERNAME:-superadmin}
+      Seed__SuperAdmin__Email: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
+      Seed__SuperAdmin__Password: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # Optional, all of it — an empty SMTP_HOST just means outgoing mail (test
+      # emails, form-reply sending) fails at send time rather than at startup.
+      # Email.FromAddress/FromDisplayName can still be overridden per-site from
+      # Site Settings. These env vars are now only the deploy-time FALLBACK: the
+      # CMS's "Sırlar" screen (SecretsManage permission) writes to the encrypted
+      # IntegrationSecrets table instead, and that wins whenever it has a value —
+      # see IntegrationSecretsBootstrap. A fresh install can leave every SMTP_*
+      # var below empty and configure mail entirely from the admin panel.
+      # See docker-compose.dev-tools.yml for a local SMTP server to point this at
+      # without a real mailbox.
+      Email__Host: ${SMTP_HOST:-}
+      Email__Port: ${SMTP_PORT:-587}
+      Email__EnableSsl: ${SMTP_ENABLE_SSL:-true}
+      Email__UserName: ${SMTP_USERNAME:-}
+      Email__Password: ${SMTP_PASSWORD:-}
+      Email__FromAddress: ${SMTP_FROM_ADDRESS:-}
+      Email__FromDisplayName: ${SMTP_FROM_DISPLAY_NAME:-CMS}
+      # Optional — object storage (S3/CDN) is the same story as Email above: these
+      # are only the deploy-time fallback, and the "Sırlar" screen's encrypted
+      # value wins whenever it is set. Left empty/"Local", uploads stay on the
+      # cms-uploads volume exactly as before.
+      ObjectStorage__Provider: ${OBJECT_STORAGE_PROVIDER:-Local}
+      ObjectStorage__BucketName: ${OBJECT_STORAGE_BUCKET_NAME:-}
+      ObjectStorage__Region: ${OBJECT_STORAGE_REGION:-}
+      ObjectStorage__AccessKey: ${OBJECT_STORAGE_ACCESS_KEY:-}
+      ObjectStorage__SecretKey: ${OBJECT_STORAGE_SECRET_KEY:-}
+      ObjectStorage__ServiceUrl: ${OBJECT_STORAGE_SERVICE_URL:-}
+      ObjectStorage__PublicBaseUrl: ${OBJECT_STORAGE_PUBLIC_BASE_URL:-}
+    ports:
+      - "${CMS_PORT:-5150}:8080"
+    volumes:
+      - cms-uploads:/app/wwwroot/uploads
+      - cms-keys:/app/keys
+      - db-backups:/app/Backups
+    restart: unless-stopped
+
+  web:
+    build:
+      context: .
+      dockerfile: src/web/Presentation/WebMvc/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      cms:
+        # Healthy, not merely started. The CMS owns the schema, and creating the
+        # database runs ALTER DATABASE ... READ_COMMITTED_SNAPSHOT, which needs
+        # exclusive access — a site that has already opened a connection blocks it
+        # until the statement times out and takes the CMS down with it. Its /health
+        # only answers after migrations and seeding, so waiting for it is what makes
+        # the very first `up` come clean.
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: "8080"
+      # Behind nginx (or any reverse proxy): without this, the app never sees the
+      # original scheme/host from X-Forwarded-* and treats every request as plain
+      # HTTP, which breaks anything gated on IsHttps (secure cookies, redirects).
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      ConnectionStrings__DefaultConnection: >-
+        Host=db;Port=5432;Database=${DB_NAME:-ElevareDB};Username=${POSTGRES_USER:-elevare};
+        Password=${POSTGRES_PASSWORD};
+      # Must match the CMS byte for byte or preview links will not validate. Same
+      # required-value guard as the CMS's own copy above — an unset value here
+      # would otherwise fail silently (preview links just never validate) instead
+      # of refusing to start.
+      Preview__SigningKey: ${PREVIEW_SIGNING_KEY:?set PREVIEW_SIGNING_KEY in .env}
+      # Database 0 (the default) — this is the cache a site-cache-clear FLUSHDBs
+      # entirely, so it must stay its own database, separate from the CMS's session
+      # store (which explicitly moves to database 1 — see the cms service above).
+      Redis__ConnectionString: ${REDIS_CONNECTION:-cache:6379}
+      # Must match the CMS exactly, or every cache-clear request is refused with
+      # 401. Same required-value guard as the CMS's own copy above.
+      Cache__ClearSecret: ${CACHE_CLEAR_SECRET:?set CACHE_CLEAR_SECRET in .env}
+      # Pairs with Integrations.CaptchaProvider/CaptchaSiteKey (Site Settings, safe
+      # to expose). Optional: captcha stays off until both a provider is chosen in
+      # Site Settings AND a secret key is set — either here as a fallback, or from
+      # the CMS's "Sırlar" screen, which wins when set (see
+      # IntegrationSecretsBootstrap). Decrypting that value needs the SAME
+      # DataProtection key ring the CMS wrote it with — see the volume below.
+      Captcha__SecretKey: ${CAPTCHA_SECRET_KEY:-}
+      # Optional: where Seq is, if you run one. Empty (the default) leaves the
+      # console as the only sink, which is what `docker compose logs` reads. The
+      # sink is only registered when this has a value — see Program.cs — because a
+      # Seq address that resolves to nothing fails silently.
+      Serilog__SeqUrl: ${SEQ_URL:-}
+      Serilog__SeqApiKey: ${SEQ_API_KEY:-}
+      DataProtection__KeyPath: /app/keys
+    ports:
+      - "${WEB_PORT:-5160}:8080"
+    volumes:
+      # Read-only: this app only ever decrypts with these keys, it never writes or
+      # rotates them — that stays the CMS's job.
+      - cms-keys:/app/keys:ro
+      # Local-disk uploads (LocalDiskBlobStorage) live only in the CMS's own volume,
+      # and GetPublicUrlAsync returns a CMS-relative URL for them — fine inside the
+      # CMS's own preview, but a dead link from the PUBLIC site, which is a separate
+      # origin with no route of its own for it. A production deployment behind
+      # S3 + a CDN never hits this (that URL is already absolute), but the
+      # docker-compose default has no CDN configured, so without this mount every
+      # image a CMS user embeds in a real page — not just the seeded templates —
+      # would 404 for every visitor. Read-only: this app only ever serves uploads,
+      # it never writes them.
+      - cms-uploads:/app/wwwroot/uploads:ro
+    restart: unless-stopped
+
+volumes:
+  db-data:
+  db-backups:
+  cms-uploads:
+  cms-keys:

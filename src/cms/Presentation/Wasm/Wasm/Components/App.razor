@@ -1,0 +1,51 @@
+﻿@using System.Globalization
+
+<!DOCTYPE html>
+<html lang="@CultureInfo.CurrentCulture.TwoLetterISOLanguageName">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Apply saved theme immediately to prevent flash -->
+    <script>(function() { var t = localStorage.getItem('cms_theme') || 'dark'; document.documentElement.setAttribute('data-theme', t); })()</script>
+    <base href="/" />
+    <title>Elevare CMS</title>
+
+    <!-- IBM Plex Sans — an enterprise-software typeface (IBM's Carbon Design System),
+         not the default of every AI-demo SaaS screen the way Inter had become. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- Bootstrap 5 -->
+    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" />
+
+    <!-- Custom CMS Theme -->
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["Wasm.styles.css"]" />
+
+    <ImportMap />
+    <link rel="icon" type="image/x-icon" href="img/favicon.ico" />
+    <HeadOutlet @rendermode="InteractiveServer" />
+</head>
+<body>
+    <AppErrorBoundary>
+        <Routes @rendermode="InteractiveServer" />
+    </AppErrorBoundary>
+
+    <script src="_framework/blazor.web.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
+    <!-- CMS JS helpers -->
+    <script src="@Assets["js/cms.js"]" defer></script>
+    <!-- Rich-text box for e-mail replies/templates; lazy-loads CKEditor on demand -->
+    <script src="@Assets["js/elevare-html-editor.js"]" defer></script>
+    <!-- Site Codes' code editor; lazy-loads the vendored Monaco build on demand -->
+    <script src="@Assets["js/elevare-code-editor.js"]" defer></script>
+    <script src="@Assets["js/grapesjs/custom-plugins/elevare-seo.js"]" defer></script>
+    <script src="@Assets["js/grapesjs/custom-plugins/elevare-blocks.js"]" defer></script>
+    <!-- Page builder (GrapeJS) integration; lazy-loads the library on demand -->
+    <script src="@Assets["js/grapesjs/grapes-editor.js"]" defer></script>
+</body>
+</html>

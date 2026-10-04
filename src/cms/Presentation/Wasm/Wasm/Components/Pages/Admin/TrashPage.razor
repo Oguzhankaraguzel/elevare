@@ -1,0 +1,341 @@
+﻿@page "/admin/trash"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Trash"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Trash"]</h1>
+    <p>@L["Trash_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="TrashItemResponse"
+             Data="_items"
+             Loading="_loading"
+             Title="@L["Nav_Trash"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Trash_Empty"]"
+             PageSize="20">
+    <ToolbarEnd>
+        @if (_items.Count > 0)
+        {
+            <button class="btn-cms btn-danger-cms" @onclick="() => _showEmpty = true">
+                <i class="bi bi-trash3"></i> @L["Trash_EmptyBtn"]
+            </button>
+        }
+    </ToolbarEnd>
+</ElevareGrid>
+
+@* ── Permanent delete (single) ────────────────────────────────────────────── *@
+<CmsModal Title="@L["Trash_PurgeTitle"]" IsVisible="@(_purgeTarget is not null)"
+          OnClose="() => _purgeTarget = null" Size="sm">
+    <Body>
+        @if (_purgeTarget is { } target)
+        {
+            <p style="color:var(--cms-text)">@string.Format(L["Trash_PurgeConfirm"], target.DisplayName)</p>
+            <p style="font-size:13px;color:var(--cms-danger)">
+                <i class="bi bi-exclamation-octagon"></i> @L["Trash_PurgeIrreversible"]
+            </p>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _purgeTarget = null">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" disabled="@_purging" @onclick="ConfirmPurge">@L["Trash_PurgeBtn"]</button>
+    </Footer>
+</CmsModal>
+
+@* ── Empty the whole Trash ────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Trash_EmptyTitle"]" IsVisible="_showEmpty" OnClose="() => _showEmpty = false" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["Trash_EmptyConfirm"], _items.Count)</p>
+        <p style="font-size:13px;color:var(--cms-danger)">
+            <i class="bi bi-exclamation-octagon"></i> @L["Trash_PurgeIrreversible"]
+        </p>
+        @* Said up front, not discovered afterwards: some rows deliberately survive
+           this, and a count that does not match expectations reads as a bug. *@
+        <p class="cms-hint">@L["Trash_EmptyProtectedNote"]</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showEmpty = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" disabled="@_purging" @onclick="ConfirmEmpty">@L["Trash_EmptyBtn"]</button>
+    </Footer>
+</CmsModal>
+
+@* ── Restore confirmation ─────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Trash_RestoreBtn"]" IsVisible="_showRestore" OnClose="() => _showRestore = false" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["Trash_RestoreConfirm"], _restoreTarget?.DisplayName ?? "")</p>
+        @if (_restoreTarget is { EntityType: TrashEntityType.PageInfo, ConflictKind: TrashConflictKind.SlugTaken })
+        {
+            <p style="font-size:13px;color:var(--cms-warning)"><i class="bi bi-exclamation-triangle"></i> @L["Trash_Conflict_SlugTaken"]</p>
+            <div class="form-group" style="text-align:left;margin-top:8px">
+                <label class="cms-label">@L["Trash_OverrideSlugLabel"]</label>
+                <input @bind="_overrideSlug" @bind:event="oninput" class="cms-input" />
+            </div>
+        }
+        else if (_restoreTarget is { EntityType: TrashEntityType.PageInfo, ConflictKind: TrashConflictKind.RedirectExists })
+        {
+            <p style="font-size:13px;color:var(--cms-warning)"><i class="bi bi-exclamation-triangle"></i> @L["Trash_Conflict_RedirectExists"]</p>
+        }
+        @* Site code is the one thing here that starts running again the moment it
+           comes back, so the restore says up front that it will not. *@
+        else if (_restoreTarget is { EntityType: TrashEntityType.SiteCodeSnippet })
+        {
+            <p style="font-size:13px;color:var(--cms-muted)"><i class="bi bi-info-circle"></i> @L["Trash_SiteCodeRestoredDisabled"]</p>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showRestore = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ConfirmRestore" disabled="@_restoring">
+            @if (_restoring)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-arrow-counterclockwise"></i>
+            }
+            @L["Trash_RestoreBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<TrashItemResponse> _items = [];
+    private bool _loading = true;
+
+    private bool _showRestore;
+    private bool _restoring;
+    private TrashItemResponse? _restoreTarget;
+    private string _overrideSlug = "";
+
+    private List<GridColumnDef<TrashItemResponse>> _columns = [];
+    private RenderFragment<TrashItemResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.TrashView))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadItems();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<TrashItemResponse>
+            {
+                PropertyName  = "EntityType",
+                Title         = L["Trash_ColType"],
+                PropertyType  = typeof(string),
+                ValueAccessor = i => TypeLabel(i.EntityType),
+                CellTemplate  = TypeTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "180px",
+            },
+            new GridColumnDef<TrashItemResponse>
+            {
+                PropertyName  = "DisplayName",
+                Title         = L["Trash_ColName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = i => i.DisplayName,
+                CellTemplate  = NameTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<TrashItemResponse>
+            {
+                PropertyName  = "DeletedAt",
+                Title         = L["Trash_ColDeletedAt"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = i => (object?)i.DeletedAt,
+                CellTemplate  = DeletedAtTemplate,
+                Sortable      = true,
+                Width         = "160px",
+            },
+            new GridColumnDef<TrashItemResponse>
+            {
+                PropertyName  = "DeletedByUserName",
+                Title         = L["Trash_ColDeletedBy"],
+                PropertyType  = typeof(string),
+                ValueAccessor = i => (object?)i.DeletedByUserName ?? "—",
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "180px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private RenderFragment<TrashItemResponse> TypeTemplate => i => __builder =>
+    {
+        <span class="badge-cms badge-neutral">@TypeLabel(i.EntityType)</span>
+    };
+
+    private RenderFragment<TrashItemResponse> NameTemplate => i => __builder =>
+    {
+        @i.DisplayName
+        @if (i.ConflictKind != TrashConflictKind.None)
+        {
+            <i class="bi bi-exclamation-triangle-fill" style="color:var(--cms-warning);margin-left:6px" title="@ConflictLabel(i.ConflictKind)"></i>
+        }
+    };
+
+    private static RenderFragment<TrashItemResponse> DeletedAtTemplate => i => __builder =>
+    {
+        <span style="color:var(--cms-text-muted);font-size:12px">@i.DeletedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+    };
+
+    private RenderFragment<TrashItemResponse> ActionButtons => i => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms btn-primary-cms btn-sm-cms" @onclick="() => OpenRestore(i)">
+                <i class="bi bi-arrow-counterclockwise"></i> @L["Trash_RestoreBtn"]
+            </button>
+            @* Disabled with the reason in the tooltip rather than hidden: an item
+               that cannot be destroyed is a fact worth seeing, and a missing button
+               reads as a rendering bug. *@
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon"
+                    disabled="@(i.PurgeBlock != TrashPurgeBlock.None)"
+                    title="@PurgeBlockLabel(i.PurgeBlock)"
+                    @onclick="() => _purgeTarget = i">
+                <i class="bi bi-x-octagon"></i>
+            </button>
+        </div>
+    };
+
+    private async Task LoadItems()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetTrashedItemsQuery())).Match(
+                list => _items = list,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Trash_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private TrashItemResponse? _purgeTarget;
+    private bool _showEmpty;
+    private bool _purging;
+
+    private async Task ConfirmPurge()
+    {
+        if (_purgeTarget is null) return;
+        _purging = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new PurgeTrashItemCommand(_purgeTarget.EntityType, _purgeTarget.EntityId)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Trash_Purged"]);
+                _purgeTarget = null;
+                await LoadItems();
+            }
+        }
+        finally { _purging = false; }
+    }
+
+    private async Task ConfirmEmpty()
+    {
+        _purging = true;
+        try
+        {
+            (await Sender.Send(new EmptyTrashCommand())).Match(
+                result =>
+                {
+                    // Two numbers, because "emptied" with items still on screen is
+                    // exactly the moment a user decides the button is broken.
+                    Toast.Success(result.Skipped == 0
+                        ? string.Format(L["Trash_EmptyDone"], result.Purged)
+                        : string.Format(L["Trash_EmptyDonePartial"], result.Purged, result.Skipped));
+                    _showEmpty = false;
+                },
+                error => Toast.Error(L.Error(error)));
+
+            await LoadItems();
+        }
+        finally { _purging = false; }
+    }
+
+    private void OpenRestore(TrashItemResponse item)
+    {
+        _restoreTarget = item;
+        _overrideSlug = "";
+        _showRestore = true;
+    }
+
+    private async Task ConfirmRestore()
+    {
+        if (_restoreTarget is null) return;
+        _restoring = true;
+        try
+        {
+            string? overrideSlug = _overrideSlug.IsNullOrWhiteSpace() ? null : _overrideSlug.Trim();
+            bool ok = false;
+            (await Sender.Send(new RestoreTrashItemCommand(_restoreTarget.EntityType, _restoreTarget.EntityId, overrideSlug)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Trash_Restored"]);
+                _showRestore = false;
+                _restoreTarget = null;
+                await LoadItems();
+            }
+        }
+        finally { _restoring = false; }
+    }
+
+    private string PurgeBlockLabel(TrashPurgeBlock block) => block switch
+    {
+        TrashPurgeBlock.HasFormSubmissions => L["Trash_PurgeBlocked_FormSubmissions"],
+        TrashPurgeBlock.HasChildren => L["Trash_PurgeBlocked_Children"],
+        _ => L["Trash_PurgeBtn"],
+    };
+
+    private string TypeLabel(TrashEntityType type) => type switch
+    {
+        TrashEntityType.PageInfo => L["Trash_Type_PageInfo"],
+        TrashEntityType.PageTemplate => L["Trash_Type_PageTemplate"],
+        TrashEntityType.MediaFile => L["Trash_Type_MediaFile"],
+        TrashEntityType.Language => L["Trash_Type_Language"],
+        TrashEntityType.SiteSetting => L["Trash_Type_SiteSetting"],
+        TrashEntityType.UserTask => L["Trash_Type_UserTask"],
+        TrashEntityType.UserNote => L["Trash_Type_UserNote"],
+        TrashEntityType.UserReminder => L["Trash_Type_UserReminder"],
+        TrashEntityType.ContentBulkEdit => L["Trash_Type_ContentBulkEdit"],
+        TrashEntityType.SiteCodeSnippet => L["Trash_Type_SiteCodeSnippet"],
+        _ => type.ToString(),
+    };
+
+    private string ConflictLabel(TrashConflictKind kind) => kind switch
+    {
+        TrashConflictKind.SlugTaken => L["Trash_Conflict_SlugTaken"],
+        TrashConflictKind.RedirectExists => L["Trash_Conflict_RedirectExists"],
+        _ => "",
+    };
+}

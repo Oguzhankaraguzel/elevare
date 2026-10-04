@@ -1,0 +1,387 @@
+﻿@page "/admin/workflows"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Workflows"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Workflows"]</h1>
+    <p>@L["Workflows_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="WorkflowDefinitionResponse"
+             Data="_workflows"
+             Loading="_loading"
+             Title="@L["Nav_Workflows"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ToolbarEnd="CreateButton"
+             ShowGroupPanel="false"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Workflows_Empty"]"
+             PageSize="20" />
+
+@* ── Create workflow ──────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Workflows_CreateBtn"]" IsVisible="_showCreate" OnClose="() => _showCreate = false" Size="md">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label">@L["Workflows_NameLabel"]</label>
+            <input @bind="_newName" @bind:event="oninput" class="cms-input" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Workflows_ContentTypeLabel"]</label>
+            <select @bind="_newContentType" class="cms-input">
+                <option value="@WorkflowContentType.Page">@L["Workflows_ContentType_Page"]</option>
+                <option value="@WorkflowContentType.PageTemplate">@L["Workflows_ContentType_PageTemplate"]</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Workflows_StepsLabel"]</label>
+            @for (int i = 0; i < _newSteps.Count; i++)
+            {
+                int idx = i;
+                <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+                    <span style="color:var(--cms-text-muted);min-width:70px">@string.Format(L["Workflows_StepN"], idx + 1)</span>
+                    <select class="cms-input" style="flex:1" value="@_newSteps[idx].RequiredRoleId"
+                            @onchange="e => SetStepRole(idx, e)">
+                        @foreach (RoleResponse role in _roles)
+                        {
+                            <option value="@role.Id">@role.Name</option>
+                        }
+                    </select>
+                    @* Optional: narrows the step from "anyone in this role" to one
+                       named person. Left on "whole role" it behaves as before. *@
+                    <select class="cms-input" style="flex:1" value="@_newSteps[idx].RequiredUserId"
+                            @onchange="e => SetStepUser(idx, e)">
+                        <option value="">@L["Workflows_AnyoneInRole"]</option>
+                        @foreach (AssignableUserResponse user in _users)
+                        {
+                            <option value="@user.Id">@(user.FullName.HasValue() ? user.FullName : user.UserName)</option>
+                        }
+                    </select>
+                    @if (_newSteps.Count > 1)
+                    {
+                        <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => _newSteps.RemoveAt(idx)">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    }
+                </div>
+                @* Naming a role in a step does not by itself let that role act on
+                   the approval queue — /admin/approvals needs Approvals.Decide.
+                   Without this warning the workflow simply deadlocks: content
+                   stages, nobody but an admin can release it, and nothing says why. *@
+                @if (StepApproverLacksPermission(_newSteps[idx]) is { } blockedName)
+                {
+                    <div class="badge-cms badge-warning" style="margin:-4px 0 10px 78px">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        @string.Format(L["Workflows_ApproverMissingPermission"], blockedName)
+                    </div>
+                }
+            }
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="AddStep">
+                <i class="bi bi-plus-lg"></i> @L["Workflows_AddStepBtn"]
+            </button>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showCreate = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="CreateWorkflow" disabled="@(_creating || _newName.IsNullOrWhiteSpace())">
+            @if (_creating)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check-lg"></i>
+            }
+            @L["Workflows_CreateBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete confirmation ──────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Workflows_DeleteBtn"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["Workflows_DeleteConfirm"], _deleteTarget?.Name ?? "")</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_deleting">
+            @if (_deleting)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-trash3"></i>
+            }
+            @L["Workflows_DeleteBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<WorkflowDefinitionResponse> _workflows = [];
+    private List<RoleResponse> _roles = [];
+    private bool _loading = true;
+
+    private bool _showCreate;
+    private string _newName = "";
+    private WorkflowContentType _newContentType = WorkflowContentType.Page;
+    private List<WorkflowStepInput> _newSteps = [];
+    private List<AssignableUserResponse> _users = [];
+    private bool _creating;
+
+    private bool _showDelete;
+    private WorkflowDefinitionResponse? _deleteTarget;
+    private bool _deleting;
+
+    private List<GridColumnDef<WorkflowDefinitionResponse>> _columns = [];
+    private RenderFragment<WorkflowDefinitionResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.WorkflowsManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadData();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<WorkflowDefinitionResponse>
+            {
+                PropertyName  = "Name",
+                Title         = L["Workflows_ColName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = w => w.Name,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<WorkflowDefinitionResponse>
+            {
+                PropertyName  = "ContentType",
+                Title         = L["Workflows_ColContentType"],
+                PropertyType  = typeof(string),
+                ValueAccessor = w => ContentTypeLabel(w.ContentType),
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "170px",
+            },
+            new GridColumnDef<WorkflowDefinitionResponse>
+            {
+                PropertyName  = "Steps",
+                Title         = L["Workflows_ColSteps"],
+                PropertyType  = typeof(string),
+                ValueAccessor = w => string.Join(" → ", w.Steps.Select(s => s.RoleName)),
+                CellTemplate  = StepsTemplate,
+                Sortable      = false,
+                Filterable    = true,
+            },
+            new GridColumnDef<WorkflowDefinitionResponse>
+            {
+                PropertyName  = "IsActive",
+                Title         = L["Workflows_ColStatus"],
+                PropertyType  = typeof(string),
+                ValueAccessor = w => w.IsActive ? L["Workflows_Active"] : L["Workflows_Inactive"],
+                CellTemplate  = StatusTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "130px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private static RenderFragment<WorkflowDefinitionResponse> StepsTemplate => w => __builder =>
+    {
+        <span style="color:var(--cms-text-muted)">@string.Join(" → ", w.Steps.Select(s => s.RoleName))</span>
+    };
+
+    private RenderFragment<WorkflowDefinitionResponse> StatusTemplate => w => __builder =>
+    {
+        @if (w.IsActive)
+        {
+            <span class="badge-cms badge-success">@L["Workflows_Active"]</span>
+        }
+        else
+        {
+            <span class="badge-cms badge-neutral">@L["Workflows_Inactive"]</span>
+        }
+    };
+
+    private RenderFragment<WorkflowDefinitionResponse> ActionButtons => w => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => ToggleActive(w)">
+                @(w.IsActive ? L["Workflows_DeactivateBtn"] : L["Workflows_ActivateBtn"])
+            </button>
+            @if (!w.IsActive)
+            {
+                <button class="btn-cms btn-danger-cms btn-sm-cms btn-icon" @onclick="() => OpenDelete(w)">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            }
+        </div>
+    };
+
+    private RenderFragment CreateButton => __builder =>
+    {
+        <button class="btn-cms btn-primary-cms btn-sm-cms" @onclick="OpenCreate">
+            <i class="bi bi-plus-lg"></i> @L["Workflows_CreateBtn"]
+        </button>
+    };
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetWorkflowDefinitionsQuery())).Match(
+                list => _workflows = list,
+                error => Toast.Error(L.Error(error)));
+
+            (await Sender.Send(new GetRolesQuery())).Match(
+                list => _roles = list,
+                error => Toast.Error(L.Error(error)));
+
+            // Only active users can act on a step, so an inactive account must not
+            // be offerable as the person a workflow waits on.
+            (await Sender.Send(new GetAssignableUsersQuery())).Match(
+                users => _users = users,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Workflows_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _newName = "";
+        _newContentType = WorkflowContentType.Page;
+        _newSteps = _roles.Count > 0 ? [new WorkflowStepInput(_roles[0].Id)] : [];
+        _showCreate = true;
+    }
+
+    private void AddStep()
+    {
+        if (_roles.Count > 0)
+            _newSteps.Add(new WorkflowStepInput(_roles[0].Id));
+    }
+
+    private void SetStepRole(int index, ChangeEventArgs e) =>
+        _newSteps[index] = _newSteps[index] with { RequiredRoleId = Guid.Parse((string)e.Value!) };
+
+    /// <summary>
+    /// Name of the role this step waits on when that role cannot actually reach the
+    /// approval queue, otherwise <c>null</c>.
+    /// <para>
+    /// A step is answered from <c>/admin/approvals</c>, which requires
+    /// <c>Approvals.Decide</c>. Being named in a step grants nothing on its own, so a
+    /// role without that permission produces a workflow that stages content nobody
+    /// can release — an admin override is the only way out, and only if someone
+    /// works out that is what happened.
+    /// </para>
+    /// </summary>
+    private string? StepApproverLacksPermission(WorkflowStepInput step)
+    {
+        RoleResponse? role = _roles.FirstOrDefault(r => r.Id == step.RequiredRoleId);
+
+        if (role is null || role.Permissions.Contains(PermissionKeys.ApprovalsDecide))
+            return null;
+
+        // SuperAdmin/Admin get in through IsAdminOrAbove regardless of the checkbox.
+        return role.Name is Roles.SuperAdmin or Roles.Admin ? null : role.Name;
+    }
+
+    private void SetStepUser(int index, ChangeEventArgs e)
+    {
+        string raw = (string?)e.Value ?? "";
+        _newSteps[index] = _newSteps[index] with
+        {
+            RequiredUserId = Guid.TryParse(raw, out Guid id) ? id : null,
+        };
+    }
+
+    private async Task CreateWorkflow()
+    {
+        if (_newName.IsNullOrWhiteSpace() || _newSteps.Count == 0) return;
+        _creating = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new CreateWorkflowDefinitionCommand(_newName.Trim(), _newContentType, _newSteps)))
+                .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Workflows_Created"]);
+                _showCreate = false;
+                await LoadData();
+            }
+        }
+        finally { _creating = false; }
+    }
+
+    private async Task ToggleActive(WorkflowDefinitionResponse wf)
+    {
+        bool ok = false;
+        (await Sender.Send(new SetWorkflowDefinitionActiveCommand(wf.Id, !wf.IsActive)))
+            .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+        if (ok)
+        {
+            Toast.Success(wf.IsActive ? L["Workflows_Deactivated"] : L["Workflows_Activated"]);
+            await LoadData();
+        }
+    }
+
+    private void OpenDelete(WorkflowDefinitionResponse wf)
+    {
+        _deleteTarget = wf;
+        _showDelete = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeleteWorkflowDefinitionCommand(_deleteTarget.Id)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Workflows_Deleted"]);
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadData();
+            }
+        }
+        finally { _deleting = false; }
+    }
+
+    private string ContentTypeLabel(WorkflowContentType type) => type switch
+    {
+        WorkflowContentType.Page => L["Workflows_ContentType_Page"],
+        WorkflowContentType.PageTemplate => L["Workflows_ContentType_PageTemplate"],
+        _ => type.ToString(),
+    };
+}

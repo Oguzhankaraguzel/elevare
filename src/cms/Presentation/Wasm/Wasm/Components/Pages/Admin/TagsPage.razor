@@ -1,0 +1,214 @@
+@page "/admin/tags"
+@layout CMSLayout
+@using Application.Features.Commands.Tags.DeleteTag
+@using Application.Features.Commands.Tags.UpdateTag
+@using Application.Features.Queries.Tags.GetTagUsage
+
+<PageTitle>@L["Tags_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Tags_PageTitle"]</h1>
+    <p>@L["Tags_PageSubtitle"]</p>
+</div>
+
+<ElevareGrid TItem="TagUsageResponse"
+             Data="_tags"
+             Loading="_loading"
+             Title="@L["Tags_GridTitle"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             EmptyText="@L["Tags_Empty"]"
+             PageSize="50" />
+
+@* ── Rename ──────────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Tags_RenameTitle"]" IsVisible="@(_renameTarget is not null)"
+          OnClose="() => _renameTarget = null" Size="sm">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label" for="tag-name">@L["Tags_Name"]</label>
+            <input id="tag-name" class="cms-input" @bind="_renameValue" />
+            @if (_renameTarget is { PageCount: > 0 } target)
+            {
+                @* Said before saving, because renaming is not a local edit: the tag is
+                   shared, so the change lands on every page carrying it at once. *@
+                <small class="cms-hint">@string.Format(L["Tags_RenameAffects"], target.PageCount)</small>
+            }
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _renameTarget = null">@L["Common_Cancel"]</button>
+        <button class="btn-cms btn-primary-cms" disabled="@_saving" @onclick="ConfirmRename">@L["Common_Save"]</button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete ──────────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Tags_DeleteTitle"]" IsVisible="@(_deleteTarget is not null)"
+          OnClose="() => _deleteTarget = null" Size="sm">
+    <Body>
+        @if (_deleteTarget is { } target)
+        {
+            <p>@string.Format(L["Tags_DeleteConfirm"], target.Name)</p>
+            <p class="cms-hint">
+                @(target.PageCount > 0
+                    ? string.Format(L["Tags_DeleteUsedHint"], target.PageCount)
+                    : L["Tags_DeleteUnusedHint"])
+            </p>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _deleteTarget = null">@L["Common_Cancel"]</button>
+        <button class="btn-cms btn-danger-cms" disabled="@_saving" @onclick="ConfirmDelete">@L["Common_Delete"]</button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<TagUsageResponse> _tags = [];
+    private List<GridColumnDef<TagUsageResponse>> _columns = [];
+    private RenderFragment<TagUsageResponse>? _actionTemplate;
+    private bool _loading = true;
+    private bool _saving;
+
+    private TagUsageResponse? _renameTarget;
+    private string _renameValue = "";
+    private TagUsageResponse? _deleteTarget;
+
+    private bool CanManage => UserContext.HasPermission(PermissionKeys.PagesEdit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildColumns();
+        _actionTemplate = ActionButtons;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetTagUsageQuery())).Match(
+                tags => _tags = tags,
+                error => Toast.Error(L.Error(error)));
+        }
+        finally { _loading = false; }
+    }
+
+    private void BuildColumns() => _columns =
+    [
+        new GridColumnDef<TagUsageResponse>
+        {
+            PropertyName = "Name",
+            Title = L["Tags_Name"],
+            PropertyType = typeof(string),
+            ValueAccessor = t => t.Name,
+            Sortable = true,
+            Filterable = true,
+        },
+        new GridColumnDef<TagUsageResponse>
+        {
+            PropertyName = "Slug",
+            Title = L["Tags_Slug"],
+            PropertyType = typeof(string),
+            ValueAccessor = t => t.Slug,
+            CellTemplate = SlugTemplate,
+            Sortable = true,
+            Width = "260px",
+        },
+        new GridColumnDef<TagUsageResponse>
+        {
+            PropertyName = "PageCount",
+            Title = L["Tags_PageCount"],
+            PropertyType = typeof(int),
+            ValueAccessor = t => (object?)t.PageCount,
+            CellTemplate = UsageTemplate,
+            Sortable = true,
+            Width = "160px",
+        },
+    ];
+
+    private static RenderFragment<TagUsageResponse> SlugTemplate => t => __builder =>
+    {
+        <code style="font-size:12.5px;color:var(--cms-text-muted)">@t.Slug</code>
+    };
+
+    private RenderFragment<TagUsageResponse> UsageTemplate => t => __builder =>
+    {
+        @if (t.PageCount == 0)
+        {
+            <span class="badge-cms badge-warning" title="@L["Tags_UnusedHint"]">
+                <i class="bi bi-dash-circle"></i> @L["Tags_Unused"]
+            </span>
+        }
+        else
+        {
+            <span class="badge-cms badge-neutral">@string.Format(L["Tags_UsedOnPages"], t.PageCount)</span>
+        }
+    };
+
+    private RenderFragment<TagUsageResponse> ActionButtons => t => __builder =>
+    {
+        @if (CanManage)
+        {
+            <div style="display:flex;gap:6px;justify-content:flex-end">
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Tags_RenameTitle"]"
+                        @onclick="() => OpenRename(t)">
+                    <i class="bi bi-pencil"></i>
+                </button>
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Delete"]"
+                        @onclick="() => _deleteTarget = t">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            </div>
+        }
+    };
+
+    private void OpenRename(TagUsageResponse tag)
+    {
+        _renameTarget = tag;
+        _renameValue = tag.Name;
+    }
+
+    private async Task ConfirmRename()
+    {
+        if (_renameTarget is not { } target) return;
+
+        _saving = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new UpdateTagCommand(target.Id, _renameValue)))
+                .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Tags_Renamed"]);
+                _renameTarget = null;
+                await LoadAsync();
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is not { } target) return;
+
+        _saving = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeleteTagCommand(target.Id)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Tags_Deleted"]);
+                _deleteTarget = null;
+                await LoadAsync();
+            }
+        }
+        finally { _saving = false; }
+    }
+}

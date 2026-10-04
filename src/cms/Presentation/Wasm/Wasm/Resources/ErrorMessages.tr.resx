@@ -1,0 +1,368 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <!-- Article -->
+  <!-- Category -->
+  <!-- Auth -->
+  <data name="Auth.InvalidCredentials" xml:space="preserve">
+    <value>E-posta adresi veya şifre hatalı.</value>
+  </data>
+  <data name="Auth.AccountLocked" xml:space="preserve">
+    <value>Hesabiniz kilitlenmistir. L�tfen y�netici ile iletisime ge�in.</value>
+  </data>
+  <!-- User -->
+  <!-- Comment -->
+  <!-- ContactMessage -->
+  <!-- Language -->
+  <data name="Language.NotFound" xml:space="preserve">
+    <value>Dil bulunamadı.</value>
+  </data>
+  <data name="Language.CodeAlreadyExists" xml:space="preserve">
+    <value>Bu kod için bir dil zaten mevcut.</value>
+  </data>
+  <data name="Language.CannotDeleteDefaultLanguage" xml:space="preserve">
+    <value>Varsayılan dil silinemez.</value>
+  </data>
+  <data name="Language.HasPages" xml:space="preserve">
+    <value>Bu dilde hâlâ sayfa var. Dili siteden kaldırmak için "Sitede" kutusunun işaretini kaldırın; tamamen silmek için önce sayfalarını silin.</value>
+  </data>
+  <!-- MediaFile -->
+  <data name="MediaFile.NotFound" xml:space="preserve">
+    <value>Medya dosyası bulunamadı.</value>
+  </data>
+  <!-- Menu -->
+  <!-- NewsletterSubscriber -->
+  <!-- PageInfo -->
+  <data name="PageInfo.NotFound" xml:space="preserve">
+    <value>Sayfa bulunamadı.</value>
+  </data>
+  <data name="PageInfo.EditedElsewhere" xml:space="preserve">
+    <value>Bu sayfa siz açtıktan sonra değiştirildi.</value>
+  </data>
+  <data name="PageInfo.SlugAlreadyExists" xml:space="preserve">
+    <value>Bu slug ile sayfa zaten mevcut.</value>
+  </data>
+  <data name="PageInfo.CircularParentReference" xml:space="preserve">
+    <value>Sayfa kendi üst ö�Yesi olamaz.</value>
+  </data>
+  <data name="PageInfo.CannotDeleteWithChildren" xml:space="preserve">
+    <value>Sayfanın alt sayfaları oldu�Yu için silinemez.</value>
+  </data>
+  <data name="PageInfo.CannotUnpublishHomePage" xml:space="preserve">
+    <value>Ana sayfa yayından kaldırılamaz.</value>
+  </data>
+  <!-- Redirect -->
+  <data name="Redirect.NotFound" xml:space="preserve">
+    <value>Yönlendirme kuralı bulunamadı.</value>
+  </data>
+  <data name="Redirect.OldPathAlreadyExists" xml:space="preserve">
+    <value>Bu yol için yönlendirme kuralı zaten mevcut.</value>
+  </data>
+  <data name="Redirect.CircularRedirect" xml:space="preserve">
+    <value>Bu dairesel bir yönlendirme oluşturacak.</value>
+  </data>
+  <data name="Redirect.OldPathCannotMatchNewPath" xml:space="preserve">
+    <value>Eski ve yeni yollar aynı olamaz.</value>
+  </data>
+  <!-- ScheduledJob -->
+  <!-- SiteSetting -->
+  <data name="SiteSetting.NotFound" xml:space="preserve">
+    <value>Site ayarı bulunamadı.</value>
+  </data>
+  <data name="IntegrationSecret.NotFound" xml:space="preserve">
+    <value>Sır bulunamadı.</value>
+  </data>
+  <data name="SiteSetting.KeyAlreadyExists" xml:space="preserve">
+    <value>Bu anahtarla ayar zaten mevcut.</value>
+  </data>
+  <!-- Tag -->
+  <data name="Tag.NotFound" xml:space="preserve">
+    <value>Etiket bulunamadı.</value>
+  </data>
+  <data name="Tag.NameAlreadyExists" xml:space="preserve">
+    <value>Bu isimle etiket zaten mevcut.</value>
+  </data>
+  <!-- Advertisement -->
+  <!-- Form -->
+  <!-- Popup -->
+  <!-- File -->
+  <data name="File.Empty" xml:space="preserve">
+    <value>Yüklenen dosya boş olamaz.</value>
+  </data>
+  <data name="File.TooLarge" xml:space="preserve">
+    <value>Dosya boyut limitini aşıyor.</value>
+  </data>
+  <data name="File.MimeTypeNotAllowed" xml:space="preserve">
+    <value>Bu dosya türüne izin verilmiyor.</value>
+  </data>
+  <data name="File.NotFound" xml:space="preserve">
+    <value>Dosya bulunamadı.</value>
+  </data>
+  <data name="File.PhysicalNotFound" xml:space="preserve">
+    <value>Fiziksel dosya depolamada bulunamadı.</value>
+  </data>
+  <data name="File.UploadFailed" xml:space="preserve">
+    <value>Dosya yükleme başarısız.</value>
+  </data>
+  <!-- Email -->
+  <data name="Email.NoRecipients" xml:space="preserve">
+    <value>En az bir alıcı adresi gereklidir.</value>
+  </data>
+  <data name="Email.TemplateNameEmpty" xml:space="preserve">
+    <value>Şablon adı boş olamaz.</value>
+  </data>
+  <data name="Email.TemplateNotFound" xml:space="preserve">
+    <value>E-posta şablonu bulunamadı.</value>
+  </data>
+  <data name="Email.SendFailed" xml:space="preserve">
+    <value>E-posta gönderilemedi.</value>
+  </data>
+  <data name="Trash.NotFound" xml:space="preserve">
+    <value>Öğe çöp kutusunda bulunamadı.</value>
+  </data>
+  <data name="Trash.UnknownType" xml:space="preserve">
+    <value>Bilinmeyen çöp kutusu öğe türü.</value>
+  </data>
+  <data name="AppUser.InvalidPassword" xml:space="preserve">
+    <value>Mevcut şifreniz doğru değil.</value>
+  </data>
+  <data name="AppUser.EmailAlreadyInUse" xml:space="preserve">
+    <value>Bu e-posta adresiyle kayıtlı bir kullanıcı zaten var.</value>
+  </data>
+  <data name="AppUser.NotFound" xml:space="preserve">
+    <value>Kullanıcı bulunamadı.</value>
+  </data>
+  <data name="PasswordSetup.InvalidOrExpiredToken" xml:space="preserve">
+    <value>Bu bağlantı geçersiz veya süresi dolmuş. Bir yöneticiden yeni bir bağlantı göndermesini isteyin.</value>
+  </data>
+  <data name="PasswordSetup.AlreadyHasPassword" xml:space="preserve">
+    <value>Bu kullanıcının zaten bir şifresi var.</value>
+  </data>
+  <data name="AppRole.CannotDeleteBuiltInRole" xml:space="preserve">
+    <value>Yerleşik roller silinemez.</value>
+  </data>
+  <data name="AppRole.CannotDeleteRoleInUse" xml:space="preserve">
+    <value>Bu role atanmış kullanıcılar olduğu için silinemez. Önce kullanıcıları başka bir role taşıyın.</value>
+  </data>
+  <data name="AppRole.CannotDeleteRoleInWorkflow" xml:space="preserve">
+    <value>Bu rol bir onay hiyerarşisinin adımında kullanıldığı için silinemez. Önce ilgili adımdan bu rolü kaldırın.</value>
+  </data>
+  <data name="AppRole.NameAlreadyExists" xml:space="preserve">
+    <value>Bu adda bir rol zaten var.</value>
+  </data>
+  <data name="AppRole.NotFound" xml:space="preserve">
+    <value>Rol bulunamadı.</value>
+  </data>
+  <data name="AppUser.CannotDeleteLastSuperAdmin" xml:space="preserve">
+    <value>Son SuperAdmin hesabı silinemez.</value>
+  </data>
+  <data name="AppUser.CannotDeleteSelf" xml:space="preserve">
+    <value>Kendi hesabınızı silemezsiniz.</value>
+  </data>
+  <data name="Backup.ConnectionStringMissing" xml:space="preserve">
+    <value>Veritabanı bağlantı bilgisi tanımlı değil, yedek alınamaz.</value>
+  </data>
+  <data name="CdnProbe.NotConfigured" xml:space="preserve">
+    <value>Test etmeden önce bir CDN taban adresi girin.</value>
+  </data>
+  <data name="CdnProbe.InvalidBaseUrl" xml:space="preserve">
+    <value>Bu geçerli bir http(s) adresi değil.</value>
+  </data>
+  <data name="CdnProbe.NoMediaToTest" xml:space="preserve">
+    <value>Test edilecek yüklenmiş bir dosya yok. Önce Medya Kütüphanesi'ne herhangi bir görsel yükleyin — kontrol, gerçek bir dosyayı CDN üzerinden çekip aslıyla karşılaştırarak çalışır.</value>
+  </data>
+  <data name="TestEmail.InvalidRecipient" xml:space="preserve">
+    <value>Testin gönderileceği geçerli bir e-posta adresi girin.</value>
+  </data>
+  <data name="Email.SenderNotConfigured" xml:space="preserve">
+    <value>Gönderen adresi tanımlı değil. Yukarıdaki "Gönderen E-posta Adresi" alanını doldurup kaydedin ya da appsettings.json'da Email:FromAddress değerini ayarlayın.</value>
+  </data>
+  <data name="ContentBulkEdit.AlreadyReverted" xml:space="preserve">
+    <value>Bu toplu güncelleme zaten geri alınmış.</value>
+  </data>
+  <data name="ContentBulkEdit.NoPagesSelected" xml:space="preserve">
+    <value>Güncellenecek en az bir sayfa seçin.</value>
+  </data>
+  <data name="ContentBulkEdit.NotFound" xml:space="preserve">
+    <value>Toplu güncelleme kaydı bulunamadı.</value>
+  </data>
+  <data name="ContentBulkEdit.SearchTextRequired" xml:space="preserve">
+    <value>Aranacak metni girin.</value>
+  </data>
+  <data name="FormReplyTemplate.NotFound" xml:space="preserve">
+    <value>Hazır cevap şablonu bulunamadı.</value>
+  </data>
+  <data name="FormSubmission.NotFound" xml:space="preserve">
+    <value>Form gönderimi bulunamadı.</value>
+  </data>
+  <data name="Page.CustomCodeNotAllowed" xml:space="preserve">
+    <value>Ham script/özel kod kaydetme yetkiniz yok. Bunu yalnızca Developer, Admin ve SuperAdmin yapabilir.</value>
+  </data>
+  <data name="Page.InvalidSlug" xml:space="preserve">
+    <value>Başlıktan geçerli bir adres (slug) üretilemedi. Slug alanını elle doldurun.</value>
+  </data>
+  <data name="PageInfo.MaxDepthExceeded" xml:space="preserve">
+    <value>Sayfalar en fazla 3 seviye iç içe olabilir.</value>
+  </data>
+  <data name="PageInfo.ParentLanguageMismatch" xml:space="preserve">
+    <value>Üst sayfa aynı dilde olmalı.</value>
+  </data>
+  <data name="PageInfo.ParentNotFound" xml:space="preserve">
+    <value>Seçilen üst sayfa bulunamadı.</value>
+  </data>
+  <data name="PageInfo.PreviewBaseUrlNotConfigured" xml:space="preserve">
+    <value>Public site adresi henüz tanımlı değil. Site Ayarları içindeki Public Site URL alanını doldurun.</value>
+  </data>
+  <data name="PageInfo.SameLanguage" xml:space="preserve">
+    <value>Hedef dil, kaynak sayfanın dilinden farklı olmalı.</value>
+  </data>
+  <data name="PageInfo.TranslationAlreadyExists" xml:space="preserve">
+    <value>Bu sayfanın seçilen dilde bir sürümü zaten var.</value>
+  </data>
+  <data name="PageTemplate.CustomCodeNotAllowed" xml:space="preserve">
+    <value>Ham script/özel kod kaydetme yetkiniz yok. Bunu yalnızca Developer, Admin ve SuperAdmin yapabilir.</value>
+  </data>
+  <data name="PageTemplate.EditedElsewhere" xml:space="preserve">
+    <value>Bu şablon siz açtıktan sonra değiştirildi.</value>
+  </data>
+  <data name="PageTemplate.NotFound" xml:space="preserve">
+    <value>Şablon bulunamadı.</value>
+  </data>
+  <data name="Preview.SigningKeyMissing" xml:space="preserve">
+    <value>Önizleme bağlantısı üretilemiyor: Preview:SigningKey tanımlı değil. Değerin public sitedekiyle birebir aynı olması gerekir.</value>
+  </data>
+  <data name="Preview.SigningKeyTooShort" xml:space="preserve">
+    <value>Önizleme bağlantısı üretilemiyor: Preview:SigningKey en az 32 karakter olmalı. `openssl rand -base64 48` (veya benzeri) ile bir tane üretip her iki uygulamada da aynı değeri kullanın.</value>
+  </data>
+  <data name="PublicSite.BaseUrlNotConfigured" xml:space="preserve">
+    <value>Public site adresi tanımlı değil.</value>
+  </data>
+  <data name="Redirect.OldPathRequired" xml:space="preserve">
+    <value>Yönlendirilecek yol zorunludur.</value>
+  </data>
+  <data name="Redirect.ShadowsLivePage" xml:space="preserve">
+    <value>Bu yolda yayınlanmış bir sayfa var; yönlendirme o sayfayı erişilmez kılar.</value>
+  </data>
+  <data name="Seo.LlmsTooLarge" xml:space="preserve">
+    <value>llms.txt çok uzun. Bu dosya sitenin kopyası değil, kısa bir haritası olmalı.</value>
+  </data>
+  <data name="Seo.RobotsMissingUserAgent" xml:space="preserve">
+    <value>robots.txt en az bir User-agent satırı içermeli. Bu satır olmadan altındaki tüm kurallar yok sayılır.</value>
+  </data>
+  <data name="Seo.RobotsTooLarge" xml:space="preserve">
+    <value>robots.txt çok uzun. Tarayıcılar uzun dosyaları sonuna kadar okumaz, sondaki kurallar hiç işlemez.</value>
+  </data>
+  <data name="SiteCode.ContentRequired" xml:space="preserve">
+    <value>Kaydedilecek kod yok. Sağlayıcınızın verdiği kod parçasını yapıştırın.</value>
+  </data>
+  <data name="SiteCode.Malformed" xml:space="preserve">
+    <value>Kodda kapatılmamış bir etiket var. Kodun tamamını sağlayıcıdan kopyalayın — eksik bir kapanış etiketi tüm sayfayı boşaltabilir.</value>
+  </data>
+  <data name="SiteCode.NameRequired" xml:space="preserve">
+    <value>Listede tanıyabilmek için koda bir ad verin.</value>
+  </data>
+  <data name="SiteCode.NotFound" xml:space="preserve">
+    <value>Kod parçası bulunamadı.</value>
+  </data>
+  <data name="SiteCode.PresetValueUnrecognised" xml:space="preserve">
+    <value>Yapıştırılan içerikten kimlik okunamadı. Ya sadece kimliği ya da sağlayıcının kurulum sayfasındaki kodun tamamını yapıştırın.</value>
+  </data>
+  <data name="SiteCode.TooLarge" xml:space="preserve">
+    <value>Kod parçası çok büyük. Büyük kütüphaneleri dosya olarak barındırıp script src ile çağırın.</value>
+  </data>
+  <data name="SiteCode.WholeDocumentPasted" xml:space="preserve">
+    <value>Bu bir kod parçası değil, komple bir web sayfası. Yalnızca sağlayıcının head ya da body için işaretlediği bölümü yapıştırın.</value>
+  </data>
+  <data name="SiteSetting.CustomCodeNotAllowed" xml:space="preserve">
+    <value>Ham script/özel kod kaydetme yetkiniz yok. Bunu yalnızca Developer, Admin ve SuperAdmin yapabilir.</value>
+  </data>
+  <data name="Tag.InvalidName" xml:space="preserve">
+    <value>Geçerli bir etiket adı girin.</value>
+  </data>
+  <data name="UserNote.Unauthorized" xml:space="preserve">
+    <value>Bu nota erişim yetkiniz yok.</value>
+  </data>
+  <data name="UserReminder.NotFound" xml:space="preserve">
+    <value>Hatırlatıcı bulunamadı.</value>
+  </data>
+  <data name="UserReminder.Unauthorized" xml:space="preserve">
+    <value>Bu hatırlatıcıya erişim yetkiniz yok.</value>
+  </data>
+  <data name="UserTask.NotFound" xml:space="preserve">
+    <value>Görev bulunamadı.</value>
+  </data>
+  <data name="UserTask.Unauthorized" xml:space="preserve">
+    <value>Bu göreve erişim yetkiniz yok.</value>
+  </data>
+  <data name="Workflow.CannotDeleteActiveDefinition" xml:space="preserve">
+    <value>Silmeden önce bu onay akışını devre dışı bırakın.</value>
+  </data>
+  <data name="Workflow.CannotDeleteWithPendingRequests" xml:space="preserve">
+    <value>Bu akışta onay bekleyen içerik var. Önce o istekleri onaylayın ya da reddedin — şimdi silmek o düzenlemeleri askıda ve görünmez bırakır.</value>
+  </data>
+  <data name="Workflow.DefinitionNotFound" xml:space="preserve">
+    <value>Onay akışı bulunamadı.</value>
+  </data>
+  <data name="Workflow.NeedsAtLeastOneStep" xml:space="preserve">
+    <value>Bir onay akışında en az bir adım olmalı.</value>
+  </data>
+  <data name="Workflow.NotAuthorizedForStep" xml:space="preserve">
+    <value>Bu adımı karara bağlamak için gereken rolde değilsiniz.</value>
+  </data>
+  <data name="Workflow.RequestNotFound" xml:space="preserve">
+    <value>Onay isteği bulunamadı.</value>
+  </data>
+  <data name="Workflow.RequestNotPending" xml:space="preserve">
+    <value>Bu istek zaten karara bağlanmış.</value>
+  </data>
+  <data name="Permission.NotGranted" xml:space="preserve">
+    <value>Bu işlem için gereken yetkiye sahip değilsiniz.</value>
+  </data>
+  <data name="SiteCode.KindMismatch" xml:space="preserve">
+    <value>Seçilen tür yapıştırılan kodla uyuşmuyor. Türü değiştirin ya da o türe uygun kodu yapıştırın.</value>
+  </data>
+  <data name="Cache.BaseUrlNotConfigured" xml:space="preserve">
+    <value>Public site adresi girilmeden önbellek yönetilemez. Site Ayarları içindeki Public Site URL alanını doldurun.</value>
+  </data>
+  <data name="Cache.SecretMismatch" xml:space="preserve">
+    <value>Web sitesi isteği reddetti (401). CMS ve Web tarafındaki Cache:ClearSecret değerleri aynı olmalı ve boş olmamalı.</value>
+  </data>
+  <data name="Cache.StatusUnreadable" xml:space="preserve">
+    <value>Web sitesi beklenmeyen bir yanıt döndürdü.</value>
+  </data>
+  <data name="Cache.RequestFailed" xml:space="preserve">
+    <value>Web sitesi isteği başarısız oldu.</value>
+  </data>
+  <data name="Cache.Unreachable" xml:space="preserve">
+    <value>Web sitesine ulaşılamadı.</value>
+  </data>
+  <data name="StructuredData.PublicSiteBaseUrlMissing" xml:space="preserve">
+    <value>Yapısal veri taslağı oluşturulamadı: Public Site URL boş. Şemadaki tüm adresler bu adresten türetildiği için doldurulması zorunlu.</value>
+  </data>
+  <data name="StructuredData.PageNotFound" xml:space="preserve">
+    <value>Sayfa bulunamadı. Başka bir sekmede silinmiş olabilir; sayfa listesini yenileyin.</value>
+  </data>
+  <data name="Trash.CannotPurgeHasFormSubmissions" xml:space="preserve">
+    <value>Bu sayfada form yanıtları var. Kalıcı silmek o başvuruları da silerdi.</value>
+  </data>
+  <data name="Trash.CannotPurgeHasChildren" xml:space="preserve">
+    <value>Bu sayfanın alt sayfaları var. Önce onları kalıcı silin.</value>
+  </data>
+  <data name="Database.SaveError" xml:space="preserve">
+    <value>Veri kaydedilirken bir hata oluştu.</value>
+  </data>
+  <data name="Page.StructuredDataInvalidJson" xml:space="preserve">
+    <value>Yapısal veri geçerli bir JSON değil. Bu haliyle yayınlanırsa arama motorları hiçbirini okuyamaz.</value>
+  </data>
+</root>

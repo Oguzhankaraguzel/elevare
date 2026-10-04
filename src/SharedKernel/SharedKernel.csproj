@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<PackageReference Include="AngleSharp" />
+		<PackageReference Include="MediatR" />
+		<PackageReference Include="MediatR.Contracts" />
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+		<PackageReference Include="System.IdentityModel.Tokens.Jwt" />
+	</ItemGroup>
+
+</Project>

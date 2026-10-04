@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+		<PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Core\Application\Application.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="ArchitectureTests" />
+		<InternalsVisibleTo Include="Application.UnitTests" />
+	</ItemGroup>
+
+</Project>

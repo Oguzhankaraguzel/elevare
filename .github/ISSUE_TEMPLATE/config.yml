@@ -1,0 +1,7 @@
+# Security reports must not go through the public issue tracker — an open issue is
+# a disclosure. SECURITY.md explains the private route.
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/Oguzhankaraguzel/elevare/security/advisories/new
+    about: Report privately. Please do not open a public issue for security problems.

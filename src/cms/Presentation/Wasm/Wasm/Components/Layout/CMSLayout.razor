@@ -1,0 +1,78 @@
+@inherits LayoutComponentBase
+
+@attribute [Authorize(Roles = "SuperAdmin,Admin")]
+
+@inject AuthenticationStateProvider AuthStateProvider
+@inject CurrentUserPrincipalHolder UserPrincipalHolder
+
+@if (_signedIn)
+{
+    <div class="cms-shell">
+        <CMSSidebar />
+        <div class="cms-main">
+            <CMSTopBar Title="@_pageTitle" />
+            <div class="cms-content">
+                @Body
+            </div>
+        </div>
+        <CMSRightBar />
+    </div>
+
+    <ToastContainer />
+    <NavigationLoadingOverlay />
+    <CmsLoadingModal />
+    <ReminderAlarmMonitor />
+}
+
+@code {
+    private string _pageTitle = "";
+    private bool _signedIn;
+
+    [CascadingParameter(Name = "PageTitle")]
+    private string PageTitle
+    {
+        get => _pageTitle;
+        set { _pageTitle = value; StateHasChanged(); }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // AuthorizeRouteView only inspects [Authorize]/[AllowAnonymous] on the
+        // routed @page component, never on the layout wrapping it — so the
+        // [Authorize] attribute above has no effect on its own, and every page
+        // using this layout is reachable while signed out unless it adds its
+        // own guard. Most pages do (an OnInitializedAsync permission check that
+        // redirects unauthorized users to "/"), but that check can't tell "not
+        // signed in" from "signed in without this permission" and sends both
+        // cases to "/" — which has no guard of its own, so an anonymous visitor
+        // lands on a half-broken dashboard instead of the login page. This is
+        // the one place shared by every admin page, so it is where "not signed
+        // in at all" gets caught first, before any page-specific check runs.
+        //
+        // @Body is gated behind _signedIn rather than rendered unconditionally:
+        // Blazor does not wait for a parent's OnInitializedAsync to finish before
+        // starting a child's, so an ungated @Body would start rendering the page
+        // (and its own queries) concurrently with this await — on a slow enough
+        // connection to the database, the page's own output can start streaming
+        // before this decides to redirect, and NavigateTo can only still turn
+        // into an HTTP redirect if the response hasn't started yet.
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        if (state.User.Identity?.IsAuthenticated != true)
+        {
+            string returnUrl = Uri.EscapeDataString(Nav.Uri);
+            Nav.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: false);
+            return;
+        }
+        _signedIn = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        // Populate the holder so that UserContext can resolve the user ID
+        // during Blazor Server interactive (SignalR) execution, where
+        // IHttpContextAccessor.HttpContext has no authentication claims.
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        UserPrincipalHolder.Principal = state.User;
+    }
+}

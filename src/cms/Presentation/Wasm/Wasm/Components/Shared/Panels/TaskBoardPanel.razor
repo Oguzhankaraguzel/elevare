@@ -1,0 +1,604 @@
+﻿@implements IDisposable
+
+<div class="kanban-toolbar">
+    <div style="display:flex;align-items:center;gap:8px;flex:1;flex-wrap:wrap">
+        @* Task search *@
+        <div style="position:relative;flex:1;min-width:160px;max-width:260px">
+            <i class="bi bi-search" style="position:absolute;left:9px;top:50%;transform:translateY(-50%);font-size:12px;color:var(--cms-text-muted);pointer-events:none"></i>
+            <input @bind="_searchText" @bind:event="oninput" class="cms-input"
+                   style="padding-left:28px;height:32px;font-size:13px"
+                   placeholder="@L["UserTasks_SearchPlaceholder"]" />
+        </div>
+        @* Week filter *@
+        <div style="display:flex;gap:4px">
+            <button class="btn-cms btn-sm-cms @(_weekFilter == WeekFilter.All ? "btn-primary-cms" : "btn-ghost")"
+                    @onclick='() => _weekFilter = WeekFilter.All'>
+                @L["UserTasks_FilterAll"]
+            </button>
+            <button class="btn-cms btn-sm-cms @(_weekFilter == WeekFilter.ThisWeek ? "btn-primary-cms" : "btn-ghost")"
+                    @onclick='() => _weekFilter = WeekFilter.ThisWeek'>
+                @L["UserTasks_FilterThisWeek"]
+            </button>
+        </div>
+    </div>
+    <button class="btn-cms btn-primary-cms btn-sm-cms" style="margin-left:8px" @onclick="OpenCreate">
+        <i class="bi bi-plus-lg"></i> @L["UserTasks_NewTask"]
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div style="display:flex;align-items:center;justify-content:center;padding:60px">
+        <div class="cms-loading-spinner"></div>
+    </div>
+}
+else
+{
+    <div class="kanban-board">
+        @foreach (var col in _boardColumns)
+        {
+            <div class="kanban-column @(col.Status == _dragOverStatus ? "kanban-column-dragover" : "")"
+                 @ondragover="HandleDragOver"
+                 @ondragover:preventDefault
+                 @ondragenter="() => OnDragEnter(col.Status)"
+                 @ondragleave="() => OnDragLeave(col.Status)"
+                 @ondrop="() => OnDrop(col.Status)">
+                <div class="kanban-column-header" style="border-top:3px solid @col.Color">
+                    <div style="display:flex;align-items:center;gap:8px">
+                        <i class="bi @col.Icon" style="color:@col.Color;font-size:14px"></i>
+                        <span class="kanban-column-title">@col.Label</span>
+                    </div>
+                    <span class="kanban-column-count">@GetTasks(col.Status).Count</span>
+                </div>
+                <div class="kanban-column-body">
+                    @foreach (var task in GetTasks(col.Status))
+                    {
+                        <div class="kanban-card @(_draggedTask?.Id == task.Id ? "kanban-card-dragging" : "") @(!task.IsRead ? "kanban-card-unread" : "")"
+                             draggable="true"
+                             @ondragstart="() => OnDragStart(task)"
+                             @ondragend="OnDragEnd"
+                             @onclick="() => OpenEdit(task)">
+                            <div class="kanban-card-header">
+                                <span class="kanban-card-title">
+                                    @if (!task.IsRead)
+                                    {
+                                        <span class="kanban-unread-dot" title="@L["UserTasks_Unread"]"></span>
+                                    }
+                                    @task.Title
+                                </span>
+                                <button class="kanban-card-action" @onclick:stopPropagation @onclick="() => OpenDelete(task)" title="@L["UserTasks_ActionDelete"]">
+                                    <i class="bi bi-trash3"></i>
+                                </button>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(task.Description))
+                            {
+                                <div class="kanban-card-desc">@Truncate(task.Description, 80)</div>
+                            }
+                            <div class="kanban-card-footer">
+                                <span class="badge-cms @GetPriorityBadge(task.Priority)" style="font-size:10px">
+                                    @L[$"UserTasks_Priority{task.Priority}"]
+                                </span>
+                                @* An ownerless task says so out loud rather than just
+                                   omitting the name — silence looks like a rendering
+                                   gap, and "nobody has this" is the thing worth seeing. *@
+                                @if (task.AssignedToUserName is not null)
+                                {
+                                    <span class="kanban-card-user">
+                                        <i class="bi bi-person-fill"></i> @task.AssignedToUserName
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="kanban-card-user kanban-card-unassigned">
+                                        <i class="bi bi-person-dash"></i> @L["UserTasks_Unassigned"]
+                                    </span>
+                                }
+                                @if (task.DueDate.HasValue)
+                                {
+                                    bool overdue = task.DueDate.Value <= DateTime.UtcNow && task.Status != UserTaskStatus.Completed;
+                                    <span class="kanban-card-due @(overdue ? "overdue" : "")">
+                                        <i class="bi bi-calendar-event"></i> @task.DueDate.Value.ToString("MMM dd")
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ── Create / Edit inner window ──────────────────────────────────────────── *@
+<CmsModal Title="@(_editId.HasValue ? L["UserTasks_EditTitle"] : L["UserTasks_CreateTitle"])"
+          IsVisible="_showForm"
+          OnClose="CloseForm"
+          Size="md">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label">@L["UserTasks_FormTitle"] <span style="color:var(--cms-danger)">*</span></label>
+            <input @bind="_form.Title" class="cms-input" placeholder="@L["UserTasks_FormTitlePlaceholder"]" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UserTasks_FormDescription"] <span style="color:var(--cms-danger)">*</span></label>
+            <textarea @bind="_form.Description" class="cms-input" rows="3" placeholder="@L["UserTasks_FormDescriptionPlaceholder"]"></textarea>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label" for="task-assignee">@L["UserTasks_FormAssignTo"]</label>
+                @* A native select: it is keyboard- and screen-reader-operable for
+                   free, browsers give it type-ahead, and the empty first option is
+                   what lets a task start with nobody on it. *@
+                <select id="task-assignee" class="cms-input" @bind="_form.AssignedToUserId">
+                    <option value="">@L["UserTasks_Unassigned"]</option>
+                    @foreach (AssignableUserResponse u in _users)
+                    {
+                        <option value="@u.Id">@(string.IsNullOrWhiteSpace(u.FullName) ? u.UserName : u.FullName)</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["UserTasks_FormPriority"]</label>
+                <select @bind="_form.Priority" class="cms-input">
+                    @foreach (UserTaskPriority p in Enum.GetValues<UserTaskPriority>())
+                    {
+                        <option value="@p">@L[$"UserTasks_Priority{p}"]</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["UserTasks_FormStartDate"]</label>
+                <input @bind="_form.StartDate" type="datetime-local" class="cms-input" />
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["UserTasks_FormDueDate"]</label>
+                <input @bind="_form.DueDate" type="datetime-local" class="cms-input" />
+            </div>
+        </div>
+        @if (_editId.HasValue)
+        {
+            <div class="form-row cols-2">
+                <div class="form-group">
+                    <label class="cms-label">@L["UserTasks_FormStatus"]</label>
+                    <select @bind="_form.Status" class="cms-input">
+                        @foreach (UserTaskStatus s in Enum.GetValues<UserTaskStatus>())
+                        {
+                            <option value="@s">@L[$"UserTasks_Status{s}"]</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:4px">
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                        <label class="cms-toggle">
+                            <input type="checkbox" @bind="_form.IsArchived" />
+                            <span class="cms-toggle-slider"></span>
+                        </label>
+                        <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["UserTasks_FormArchived"]</span>
+                    </label>
+                </div>
+            </div>
+        }
+        @* ── Comments ── *@
+        @if (_editId.HasValue)
+        {
+            <div style="margin-top:16px">
+                <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--cms-text-muted);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+                    <i class="bi bi-chat-left-text"></i> @L["UserTasks_Comments"] (@_comments.Count)
+                </div>
+                @if (_loadingComments)
+                {
+                    <div style="text-align:center;padding:16px"><div class="cms-loading-spinner" style="width:20px;height:20px"></div></div>
+                }
+                else
+                {
+                    <div style="display:flex;flex-direction:column;gap:8px;max-height:220px;overflow-y:auto;margin-bottom:10px">
+                        @foreach (var c in _comments)
+                        {
+                            <div style="background:var(--cms-bg);border:1px solid var(--cms-border);border-radius:var(--radius-sm);padding:10px 12px">
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+                                    <span style="font-size:12px;font-weight:600;color:var(--cms-accent)">
+                                        <i class="bi bi-person-fill"></i> @(c.UserName ?? "–")
+                                    </span>
+                                    <div style="display:flex;align-items:center;gap:6px">
+                                        <span style="font-size:11px;color:var(--cms-text-muted)">@c.CreateDate.ToString("MMM dd, HH:mm")</span>
+                                        <button class="kanban-card-action" style="font-size:11px" @onclick="() => DeleteComment(c.Id)" title="@L["UserTasks_ActionDelete"]">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div style="font-size:13px;color:var(--cms-text);line-height:1.45">@c.Comment</div>
+                            </div>
+                        }
+                        @if (_comments.Count == 0)
+                        {
+                            <div style="text-align:center;padding:12px;font-size:13px;color:var(--cms-text-muted)">
+                                @L["UserTasks_NoComments"]
+                            </div>
+                        }
+                    </div>
+                    <div style="display:flex;gap:8px">
+                        <textarea @bind="_newComment" class="cms-input" rows="2"
+                                  style="flex:1;resize:none"
+                                  placeholder="@L["UserTasks_CommentPlaceholder"]"></textarea>
+                        <button class="btn-cms btn-primary-cms btn-sm-cms" style="align-self:flex-end"
+                                @onclick="PostComment" disabled="@_savingComment">
+                            @if (_savingComment) { <i class="bi bi-arrow-clockwise spin"></i> }
+                            else { <i class="bi bi-send"></i> }
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseForm">@L["UserTasks_FormCancel"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="SaveForm" disabled="@_saving">
+            @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+            else { <i class="bi bi-check2"></i> }
+            @L["UserTasks_FormSave"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete confirmation ─────────────────────────────────────────────────── *@
+<CmsModal Title="@L["UserTasks_DeleteTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-warning);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">
+                @string.Format(L["UserTasks_DeleteConfirm"], _deleteTarget?.Title)
+            </p>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["UserTasks_FormCancel"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_saving">
+            @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+            else { <i class="bi bi-trash3"></i> }
+            @L["UserTasks_DeleteConfirmBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<UserTaskResponse> _tasks = [];
+    private List<AssignableUserResponse> _users = [];
+    private bool _loading = true;
+    private CancellationTokenSource? _loadCts;
+
+    // Drag state
+    private UserTaskResponse? _draggedTask;
+    private UserTaskStatus? _dragOverStatus;
+
+    // Filter / search state
+    private string _searchText = "";
+    private WeekFilter _weekFilter = WeekFilter.All;
+
+    // Form state
+    private bool _showForm;
+    private bool _saving;
+    private int? _editId;
+    private TaskFormModel _form = new();
+    private bool _showDelete;
+    private UserTaskResponse? _deleteTarget;
+
+    private readonly BoardColumn[] _boardColumns =
+    [
+        new(UserTaskStatus.New,        "New",         "bi-circle",          "#6366f1"),
+        new(UserTaskStatus.InProgress, "In Progress", "bi-play-circle-fill","#38bdf8"),
+        new(UserTaskStatus.Waiting,    "Waiting",     "bi-hourglass-split", "#f59e0b"),
+        new(UserTaskStatus.Completed,  "Done",        "bi-check-circle-fill","#10b981"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+        await LoadTasks();
+    }
+
+    private List<UserTaskResponse> GetTasks(UserTaskStatus status)
+    {
+        var query = _tasks.Where(t => t.Status == status && !t.IsArchived);
+
+        if (!string.IsNullOrWhiteSpace(_searchText))
+            query = query.Where(t =>
+                t.Title.Contains(_searchText, StringComparison.OrdinalIgnoreCase) ||
+                t.Description.Contains(_searchText, StringComparison.OrdinalIgnoreCase));
+
+        if (_weekFilter == WeekFilter.ThisWeek)
+        {
+            var monday = DateTime.Today.AddDays(-(int)DateTime.Today.DayOfWeek == 0 ? 6 : (int)DateTime.Today.DayOfWeek - 1);
+            var sunday = monday.AddDays(7);
+            query = query.Where(t =>
+                (t.DueDate.HasValue && t.DueDate.Value >= monday && t.DueDate.Value < sunday) ||
+                (t.StartDate.HasValue && t.StartDate.Value >= monday && t.StartDate.Value < sunday) ||
+                t.CreateDate >= monday);
+        }
+
+        return query.ToList();
+    }
+
+    // ── Drag & Drop ──────────────────────────────────────────────────────────
+    private void HandleDragOver(DragEventArgs e)
+    {
+        // Must have a real handler (not just :preventDefault) for drop to fire in all browsers
+    }
+
+    private void OnDragEnter(UserTaskStatus status)
+    {
+        _dragOverStatus = status;
+    }
+
+    private void OnDragLeave(UserTaskStatus status)
+    {
+        if (_dragOverStatus == status)
+            _dragOverStatus = null;
+    }
+
+    private void OnDragStart(UserTaskResponse task)
+    {
+        _draggedTask = task;
+    }
+
+    private void OnDragEnd()
+    {
+        _draggedTask = null;
+        _dragOverStatus = null;
+    }
+
+    private async Task OnDrop(UserTaskStatus newStatus)
+    {
+        if (_draggedTask is null || _draggedTask.Status == newStatus)
+        {
+            _dragOverStatus = null;
+            return;
+        }
+
+        int taskId = _draggedTask.Id;
+        UserTaskStatus oldStatus = _draggedTask.Status;
+
+        // Optimistic update
+        DateTime? completedAt = newStatus == UserTaskStatus.Completed ? DateTime.UtcNow : (DateTime?)null;
+        _tasks = _tasks.Select(t => t.Id == taskId
+            ? t with { Status = newStatus, CompletedAt = completedAt ?? t.CompletedAt }
+            : t).ToList();
+
+        _draggedTask = null;
+        _dragOverStatus = null;
+        StateHasChanged();
+
+        Result result = await Sender.Send(new UpdateUserTaskStatusCommand(taskId, newStatus));
+        result.Match(
+            () => { },
+            error =>
+            {
+                // Revert on failure
+                _tasks = _tasks.Select(t => t.Id == taskId ? t with { Status = oldStatus } : t).ToList();
+                Toast.Error(L.Error(error));
+            }
+        );
+    }
+
+    // ── Data loading ─────────────────────────────────────────────────────────
+    private async Task LoadUsers()
+    {
+        try
+        {
+            Result<List<AssignableUserResponse>> result = await Sender.Send(new GetAssignableUsersQuery());
+            result.Match(
+                success => { _users = success; },
+                error => { }
+            );
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    private async Task LoadTasks(bool forceReload = false)
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        if (!forceReload && _tasks.Count > 0) { _loading = false; return; }
+
+        _loading = true;
+        try
+        {
+            Result<PagedResult<UserTaskResponse>> result = await Sender.Send(new GetUserTasksQuery(), ct);
+            result.Match(
+                success => { _tasks = [.. success.Items]; },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException) { /* expected when cancelled */ }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(L["UserTasks_ErrorLoad"]); }
+        finally { _loading = false; }
+    }
+
+    // ── CRUD ─────────────────────────────────────────────────────────────────
+    private void OpenCreate()
+    {
+        _editId = null;
+        _form = new TaskFormModel();
+        _showForm = true;
+    }
+
+    private async Task OpenEdit(UserTaskResponse t)
+    {
+        _editId = t.Id;
+        _form = new TaskFormModel
+        {
+            Title = t.Title,
+            Description = t.Description,
+            AssignedToUserId = t.AssignedToUserId?.ToString() ?? "",
+            Priority = t.Priority,
+            Status = t.Status,
+            StartDate = t.StartDate,
+            DueDate = t.DueDate,
+            IsArchived = t.IsArchived,
+            IsActive = t.IsActive,
+        };
+        _showForm = true;
+
+        // Mark as read (fire-and-forget, update local state)
+        if (!t.IsRead)
+        {
+            _tasks = _tasks.Select(x => x.Id == t.Id ? x with { IsRead = true } : x).ToList();
+            await Sender.Send(new MarkUserTaskAsReadCommand(t.Id));
+        }
+
+        // Load comments
+        _comments = [];
+        _loadingComments = true;
+        StateHasChanged();
+        try
+        {
+            var result = await Sender.Send(new GetUserTaskByIdQuery(t.Id));
+            result.Match(
+                detail => { _comments = [.. detail.Comments]; },
+                _ => { });
+        }
+        finally { _loadingComments = false; }
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editId = null;
+        _form = new TaskFormModel();
+        _comments = [];
+        _newComment = "";
+    }
+
+    private void OpenDelete(UserTaskResponse t)
+    {
+        _deleteTarget = t;
+        _showDelete = true;
+    }
+
+    private async Task SaveForm()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Title)) { Toast.Error(L["UserTasks_ValidationTitleRequired"]); return; }
+        if (string.IsNullOrWhiteSpace(_form.Description)) { Toast.Error(L["UserTasks_ValidationDescriptionRequired"]); return; }
+
+        static DateTime? AsUtc(DateTime? value) =>
+            value.HasValue ? DateTime.SpecifyKind(value.Value, DateTimeKind.Utc) : null;
+        // Empty means "nobody yet", which is allowed — only a value that is present
+        // and unparseable would be a problem, and the select cannot produce one.
+        Guid? assignedTo = Guid.TryParse(_form.AssignedToUserId, out Guid parsed) && parsed != Guid.Empty
+            ? parsed
+            : null;
+
+        _saving = true;
+        try
+        {
+            // StartDate/DueDate are "timestamp with time zone" columns and Npgsql runs
+            // in strict UTC mode, which refuses a DateTime whose Kind is not Utc. The
+            // datetime-local <input> binds as Kind=Unspecified, so without this relabel
+            // the write threw and saving a task WITH a date failed outright. This panel
+            // neither offsets nor localises these dates for display, so stamping the
+            // entered value as Utc keeps exactly the behaviour the rest of the panel
+            // already assumes — it only stops the write from being rejected.
+            DateTime? startUtc = AsUtc(_form.StartDate);
+            DateTime? dueUtc = AsUtc(_form.DueDate);
+
+            Result result = _editId.HasValue
+                ? await Sender.Send(new UpdateUserTaskCommand(
+                    _editId.Value, _form.Title, _form.Description, assignedTo,
+                    _form.Status, _form.Priority, startUtc, dueUtc,
+                    _form.IsArchived, _form.IsActive))
+                : await Sender.Send(new CreateUserTaskCommand(
+                    _form.Title, _form.Description, assignedTo,
+                    _form.Priority, startUtc, dueUtc, null));
+
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                Toast.Success(_editId.HasValue ? L["UserTasks_SuccessUpdate"] : L["UserTasks_SuccessCreate"]);
+                CloseForm();
+                await LoadTasks(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new DeleteUserTaskCommand(_deleteTarget.Id));
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                Toast.Success(string.Format(L["UserTasks_SuccessDelete"], _deleteTarget.Title));
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadTasks(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+    }
+
+    // ── Comments ─────────────────────────────────────────────────────────────
+    private async Task PostComment()
+    {
+        if (string.IsNullOrWhiteSpace(_newComment) || !_editId.HasValue) return;
+        _savingComment = true;
+        try
+        {
+            Result result = await Sender.Send(new CreateUserTaskCommentCommand(_editId.Value, _newComment.Trim()));
+            bool ok = false;
+            result.Match(() => ok = true, error => Toast.Error(L.Error(error)));
+            if (ok)
+            {
+                _newComment = "";
+                // Reload comments
+                var detail = await Sender.Send(new GetUserTaskByIdQuery(_editId.Value));
+                detail.Match(d => { _comments = [.. d.Comments]; }, _ => { });
+            }
+        }
+        finally { _savingComment = false; }
+    }
+
+    private async Task DeleteComment(int commentId)
+    {
+        Result result = await Sender.Send(new DeleteUserTaskCommentCommand(commentId));
+        result.Match(
+            () => { _comments = _comments.Where(c => c.Id != commentId).ToList(); },
+            error => Toast.Error(L.Error(error)));
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength] + "…";
+
+    private static string GetPriorityBadge(UserTaskPriority p) => p switch
+    {
+        UserTaskPriority.Critical => "badge-danger",
+        UserTaskPriority.High     => "badge-warning",
+        UserTaskPriority.Medium   => "badge-info",
+        _                         => "badge-neutral"
+    };
+
+    }

@@ -1,0 +1,585 @@
+﻿@page "/templates/edit/{Id:int}"
+@layout CMSLayout
+@implements IAsyncDisposable
+@using Application.Features.Queries.Pages.GetListingPreview
+@inject IJSRuntime JS
+
+<PageTitle>@(_name.HasValue() ? _name : L["Templates_NewTemplateTitle"])</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else if (_notFound)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">@L["PageEditor_LoadError"]</div>
+}
+else
+{
+    @* .pe-toolbar is a COLUMN — it stacks the field row above the action row. Its
+       children therefore have to be those two rows; putting the fields straight into
+       it (as this page used to) made every input a full-width row of its own. Same
+       structure as PageEditor.razor, which is where these classes come from. *@
+    <div class="pe-toolbar">
+        <div class="pe-toolbar-fields">
+            <a href="/templates" class="btn-cms btn-ghost btn-sm-cms" title="@L["PageEditor_BackToList"]">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div class="pe-field">
+                <label>@L["Templates_FieldName"]</label>
+                <input @bind="_name" @bind:event="oninput" class="cms-input" />
+            </div>
+            <div class="pe-field pe-field-sm">
+                <label>@L["Templates_FieldType"]</label>
+                <select @bind="_type" class="cms-input">
+                    <option value="@PageTemplateType.Menu">@L["Templates_TypeMenu"]</option>
+                    <option value="@PageTemplateType.FullPage">@L["Templates_TypeFullPage"]</option>
+                    <option value="@PageTemplateType.Button">@L["Templates_TypeButton"]</option>
+                    <option value="@PageTemplateType.Other">@L["Templates_TypeOther"]</option>
+                </select>
+            </div>
+            <div class="pe-field pe-field-sm">
+                <label>@L["Templates_FieldLanguage"]</label>
+                <select @bind="_languageId" class="cms-input">
+                    <option value="0">@L["Templates_LanguageNone"]</option>
+                    @foreach (LanguageResponse lang in _languages)
+                    {
+                        <option value="@lang.Id">@lang.NameInNative</option>
+                    }
+                </select>
+            </div>
+            <div class="pe-field pe-field-sm">
+                <label>@L["Templates_FieldIsLinked"]</label>
+                <label class="cms-toggle pe-field-toggle">
+                    <input type="checkbox" @bind="_isLinked" />
+                    <span class="cms-toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+        <div class="pe-toolbar-actions">
+            <button class="btn-cms btn-primary-cms pe-save" @onclick="SaveAll" disabled="@_saving">
+                @if (_saving)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                else
+                {
+                    <i class="bi bi-floppy"></i>
+                }
+                @L["PageEditor_Save"]
+            </button>
+        </div>
+    </div>
+    <div style="margin:-6px 0 12px;font-size:12px;color:var(--cms-text-muted)">
+        <i class="bi bi-info-circle"></i>
+        @(_isLinked ? L["Templates_IsLinkedHintOn"] : L["Templates_IsLinkedHintOff"])
+    </div>
+
+    <StaleTemplateNotice @ref="_staleNotice" Scope="StaleTemplateScope.Template" />
+
+    <div class="pe-editor-wrap">
+        @if (!_editorReady)
+        {
+            <div class="pe-editor-loading">
+                <i class="bi bi-arrow-clockwise spin"></i> @L["PageEditor_EditorLoading"]
+            </div>
+        }
+        @* Same side column as PageEditor.razor — see SIDE in grapes-editor.js. *@
+        <div id="gjs"></div>
+        <aside id="pe-side-right" class="pe-side" aria-label="@L["PageEditor_SideRightLabel"]"></aside>
+
+        @* Same wiring as PageEditor.razor: grapes-editor.js hands a dropped or
+           uploaded-from-the-asset-dialog file to THIS input, and Blazor's InputFile
+           streams it through the media library's own upload pipeline. Hidden rather
+           than absent: it must exist in the DOM for JS to find it. *@
+        <InputFile id="elevare-drop-input" OnChange="HandleDroppedImage" accept="image/*"
+                   style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" aria-hidden="true" />
+
+        @if (_uploadingDroppedImage)
+        {
+            <div class="pe-drop-uploading">
+                <i class="bi bi-arrow-clockwise spin"></i> @L["PageEditor_DropUploading"]
+            </div>
+        }
+    </div>
+}
+
+
+<CmsModal Title="@L["Templates_ConflictTitle"]" IsVisible="_showEditConflict" OnClose="() => _showEditConflict = false" Size="md">
+    <Body>
+        <p style="color:var(--cms-text)">@L["Templates_ConflictBody"]</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="ReloadAfterConflict" disabled="@_saving">@L["PageEditor_ConflictReload"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="OverwriteAfterConflict" disabled="@_saving">@L["PageEditor_ConflictOverwrite"]</button>
+    </Footer>
+</CmsModal>
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    // The template as this editor loaded it — sent with every save, see PageFingerprint.
+    private string? _fingerprint;
+    private bool _showEditConflict;
+    private bool _overwriteNext;
+    private bool _notFound;
+    private bool _editorReady;
+    private bool _editorInitStarted;
+
+    private string _name = "";
+    private PageTemplateType _type = PageTemplateType.Other;
+    private bool _isLinked;
+    private int _languageId;
+    private List<LanguageResponse> _languages = [];
+
+    // Empty for an every-language template: its blocks then speak the CMS's language.
+    private string TemplateLanguageCode => _languages.FirstOrDefault(l => l.Id == _languageId)?.TwoLetterCode ?? "";
+
+    private string? _gjsHtml;
+    private string? _gjsCss;
+    private string? _gjsData;
+
+    private Dictionary<int, LinkedPageTemplateContent> _linkedTemplates = [];
+    private Dictionary<int, PageTemplateVersionInfo> _templateVersions = [];
+    private List<PageDirectoryEntryResponse> _pageDirectory = [];
+    private string? _logoUrl;
+    private string? _logoAlt;
+    private string? _siteName;
+    private string? _mapEmbedUrl;
+    private string? _workingHours;
+    private SiteContactInfo _contact = SiteContactInfo.Empty;
+    private string? _publicSiteBaseUrl;
+
+    private DotNetObjectReference<TemplateEditor>? _dotNetRef;
+
+    private sealed record GjsResult(string? Html, string? Css, string? Data);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetLinkedPageTemplatesContentQuery())).Match(
+                map => _linkedTemplates = map,
+                _ => { });
+            (await Sender.Send(new GetLanguagesQuery(IsActive: true))).Match(
+                success => _languages = [.. success.Items],
+                _ => { });
+            (await Sender.Send(new GetPageTemplateVersionsQuery())).Match(
+                map => _templateVersions = map,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        // Everything below feeds the blocks the same way PageEditor does. Without it
+        // a block dropped HERE has no site to read from: the Navbar showed this
+        // file's own placeholder brand instead of the site name, the Language
+        // Switcher fell back to a hardcoded tr/en pair, the Map and Local Business
+        // blocks kept their sample address, and Sayfa Listesi's page picker was
+        // empty — all of it only because a template is edited on a different screen
+        // than a page, which nobody had wired up.
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.Identity))).Match(
+                settings =>
+                {
+                    _logoUrl = settings.FirstOrDefault(s => s.Key == "Appearance.LogoUrl")?.Value;
+                    _siteName = settings.FirstOrDefault(s => s.Key == "General.SiteName")?.Value;
+                },
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        if (!string.IsNullOrWhiteSpace(_logoUrl))
+        {
+            try
+            {
+                (await Sender.Send(new GetMediaFileAltTextQuery(_logoUrl))).Match(
+                    alt => _logoAlt = alt,
+                    _ => { });
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        }
+
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.ContactSocial))).Match(
+                settings =>
+                {
+                    _mapEmbedUrl = settings.FirstOrDefault(s => s.Key == "Contact.MapEmbedUrl")?.Value;
+                    _workingHours = settings.FirstOrDefault(s => s.Key == "Contact.WorkingHours")?.Value;
+                    _contact = SiteContactInfo.From(settings);
+                },
+                _ => { });
+
+            // The public site's host — the Google "preferred source" button names it.
+            // From the Identity group, where the setting lives despite its key.
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.Identity))).Match(
+                identity => _publicSiteBaseUrl = identity.FirstOrDefault(s => s.Key == "Advanced.PublicSiteBaseUrl")?.Value,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _editorReady = false;
+        _editorInitStarted = false;
+        try
+        {
+            (await Sender.Send(new GetPageTemplateByIdQuery(Id))).Match(
+                template => Apply(template),
+                _ => _notFound = true);
+
+            // After the template, not in OnInitializedAsync: which pages to offer
+            // depends on the template's language, and that is only known now. Asked
+            // there, it was always language 0 — no pages, an empty "Site sayfası".
+            // A template for every language offers every language's pages.
+            if (!_notFound)
+            {
+                (await Sender.Send(new GetPageDirectoryQuery(_languageId == 0 ? null : _languageId))).Match(
+                    pages => _pageDirectory = pages,
+                    _ => _pageDirectory = []);
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _notFound = true;
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ReloadAfterConflict()
+    {
+        _showEditConflict = false;
+        PageTemplateEditorResponse? current = null;
+        (await Sender.Send(new GetPageTemplateByIdQuery(Id))).Match(t => current = t, error => Toast.Error(L.Error(error)));
+        if (current is null)
+            return;
+        Apply(current);
+        try { await JS.InvokeVoidAsync("grapesEditor.destroy"); }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        _editorReady = false;
+        // OnAfterRenderAsync builds the canvas again from the content Apply just set.
+        _editorInitStarted = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task OverwriteAfterConflict()
+    {
+        _showEditConflict = false;
+        _overwriteNext = true;
+        await SaveAll();
+    }
+
+    private void Apply(PageTemplateEditorResponse template)
+    {
+        _name = template.Name;
+        _type = template.Type;
+        _isLinked = template.IsLinked;
+        _languageId = template.LanguageId ?? 0;
+        _gjsHtml = template.GjsHtml;
+        _gjsCss = template.GjsCss;
+        _gjsData = template.GjsData;
+        _fingerprint = template.Fingerprint;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_loading && !_notFound && !_editorInitStarted)
+        {
+            _editorInitStarted = true;
+            try
+            {
+                // Exclude this template's own id from the refresh map — a linked
+                // template referencing itself would otherwise wipe its own content.
+                Dictionary<int, LinkedPageTemplateContent> refreshMap = _linkedTemplates
+                    .Where(kv => kv.Key != Id)
+                    .ToDictionary(kv => kv.Key, kv => kv.Value);
+
+                _dotNetRef?.Dispose();
+                _dotNetRef = DotNetObjectReference.Create(this);
+                // Must precede init(): the blocks read this synchronously while they
+                // are being registered, which happens inside init().
+                await JS.InvokeVoidAsync("grapesEditor.setSiteInfo",
+                    new
+                    {
+                        mapEmbedUrl = _mapEmbedUrl ?? "",
+                        workingHours = _workingHours ?? "",
+                        logoUrl = _logoUrl ?? "",
+                        logoAlt = _logoAlt ?? "",
+                        siteName = _siteName ?? "",
+                        publicSiteHost = PublicSiteHost(_publicSiteBaseUrl),
+                        // Blocks in a single-language template are written in that
+                        // language, in an every-language template in the CMS's own
+                        pageLanguage = TemplateLanguageCode,
+                        contact = _contact
+                    });
+                // seoMeta/seoResources are left null (positions 6-7) — this editor
+                // has no SEO panel to feed them from, and a null seoResources is also
+                // what tells grapes-editor.js not to attach the SEO analyser here at
+                // all: scoring a header or a button fragment as though it were a whole
+                // page only ever produces a number that is wrong.
+                // dotNetRef only needs to land in its own position (8th) for
+                // LoadMediaAssets to have someone to call.
+                bool ok = await JS.InvokeAsync<bool>("grapesEditor.init", "gjs", _gjsHtml, _gjsCss, _gjsData, refreshMap,
+                    null, null, _dotNetRef,
+                    // Published as well as active — see PageEditor.razor for why:
+                    // an active-but-unpublished language becomes a switcher link the
+                    // public site never resolves, i.e. a dead href="#". The full
+                    // _languages list still drives this screen's own language tabs.
+                    _languages.Where(l => l.IsActive && l.IsPublished).Select(l => new
+                    {
+                        code = l.TwoLetterCode,
+                        isDefault = l.IsDefault,
+                        flagUrl = l.FlagIconPath ?? "",
+                        flagAlt = l.FlagIconAltText ?? l.NameInNative
+                    }),
+                    _pageDirectory.Select(c => new { id = c.Id, label = c.FullSlug, title = c.Title }),
+                    _templateVersions.ToDictionary(
+                        kv => kv.Key.ToString(),
+                        kv => new { name = kv.Value.Name, version = kv.Value.Version }));
+                _editorReady = ok;
+            }
+            catch (Exception ex)
+            {
+                LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveAll()
+    {
+        if (_name.IsNullOrWhiteSpace()) { Toast.Error(L["Templates_Validation_Name"]); return; }
+
+        _saving = true;
+        try
+        {
+            GjsResult? gjs = null;
+            try
+            {
+                gjs = await JS.InvokeAsync<GjsResult?>("grapesEditor.getData");
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+            // null means the canvas could not be read (failed interop, or an editor
+            // that never finished loading). Saving anyway would write null content
+            // over the template — and every page linked to it renders that emptiness.
+            if (gjs is null)
+            {
+                Toast.Error(L["PageEditor_ContentUnavailable"]);
+                return;
+            }
+
+            bool ok = false;
+            int? languageId = _languageId > 0 ? _languageId : null;
+            bool overwrite = _overwriteNext;
+            _overwriteNext = false;
+            (await Sender.Send(new UpdatePageTemplateCommand(
+                    Id, _name.Trim(), _type, _isLinked, gjs.Html, gjs.Css, gjs.Data, languageId, _fingerprint, overwrite)))
+                .Match(() => ok = true, error =>
+                {
+                    if (error.Code == PageTemplateErrors.EditedElsewhere.Code)
+                        _showEditConflict = true;
+                    else
+                        Toast.Error(L.Error(error));
+                });
+
+            if (ok)
+            {
+                Toast.Success(L["PageEditor_Saved"]);
+                // The next save is checked against what this one stored.
+                (await Sender.Send(new GetPageTemplateByIdQuery(Id))).Match(t => _fingerprint = t.Fingerprint, _ => { });
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    /// <summary>
+    /// Fills GrapesJS's "Select Image" dialog with the media library's images —
+    /// same purpose and shape as PageEditor.razor's LoadMediaAssets, which is the
+    /// one this was copied from. Called by grapes-editor.js every time that dialog
+    /// opens (double-clicking an image, or an image trait's picker).
+    /// </summary>
+    [JSInvokable]
+    public async Task<IReadOnlyList<MediaPickerAsset>> LoadMediaAssets()
+    {
+        try
+        {
+            Result<PagedResult<MediaFileResponse>> result = await Sender.Send(
+                new GetMediaFilesQuery(MediaType: MediaType.Image, Page: 1, PageSize: _mediaAssetLimit));
+
+            if (result.IsFailure) return [];
+
+            return MediaPickerProjection.ToPickerAssets(result.Value.Items);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            return [];
+        }
+    }
+
+    private const int _mediaAssetLimit = 200;
+
+    /// <summary>
+    /// GrapesJS reports the first canvas change after each save on every editor that
+    /// gives it a .NET reference — this one has no unsaved-changes indicator to
+    /// raise, so there is nothing to do with the report. The method still has to
+    /// exist: without it, invokeMethodAsync's promise rejects with "method not
+    /// found" on every edit, which surfaced as a console warning once dotNetRef
+    /// started being passed here for LoadMediaAssets.
+    /// </summary>
+    [JSInvokable]
+    public Task OnEditorContentChanged() => Task.CompletedTask;
+
+    /// <summary>
+    /// A template can itself embed other linked templates (_linkedTemplates,
+    /// excluding this one's own id) — if one of those has since been edited, the
+    /// snapshot sitting in this canvas is stale. Same notice PageEditor gives for
+    /// the same reason, since the risk is identical: saving would freeze the old
+    /// snapshot in place instead of picking up what the referenced template now says.
+    /// </summary>
+    [JSInvokable]
+    public void OnStaleTemplatesDetected(StaleTemplateInfo[] templates)
+    {
+        if (templates.Length == 0) return;
+        _staleNotice?.Show(templates);
+    }
+
+    private StaleTemplateNotice? _staleNotice;
+
+    /// <summary>"https://www.example.com/" → "www.example.com"; empty when the site's address is not set.</summary>
+    private static string PublicSiteHost(string? baseUrl) =>
+        Uri.TryCreate(baseUrl?.Trim(), UriKind.Absolute, out Uri? uri) ? uri.Host : "";
+
+    /// <summary>
+    /// A template has no page of its own, so a listing block in it has nothing to
+    /// preview yet — it fills in on the page the template is placed on. The block
+    /// says so (getListingPreview in grapes-editor.js).
+    /// </summary>
+    [JSInvokable]
+    public Task<ListingPreviewResponse?> GetListingPreview(ListingPreviewRequest request) =>
+        Task.FromResult<ListingPreviewResponse?>(null);
+
+    /// <summary>The site's tags, for the listing block's default-tag picker.</summary>
+    [JSInvokable]
+    public async Task<ListingTagOption[]> GetListingTags()
+    {
+        Result<List<TagResponse>> result = await Sender.Send(new GetTagsQuery());
+        return result.IsSuccess
+            ? [.. result.Value.Select(t => new ListingTagOption(t.Name, t.Slug)).OrderBy(t => t.Name, StringComparer.CurrentCulture)]
+            : [];
+    }
+
+    /// <summary>
+    /// A template has no page of its own, so there is no trail and no neighbours to
+    /// show yet — they fill in on the page the template is placed on.
+    /// </summary>
+    [JSInvokable]
+    public Task<BreadcrumbPreviewResponse?> GetBreadcrumbPreview() => Task.FromResult<BreadcrumbPreviewResponse?>(null);
+
+    /// <summary>See <see cref="GetBreadcrumbPreview"/>.</summary>
+    [JSInvokable]
+    public Task<AdjacentPreviewResponse?> GetAdjacentPreview() => Task.FromResult<AdjacentPreviewResponse?>(null);
+
+    /// <summary>
+    /// The code block's colours for the canvas — the same highlighter the public
+    /// site runs, so what the editor shows is what ships. An instance method because
+    /// the canvas reaches it through this editor's object reference.
+    /// </summary>
+    [JSInvokable]
+    public string HighlightCode(string? code, string? language) =>
+        SharedKernel.Content.CodeHighlighter.Highlight(code ?? "", language);
+
+    // ── Drag-and-drop / asset-dialog image upload ─────────────────────────────
+    // Same ceiling as PageEditor.razor's own drop handler, and the same reasoning:
+    // matches the media library's manual-upload limit so the paths can't disagree
+    // about what is too big.
+    private readonly long _maxDroppedImageBytes = 10_000_000;
+
+    private bool _uploadingDroppedImage;
+
+    /// <summary>
+    /// Receives an image dropped onto the canvas, or uploaded from inside the Select
+    /// Image dialog — grapes-editor.js routes both to this same hidden input. Stores
+    /// it through the media library pipeline, then asks the editor to place it.
+    /// </summary>
+    private async Task HandleDroppedImage(InputFileChangeEventArgs e)
+    {
+        IBrowserFile? file = e.FileCount > 0 ? e.File : null;
+        if (file is null) { await CancelDroppedImageAsync(); return; }
+
+        if (file.Size > _maxDroppedImageBytes)
+        {
+            Toast.Error(string.Format(L["PageEditor_DropTooLarge"], _maxDroppedImageBytes / 1_000_000));
+            await CancelDroppedImageAsync();
+            return;
+        }
+
+        _uploadingDroppedImage = true;
+        StateHasChanged();
+        try
+        {
+            await using Stream content = file.OpenReadStream(_maxDroppedImageBytes);
+
+            var request = new FileUploadRequest
+            {
+                FileName = file.Name,
+                ContentType = file.ContentType,
+                Content = content,
+                FileSize = file.Size,
+                AltText = Path.GetFileNameWithoutExtension(file.Name),
+                Title = Path.GetFileNameWithoutExtension(file.Name)
+            };
+
+            FileResult? uploaded = null;
+            (await Sender.Send(new CreateMediaFileCommand(request)))
+                .Match(r => uploaded = r, error => Toast.Error(L.Error(error)));
+
+            if (uploaded is null) { await CancelDroppedImageAsync(); return; }
+
+            // Site-relative, for the same reason as PageEditor's copy of this.
+            await JS.InvokeVoidAsync("grapesEditor.insertDroppedImage", uploaded.Url, uploaded.AltText);
+            Toast.Success(L["PageEditor_DropUploaded"]);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["PageEditor_DropUploadError"]);
+            await CancelDroppedImageAsync();
+        }
+        finally
+        {
+            _uploadingDroppedImage = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Clears the editor-side in-flight guard so a failed drop/upload doesn't make
+    /// the next one silently do nothing.
+    /// </summary>
+    private async Task CancelDroppedImageAsync()
+    {
+        try { await JS.InvokeVoidAsync("grapesEditor.cancelDroppedImage"); }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("grapesEditor.destroy"); }
+        catch { /* circuit may already be gone */ }
+        _dotNetRef?.Dispose();
+    }
+}

@@ -1,0 +1,245 @@
+﻿@inject IJSRuntime JS
+
+<div class="cms-rightbar @(RightbarCssClass)">
+
+    @* ── Header: an empty bar that carries the top bar's baseline across the right
+       edge. The collapse and pin controls used to sit apart — collapse up here,
+       pin in the footer — but the left sidebar keeps both together at the bottom,
+       so they moved down there too (see the footer below). ── *@
+    <div class="rightbar-header"></div>
+
+    @* ── Action items, in three evenly-spaced groups ──────────────────────────
+       The equal flex:1 gaps are what separates them: content assets at the top,
+       generators in the middle, personal tools at the bottom. Grouping by what a
+       thing is for beats one long list where "Notlar" sits next to "Şablonlar". *@
+    <div class="rightbar-body">
+
+        @* ── 1. Content assets ── *@
+        <button class="rb-item"
+                @onclick="() => _showMedia = true"
+                title="@L["TopBar_MediaLibrary"]">
+            <i class="bi bi-images"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["TopBar_MediaLibrary"]</span>
+            }
+        </button>
+
+        <button class="rb-item"
+                @onclick="() => _showTemplates = true"
+                title="@L["TopBar_Templates"]">
+            <i class="bi bi-collection"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["TopBar_Templates"]</span>
+            }
+        </button>
+
+        <div style="flex:1"></div>
+        <div class="rightbar-sep"></div>
+
+        @* ── 2. Generators ── *@
+        <button class="rb-item"
+                @onclick="() => _showUrlBuilder = true"
+                title="@L["TopBar_UrlBuilder"]">
+            <i class="bi bi-link-45deg"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["TopBar_UrlBuilder"]</span>
+            }
+        </button>
+
+        <button class="rb-item"
+                @onclick="() => _showJsonBuilder = true"
+                title="@L["StructuredData_JsonBuilderTitle"]">
+            <i class="bi bi-braces"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["StructuredData_JsonBuilderTitle"]</span>
+            }
+        </button>
+
+        <div class="rightbar-sep"></div>
+        <div style="flex:1"></div>
+
+        @* ── 3. Personal tools ── *@
+        <button class="rb-item"
+                @onclick="() => _showTasks = true"
+                title="@L["TopBar_Tasks"]">
+            <i class="bi bi-check2-square"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["TopBar_Tasks"]</span>
+            }
+        </button>
+
+        <button class="rb-item"
+                @onclick="() => _showNotes = true"
+                title="@L["TopBar_Notes"]">
+            <i class="bi bi-sticky"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["TopBar_Notes"]</span>
+            }
+        </button>
+
+        <button class="rb-item"
+                @onclick="() => _showReminders = true"
+                title="@L["TopBar_Reminders"]">
+            <i class="bi bi-bell"></i>
+            @if (_expanded || !_pinned)
+            {
+                <span class="rb-label">@L["TopBar_Reminders"]</span>
+            }
+        </button>
+
+    </div>
+
+    @* ── Footer: collapse + pin, together, like the left sidebar's footer. Side by
+       side when the bar is wide (expanded / peeking-unpinned); stacked when it is
+       the narrow icon rail, where two buttons can't sit next to each other — but
+       the pin stays visible either way. ── *@
+    <div class="rightbar-footer">
+        <button class="sidebar-toggle-btn"
+                @onclick="ToggleExpand"
+                title="@(_expanded ? L["Layout_Collapse"] : L["Layout_Expand"])">
+            <i class="bi @(_expanded ? "bi-chevron-double-right" : "bi-chevron-double-left")"></i>
+        </button>
+        <button class="sidebar-toggle-btn @(!_pinned ? "text-accent" : "")"
+                @onclick="TogglePin"
+                title="@(_pinned ? L["Layout_UnpinActionsBar"] : L["Layout_PinActionsBar"])">
+            <i class="bi @(_pinned ? "bi-pin-angle-fill" : "bi-pin-angle")"></i>
+        </button>
+    </div>
+
+</div>
+
+@* ── Media Library Window ── *@
+@if (_showMedia)
+{
+    <CmsModal Title="@L["TopBar_MediaLibrary"]" IsVisible="true" OnClose="CloseMedia" Size="xl">
+        <Body>
+            <MediaManager />
+        </Body>
+    </CmsModal>
+}
+
+@* ── Templates Window ── *@
+@if (_showTemplates)
+{
+    <CmsModal Title="@L["TopBar_Templates"]" IsVisible="true" OnClose="() => _showTemplates = false" Size="lg">
+        <Body>
+            <TemplateListPanel />
+        </Body>
+    </CmsModal>
+}
+
+@* ── Task Board Window ── *@
+@if (_showTasks)
+{
+    <CmsModal Title="@L["TopBar_Tasks"]" IsVisible="true" OnClose="() => _showTasks = false" Size="xl">
+        <Body>
+            <TaskBoardPanel />
+        </Body>
+    </CmsModal>
+}
+
+@* ── Notes Window ── *@
+@if (_showNotes)
+{
+    <CmsModal Title="@L["TopBar_Notes"]" IsVisible="true" OnClose="() => _showNotes = false" Size="lg">
+        <Body>
+            <NoteListPanel />
+        </Body>
+    </CmsModal>
+}
+
+@* ── Reminders Window ── *@
+@if (_showReminders)
+{
+    <CmsModal Title="@L["TopBar_Reminders"]" IsVisible="true" OnClose="() => _showReminders = false" Size="lg">
+        <Body>
+            <ReminderListPanel />
+        </Body>
+    </CmsModal>
+}
+
+@* ── URL Builder Window ── *@
+@if (_showUrlBuilder)
+{
+    <CmsModal Title="@L["TopBar_UrlBuilder"]" IsVisible="true" OnClose="() => _showUrlBuilder = false" Size="md">
+        <Body>
+            <UrlBuilderPanel />
+        </Body>
+    </CmsModal>
+}
+
+@* ── JSON Builder Window ── *@
+@* Lives here rather than inside the structured data panel so both can be open at
+   once: the editor builds a value here and pastes it into the graph over there. *@
+@if (_showJsonBuilder)
+{
+    <CmsModal Title="@L["StructuredData_JsonBuilderTitle"]" IsVisible="true"
+              OnClose="() => _showJsonBuilder = false" Size="md">
+        <Body>
+            <JsonBuilderPanel />
+        </Body>
+    </CmsModal>
+}
+
+@code {
+    private bool _pinned = true;
+    private bool _expanded;
+    private bool _showMedia;
+    private bool _showTemplates;
+    private bool _showTasks;
+    private bool _showJsonBuilder;
+    private bool _showNotes;
+    private bool _showReminders;
+    private bool _showUrlBuilder;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var prefs = await JS.InvokeAsync<LayoutPrefs>("cmsJs.getLayoutPrefs");
+                _pinned   = prefs.RightbarPinned;
+                _expanded = prefs.RightbarExpanded;
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+            StateHasChanged();
+        }
+    }
+
+    private sealed record LayoutPrefs(
+        bool TopbarPinned, bool SidebarCollapsed, bool SidebarPinned,
+        bool RightbarPinned, bool RightbarExpanded);
+
+    private async Task TogglePin()
+    {
+        _pinned = !_pinned;
+        await JS.InvokeVoidAsync("cmsJs.setRightbarPinned", _pinned);
+    }
+
+    private async Task ToggleExpand()
+    {
+        _expanded = !_expanded;
+        await JS.InvokeVoidAsync("cmsJs.setRightbarExpanded", _expanded);
+    }
+
+    private void CloseMedia() => _showMedia = false;
+
+    private string RightbarCssClass
+    {
+        get
+        {
+            if (!_pinned) return "rb-unpinned";
+            if (_expanded) return "rb-expanded";
+            return string.Empty;
+        }
+    }
+}
+
+

@@ -1,0 +1,45 @@
+@if (string.IsNullOrEmpty(Target))
+{
+    <a href="@Href" class="nav-item @(IsActive ? "active" : "")" @onclick="Navigate" @onclick:preventDefault="true">
+        <i class="bi @Icon"></i>
+        <span class="nav-label">@Label</span>
+    </a>
+}
+else
+{
+    @* External / non-Blazor destination (e.g. the Hangfire dashboard) — a plain
+       browser navigation, not intercepted by the SPA router. *@
+    <a href="@Href" target="@Target" rel="noopener" class="nav-item">
+        <i class="bi @Icon"></i>
+        <span class="nav-label">@Label</span>
+    </a>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Href { get; set; } = "/";
+    [Parameter, EditorRequired] public string Icon { get; set; } = "bi-circle";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    /// <summary>Highlight only on this exact route, never on its sub-routes.</summary>
+    [Parameter] public bool Exact { get; set; }
+
+    [Parameter] public string? Target { get; set; }
+
+    /// <summary>
+    /// The owning sidebar decides which single item is highlighted.
+    /// <para>
+    /// Deciding it here instead would be wrong twice over: an item only re-renders
+    /// when something touches it, so each one would keep whichever highlight it last
+    /// drew — click three menu entries and three of them stay lit. And an item on its
+    /// own cannot tell that <c>/pages</c> should yield to <c>/pages/bulk-edit</c>,
+    /// because it has never heard of the other entry.
+    /// </para>
+    /// </summary>
+    [CascadingParameter] private CMSSidebar? Owner { get; set; }
+
+    private bool IsActive => Owner?.IsNavItemActive(Href, Exact) ?? false;
+
+    protected override void OnInitialized() => Owner?.RegisterNavHref(Href);
+
+    private void Navigate() => Nav.NavigateTo(Href);
+}

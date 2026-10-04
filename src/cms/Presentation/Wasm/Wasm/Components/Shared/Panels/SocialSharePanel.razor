@@ -1,0 +1,867 @@
+@* The "Sosyal Paylaşım" side panel: everything a page says to Facebook, LinkedIn,
+   X and the other link-preview readers. Lives next to the SEO panel rather than
+   inside it — the Open Graph and X fields used to sit at the bottom of that one,
+   which made a long panel longer and hid most of what the protocol allows: with
+   type-specific properties (an article's dates and authors, a profile's name, a
+   book's ISBN, a film's cast) and X's player/app cards there is a screen's worth.
+
+   Edits Model in place. The list-valued properties (authors, tags, songs, cast)
+   are edited as text — one entry per line, or comma-separated for tags — and
+   converted on the way in and out; the *Text properties below are that seam.
+   Nothing here saves: the page's Save does, with the rest of the page. *@
+
+@using Application.Features.Queries.Media.GetMediaFileFacts
+@using SharedKernel.Content
+@using SharedKernel.Social
+@using Wasm.Models
+@inject IJSRuntime JS
+
+@* Embedded: rendered as one tab of the page-settings panel, which supplies
+   the overlay, the header and the scrolling body. Standalone (the default,
+   kept for any other host): its own side panel. *@
+@if (!Embedded)
+{
+    <div class="elevare-seo-panel-overlay" @onclick="Close"></div>
+}
+<div class="@(Embedded ? "elevare-social-embedded" : "elevare-seo-panel elevare-social-panel")">
+    @if (!Embedded)
+    {
+        <div class="elevare-seo-panel-header">
+            <h3>@L["Social_PanelTitle"]</h3>
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="Close"><i class="bi bi-x-lg"></i></button>
+        </div>
+    }
+
+    <div class="@(Embedded ? "" : "elevare-seo-panel-body")">
+        <p class="pe-field-hint" style="margin:0 0 12px">@L["Social_Intro"]</p>
+        @* Nothing is filled in behind the author's back any more: what a field says
+           is what the page ships, and an empty field ships nothing. This fills the
+           empty ones, once, with what the page and Site Settings already know. *@
+        <div class="social-autofill">
+            <button type="button" class="btn-cms btn-primary-cms btn-sm-cms" @onclick="AutoFillAsync">
+                <i class="bi bi-magic"></i> @L["Social_AutoFill"]
+            </button>
+            <span class="pe-field-hint">@(_autoFillNote ?? L["Social_AutoFillHint"])</span>
+        </div>
+
+        <h4>Open Graph</h4>
+        <div class="pe-field pe-field-sm">
+            <label>@L["Social_OgType"]</label>
+            <select class="cms-input" value="@Model.OgType" @onchange="OnTypeChanged">
+                <option value="website">website</option>
+                <option value="article">article</option>
+                <option value="profile">profile</option>
+                <option value="book">book</option>
+                <option value="product">product</option>
+                <optgroup label="video">
+                    <option value="video.movie">video.movie</option>
+                    <option value="video.episode">video.episode</option>
+                    <option value="video.tv_show">video.tv_show</option>
+                    <option value="video.other">video.other</option>
+                </optgroup>
+                <optgroup label="music">
+                    <option value="music.song">music.song</option>
+                    <option value="music.album">music.album</option>
+                    <option value="music.playlist">music.playlist</option>
+                    <option value="music.radio_station">music.radio_station</option>
+                </optgroup>
+            </select>
+            <span class="pe-field-hint">@L["Social_OgTypeHint"]</span>
+        </div>
+        <div class="pe-field">
+            <label>@L["Social_OgTitle"] <span class="elevare-seo-charcount">@Model.OgTitle.Length/95</span></label>
+            <input @bind="Model.OgTitle" @bind:event="oninput" @bind:after="Changed" class="cms-input" />
+        </div>
+        <div class="pe-field">
+            <label>@L["Social_OgDescription"] <span class="elevare-seo-charcount">@Model.OgDescription.Length/200</span></label>
+            <textarea @bind="Model.OgDescription" @bind:event="oninput" @bind:after="Changed" class="cms-input" rows="2"></textarea>
+        </div>
+        <div class="pe-field">
+            <label>@L["Social_OgImage"]</label>
+            <div class="social-image-field">
+                <input @bind="Model.OgImage" @bind:after="OnOwnImageChanged" class="cms-input" placeholder="https://..." />
+                @ImageThumb(OwnImage, _image, _imageBroken)
+            </div>
+            @if (_imageBroken && OwnImage is not null)
+            {
+                <span class="social-fallback social-fallback-warn"><i class="bi bi-exclamation-triangle"></i> @L["Social_ImageNotLoaded"]</span>
+            }
+            <span class="pe-field-hint">@L["Social_OgImageHint"]</span>
+        </div>
+        <div class="pe-field">
+            <label>@L["Social_ImageAlt"]</label>
+            <input @bind="Model.Meta.ImageAlt" @bind:after="Changed" class="cms-input" />
+        </div>
+        <div class="social-row">
+            <div class="pe-field">
+                <label>@L["Social_ImageWidth"]</label>
+                <input type="number" min="1" @bind="Model.Meta.ImageWidth" @bind:after="Changed" class="cms-input" />
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_ImageHeight"]</label>
+                <input type="number" min="1" @bind="Model.Meta.ImageHeight" @bind:after="Changed" class="cms-input" />
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_ImageType"]</label>
+                <input @bind="Model.Meta.ImageType" class="cms-input" />
+            </div>
+        </div>
+        @if (_autoFilled)
+        {
+            <span class="social-fallback social-fallback-ok"><i class="bi bi-magic"></i> @(string.Format(L["Social_ImageAutoFilled"], ImageFactsSource))</span>
+        }
+        else if (CanFillImageFacts)
+        {
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms social-fill" @onclick="FillImageFactsAsync">
+                <i class="bi bi-arrow-down-square"></i> @L["Social_FillFromImage"]
+            </button>
+        }
+        <div class="pe-field">
+            <label>@L["Social_OgUrl"]</label>
+            <input @bind="Model.OgUrl" class="cms-input" placeholder="https://..." />
+            <span class="pe-field-hint">@L["Social_OgUrlHint"]</span>
+        </div>
+        <details class="social-more">
+            <summary>@L["Social_MoreOg"]</summary>
+            <div class="pe-field">
+                <label>@L["Social_SiteName"]</label>
+                <input @bind="Model.Meta.SiteName" class="cms-input" />
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_Determiner"]</label>
+                    <select @bind="Model.Meta.Determiner" class="cms-input">
+                        <option value="">@L["Social_None"]</option>
+                        <option value="a">a</option>
+                        <option value="an">an</option>
+                        <option value="the">the</option>
+                        <option value="auto">auto</option>
+                    </select>
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_Locale"]</label>
+                    <input @bind="Model.Meta.Locale" class="cms-input" placeholder="tr_TR" />
+                </div>
+            </div>
+            <span class="pe-field-hint">@L["Social_LocaleHint"]</span>
+        </details>
+
+        @* ── Type-specific ───────────────────────────────────────────────── *@
+        @if (Model.OgType == "article")
+        {
+            <h4>article</h4>
+            <div class="pe-field">
+                <label>@L["Social_ArticlePublished"]</label>
+                <input type="datetime-local" @bind="Model.Meta.ArticlePublishedTime" class="cms-input" />
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_ArticleModified"]</label>
+                    <input type="datetime-local" @bind="Model.Meta.ArticleModifiedTime" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ArticleExpiration"]</label>
+                    <input type="datetime-local" @bind="Model.Meta.ArticleExpirationTime" class="cms-input" />
+                </div>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_ArticleAuthors"]</label>
+                <textarea @bind="ArticleAuthorsText" class="cms-input" rows="2" placeholder="https://..."></textarea>
+                <span class="pe-field-hint">@L["Social_OnePerLine"]</span>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_ArticleSection"]</label>
+                <input @bind="Model.Meta.ArticleSection" class="cms-input" placeholder="Teknoloji" />
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_Tags"]</label>
+                <input @bind="ArticleTagsText" class="cms-input" placeholder="csharp, dotnet" />
+                <span class="pe-field-hint">@L["Social_CommaSeparated"]</span>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_ArticlePublisher"]</label>
+                <input @bind="Model.Meta.ArticlePublisher" class="cms-input" placeholder="https://www.facebook.com/..." />
+            </div>
+        }
+        else if (Model.OgType == "profile")
+        {
+            <h4>profile</h4>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_ProfileFirstName"]</label>
+                    <input @bind="Model.Meta.ProfileFirstName" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ProfileLastName"]</label>
+                    <input @bind="Model.Meta.ProfileLastName" class="cms-input" />
+                </div>
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_ProfileUsername"]</label>
+                    <input @bind="Model.Meta.ProfileUsername" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ProfileGender"]</label>
+                    <select @bind="Model.Meta.ProfileGender" class="cms-input">
+                        <option value="">@L["Social_None"]</option>
+                        <option value="male">male</option>
+                        <option value="female">female</option>
+                    </select>
+                </div>
+            </div>
+            <span class="pe-field-hint">@L["Social_ProfileGenderHint"]</span>
+        }
+        else if (Model.OgType == "book")
+        {
+            <h4>book</h4>
+            <div class="pe-field">
+                <label>@L["Social_BookAuthors"]</label>
+                <textarea @bind="BookAuthorsText" class="cms-input" rows="2" placeholder="https://..."></textarea>
+                <span class="pe-field-hint">@L["Social_OnePerLine"]</span>
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>ISBN</label>
+                    <input @bind="Model.Meta.BookIsbn" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ReleaseDate"]</label>
+                    <input type="date" @bind="Model.Meta.BookReleaseDate" class="cms-input" />
+                </div>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_Tags"]</label>
+                <input @bind="BookTagsText" class="cms-input" />
+                <span class="pe-field-hint">@L["Social_CommaSeparated"]</span>
+            </div>
+        }
+        else if (Model.OgType.StartsWith("video.", StringComparison.Ordinal))
+        {
+            <h4>@Model.OgType</h4>
+            <div class="pe-field">
+                <label>@L["Social_VideoActors"]</label>
+                <textarea @bind="VideoActorsText" class="cms-input" rows="3" placeholder="https://... | Rol"></textarea>
+                <span class="pe-field-hint">@L["Social_VideoActorsHint"]</span>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_VideoDirectors"]</label>
+                <textarea @bind="VideoDirectorsText" class="cms-input" rows="2" placeholder="https://..."></textarea>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_VideoWriters"]</label>
+                <textarea @bind="VideoWritersText" class="cms-input" rows="2" placeholder="https://..."></textarea>
+                <span class="pe-field-hint">@L["Social_OnePerLine"]</span>
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_DurationSeconds"]</label>
+                    <input type="number" min="1" @bind="Model.Meta.VideoDuration" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ReleaseDate"]</label>
+                    <input type="date" @bind="Model.Meta.VideoReleaseDate" class="cms-input" />
+                </div>
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_Tags"]</label>
+                <input @bind="VideoTagsText" class="cms-input" />
+                <span class="pe-field-hint">@L["Social_CommaSeparated"]</span>
+            </div>
+            @if (Model.OgType == "video.episode")
+            {
+                <div class="pe-field">
+                    <label>@L["Social_VideoSeries"]</label>
+                    <input @bind="Model.Meta.VideoSeries" class="cms-input" placeholder="https://..." />
+                </div>
+            }
+        }
+        else if (Model.OgType.StartsWith("music.", StringComparison.Ordinal))
+        {
+            <h4>@Model.OgType</h4>
+            @if (Model.OgType == "music.song")
+            {
+                <div class="social-row">
+                    <div class="pe-field">
+                        <label>@L["Social_DurationSeconds"]</label>
+                        <input type="number" min="1" @bind="Model.Meta.MusicDuration" class="cms-input" />
+                    </div>
+                    <div class="pe-field">
+                        <label>@L["Social_MusicDisc"]</label>
+                        <input type="number" min="1" @bind="Model.Meta.MusicAlbumDisc" class="cms-input" />
+                    </div>
+                    <div class="pe-field">
+                        <label>@L["Social_MusicTrack"]</label>
+                        <input type="number" min="1" @bind="Model.Meta.MusicAlbumTrack" class="cms-input" />
+                    </div>
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_MusicAlbum"]</label>
+                    <input @bind="Model.Meta.MusicAlbum" class="cms-input" placeholder="https://..." />
+                </div>
+            }
+            @if (Model.OgType is "music.album" or "music.playlist")
+            {
+                <div class="pe-field">
+                    <label>@L["Social_MusicSongs"]</label>
+                    <textarea @bind="MusicSongsText" class="cms-input" rows="3" placeholder="https://..."></textarea>
+                    <span class="pe-field-hint">@L["Social_OnePerLine"]</span>
+                </div>
+            }
+            @if (Model.OgType == "music.album")
+            {
+                <div class="social-row">
+                    <div class="pe-field">
+                        <label>@L["Social_MusicDisc"]</label>
+                        <input type="number" min="1" @bind="Model.Meta.MusicAlbumDisc" class="cms-input" />
+                    </div>
+                    <div class="pe-field">
+                        <label>@L["Social_MusicTrack"]</label>
+                        <input type="number" min="1" @bind="Model.Meta.MusicAlbumTrack" class="cms-input" />
+                    </div>
+                    <div class="pe-field">
+                        <label>@L["Social_ReleaseDate"]</label>
+                        <input type="date" @bind="Model.Meta.MusicReleaseDate" class="cms-input" />
+                    </div>
+                </div>
+            }
+            @if (Model.OgType is "music.song" or "music.album")
+            {
+                <div class="pe-field">
+                    <label>@L["Social_MusicMusicians"]</label>
+                    <textarea @bind="MusicMusiciansText" class="cms-input" rows="2" placeholder="https://..."></textarea>
+                    <span class="pe-field-hint">@L["Social_OnePerLine"]</span>
+                </div>
+            }
+            @if (Model.OgType is "music.playlist" or "music.radio_station")
+            {
+                <div class="pe-field">
+                    <label>@L["Social_MusicCreator"]</label>
+                    <input @bind="Model.Meta.MusicCreator" class="cms-input" placeholder="https://..." />
+                </div>
+            }
+        }
+
+        @* ── Media attached to the page (any type) ────────────────────────── *@
+        <details class="social-more">
+            <summary>@L["Social_MediaSection"]</summary>
+            <div class="pe-field">
+                <label>og:video</label>
+                <input @bind="Model.Meta.Video" class="cms-input" placeholder="https://.../video.mp4" />
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_MimeType"]</label>
+                    <input @bind="Model.Meta.VideoType" class="cms-input" placeholder="video/mp4" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ImageWidth"]</label>
+                    <input type="number" min="1" @bind="Model.Meta.VideoWidth" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ImageHeight"]</label>
+                    <input type="number" min="1" @bind="Model.Meta.VideoHeight" class="cms-input" />
+                </div>
+            </div>
+            <div class="pe-field">
+                <label>og:audio</label>
+                <input @bind="Model.Meta.Audio" class="cms-input" placeholder="https://.../audio.mp3" />
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_MimeType"]</label>
+                <input @bind="Model.Meta.AudioType" class="cms-input" placeholder="audio/mpeg" />
+            </div>
+        </details>
+
+        <h4>Facebook</h4>
+        <div class="pe-field">
+            <label>fb:app_id</label>
+            <input @bind="Model.Meta.FacebookAppId" class="cms-input" />
+            <span class="pe-field-hint">@L["Social_FbAppIdHint"]</span>
+        </div>
+
+        <h4>X (Twitter)</h4>
+        <div class="pe-field pe-field-sm">
+            <label>@L["Social_TwitterCard"]</label>
+            <select @bind="Model.TwitterCard" class="cms-input">
+                <option value="">@L["Social_TwitterCardNone"]</option>
+                <option value="summary">summary</option>
+                <option value="summary_large_image">summary_large_image</option>
+                <option value="player">player</option>
+                <option value="app">app</option>
+            </select>
+            <span class="pe-field-hint">@L["Social_TwitterCardHint"]</span>
+        </div>
+        <div class="social-row">
+            <div class="pe-field">
+                <label>@L["Social_TwitterSite"]</label>
+                <input @bind="Model.TwitterSite" class="cms-input" placeholder="@@siteadi" />
+            </div>
+            <div class="pe-field">
+                <label>@L["Social_TwitterCreator"]</label>
+                <input @bind="Model.Meta.TwitterCreator" class="cms-input" placeholder="@@yazar" />
+            </div>
+        </div>
+        @if (!string.IsNullOrEmpty(Model.TwitterCard))
+        {
+            <details class="social-more">
+                <summary>@L["Social_TwitterOverrides"]</summary>
+                <div class="pe-field">
+                    <label>@L["Social_TwitterTitle"] <span class="elevare-seo-charcount">@((Model.Meta.TwitterTitle ?? "").Length)/70</span></label>
+                    <input @bind="Model.Meta.TwitterTitle" @bind:event="oninput" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_TwitterDescription"] <span class="elevare-seo-charcount">@((Model.Meta.TwitterDescription ?? "").Length)/200</span></label>
+                    <textarea @bind="Model.Meta.TwitterDescription" @bind:event="oninput" class="cms-input" rows="2"></textarea>
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_TwitterImage"]</label>
+                    <div class="social-image-field">
+                        <input @bind="Model.Meta.TwitterImage" class="cms-input" placeholder="https://..." />
+                        @ImageThumb(IsEmpty(Model.Meta.TwitterImage) ? null : Model.Meta.TwitterImage, null, false)
+                    </div>
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_TwitterImageAlt"] <span class="elevare-seo-charcount">@((Model.Meta.TwitterImageAlt ?? "").Length)/420</span></label>
+                    <input @bind="Model.Meta.TwitterImageAlt" @bind:event="oninput" class="cms-input" maxlength="420" />
+                </div>
+            </details>
+        }
+        @if (Model.TwitterCard == "player")
+        {
+            <h4>@L["Social_PlayerSection"]</h4>
+            <div class="pe-field">
+                <label>twitter:player</label>
+                <input @bind="Model.Meta.PlayerUrl" class="cms-input" placeholder="https://.../embed" />
+                <span class="pe-field-hint">@L["Social_PlayerHint"]</span>
+            </div>
+            <div class="social-row">
+                <div class="pe-field">
+                    <label>@L["Social_ImageWidth"]</label>
+                    <input type="number" min="1" @bind="Model.Meta.PlayerWidth" class="cms-input" />
+                </div>
+                <div class="pe-field">
+                    <label>@L["Social_ImageHeight"]</label>
+                    <input type="number" min="1" @bind="Model.Meta.PlayerHeight" class="cms-input" />
+                </div>
+            </div>
+            <div class="pe-field">
+                <label>twitter:player:stream</label>
+                <input @bind="Model.Meta.PlayerStream" class="cms-input" placeholder="https://.../video.mp4" />
+            </div>
+        }
+        @if (Model.TwitterCard == "app")
+        {
+            <h4>@L["Social_AppSection"]</h4>
+            <span class="pe-field-hint" style="margin-bottom:8px">@L["Social_AppHint"]</span>
+            <div class="social-row">
+                <div class="pe-field"><label>iPhone @L["Social_AppName"]</label><input @bind="Model.Meta.AppNameIphone" class="cms-input" /></div>
+                <div class="pe-field"><label>iPhone ID</label><input @bind="Model.Meta.AppIdIphone" class="cms-input" placeholder="307234931" /></div>
+            </div>
+            <div class="pe-field"><label>iPhone URL</label><input @bind="Model.Meta.AppUrlIphone" class="cms-input" placeholder="app://..." /></div>
+            <div class="social-row">
+                <div class="pe-field"><label>iPad @L["Social_AppName"]</label><input @bind="Model.Meta.AppNameIpad" class="cms-input" /></div>
+                <div class="pe-field"><label>iPad ID</label><input @bind="Model.Meta.AppIdIpad" class="cms-input" /></div>
+            </div>
+            <div class="pe-field"><label>iPad URL</label><input @bind="Model.Meta.AppUrlIpad" class="cms-input" /></div>
+            <div class="social-row">
+                <div class="pe-field"><label>Google Play @L["Social_AppName"]</label><input @bind="Model.Meta.AppNameGooglePlay" class="cms-input" /></div>
+                <div class="pe-field"><label>Google Play ID</label><input @bind="Model.Meta.AppIdGooglePlay" class="cms-input" placeholder="com.example.app" /></div>
+            </div>
+            <div class="pe-field"><label>Google Play URL</label><input @bind="Model.Meta.AppUrlGooglePlay" class="cms-input" /></div>
+            <div class="pe-field pe-field-sm"><label>@L["Social_AppCountry"]</label><input @bind="Model.Meta.AppCountry" class="cms-input" placeholder="TR" maxlength="2" /></div>
+        }
+
+        @* ── Preview: roughly what a share of this page looks like. Two shapes,
+           because the two networks' cards genuinely differ: Facebook/LinkedIn show
+           the site name over the title; X's summary card is a small square image
+           beside the text, its large-image card the wide image above it. ── *@
+        <h4>@L["Social_Preview"]</h4>
+        <div class="social-preview">
+            @if (OwnImage is not null)
+            {
+                <div class="social-preview-img" style="background-image:url('@OwnImage')"></div>
+            }
+            else
+            {
+                <div class="social-preview-img social-preview-img-empty"><i class="bi bi-image"></i></div>
+            }
+            <div class="social-preview-body">
+                <div class="social-preview-domain">@Model.Meta.SiteName</div>
+                <div class="social-preview-title">@Model.OgTitle</div>
+                <div class="social-preview-desc">@Model.OgDescription</div>
+            </div>
+            <div class="social-preview-label">Facebook · LinkedIn · WhatsApp</div>
+        </div>
+        @if (Model.TwitterCard is "summary" or "summary_large_image")
+        {
+            <div class="social-preview @(Model.TwitterCard == "summary" ? "social-preview-x-summary" : "")">
+                @if (!string.IsNullOrWhiteSpace(PreviewImage))
+                {
+                    <div class="social-preview-img" style="background-image:url('@PreviewImage')"></div>
+                }
+                else
+                {
+                    <div class="social-preview-img social-preview-img-empty"><i class="bi bi-image"></i></div>
+                }
+                <div class="social-preview-body">
+                    <div class="social-preview-title">@(FirstFilled(Model.Meta.TwitterTitle, Model.OgTitle))</div>
+                    <div class="social-preview-desc">@(FirstFilled(Model.Meta.TwitterDescription, Model.OgDescription))</div>
+                    <div class="social-preview-domain">@Host</div>
+                </div>
+                <div class="social-preview-label">X · @Model.TwitterCard</div>
+            </div>
+        }
+        <p class="pe-field-hint">@L["Social_PreviewHint"]</p>
+    </div>
+</div>
+
+<style>
+    .elevare-social-panel { width: 440px; }
+    .social-row { display: flex; gap: 10px; }
+    .social-row .pe-field { flex: 1; min-width: 0; }
+    .elevare-social-panel .pe-field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+    .elevare-social-panel .pe-field label { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--cms-text-dim); display: flex; justify-content: space-between; gap: 8px; }
+    .social-more { margin: 4px 0 12px; }
+    .social-more > summary { cursor: pointer; font-size: 12.5px; color: var(--cms-text-muted); padding: 6px 0; user-select: none; }
+    .social-more[open] > summary { margin-bottom: 8px; }
+    .social-preview { position: relative; border: 1px solid var(--cms-border); border-radius: var(--radius-sm); overflow: hidden; background: var(--cms-bg); margin-bottom: 12px; }
+    .social-preview-img { height: 150px; background-size: cover; background-position: center; }
+    .social-preview-label { position: absolute; top: 6px; right: 6px; font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 6px; border-radius: 8px; background: rgba(0,0,0,.55); color: #fff; }
+    .social-preview-x-summary { display: grid; grid-template-columns: 96px 1fr; }
+    .social-preview-x-summary .social-preview-img { height: 100%; min-height: 96px; }
+    .social-preview-img-empty { display: flex; align-items: center; justify-content: center; color: var(--cms-text-muted); font-size: 28px; background: color-mix(in srgb, var(--cms-border) 40%, transparent); }
+    .social-preview-body { padding: 10px 12px; }
+    .social-preview-domain { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--cms-text-muted); }
+    .social-preview-title { font-weight: 700; font-size: 14px; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+    .social-image-field { display: flex; gap: 8px; align-items: stretch; }
+    .social-image-field .cms-input { flex: 1; min-width: 0; }
+    .social-thumb { flex: 0 0 auto; width: 84px; display: flex; flex-direction: column; align-items: center; gap: 2px; text-decoration: none; }
+    .social-thumb-box { width: 84px; height: 48px; border: 1px solid var(--cms-border); border-radius: var(--radius-sm); background: color-mix(in srgb, var(--cms-border) 40%, transparent) center / cover no-repeat; display: flex; align-items: center; justify-content: center; color: var(--cms-text-muted); overflow: hidden; }
+    .social-thumb:hover .social-thumb-box { border-color: var(--cms-accent, #3b82f6); }
+    .social-thumb-size { font-size: 10.5px; color: var(--cms-text-muted); white-space: nowrap; }
+    .social-fallback { display: block; font-size: 12px; line-height: 1.45; color: var(--cms-text-muted); margin-top: 2px; overflow-wrap: anywhere; }
+    .social-fallback b { color: var(--cms-text); font-weight: 600; }
+    .social-fallback-src { opacity: .85; }
+    .social-fallback-warn { color: var(--cms-warning, #d97706); }
+    .social-fallback-ok { color: var(--cms-success, #16a34a); margin: -4px 0 10px; }
+    .social-fill { margin: 2px 0 10px; }
+    .social-autofill { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 14px; padding: 10px 12px; border: 1px dashed var(--cms-border); border-radius: var(--radius-sm); }
+    .social-autofill .pe-field-hint { margin: 0; flex: 1; min-width: 180px; }
+    .social-preview-desc { font-size: 12.5px; color: var(--cms-text-muted); margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+</style>
+
+@code {
+    [Parameter, EditorRequired] public SocialShareModel Model { get; set; } = new();
+    /// <summary>The page's SEO title — what "Otomatik doldur" offers for og:title.</summary>
+    [Parameter] public string FallbackTitle { get; set; } = "";
+    /// <summary>The page's meta description — what "Otomatik doldur" offers for og:description.</summary>
+    [Parameter] public string FallbackDescription { get; set; } = "";
+    /// <summary>Site Settings' site name — what og:site_name is unless the page overrides it.</summary>
+    [Parameter] public string SiteName { get; set; } = "";
+    /// <summary>What "Otomatik doldur" offers for each field, as the editor knows it.</summary>
+    [Parameter] public SocialShareSuggestions Suggestions { get; set; } = SocialShareSuggestions.Empty;
+    /// <summary>A field the SEO analysis reads changed — the host re-runs it.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    /// <summary>True when hosted inside the page-settings panel, which draws the shell.</summary>
+    [Parameter] public bool Embedded { get; set; }
+
+    private Task Close() => OnClose.InvokeAsync();
+
+    // ── Suggestions: what "Otomatik doldur" puts into an empty field ─────────
+    // Only ever written by the button — the public site no longer fills anything in
+    // on its own, so a field left empty means the tag is left out.
+
+    // Read from the canvas when the panel opens: unsaved edits count.
+    private string? _contentImage;
+    private DateTime? _articleDate;
+    private string? _autoFillNote;
+
+    private sealed record CanvasFacts(string? ContentImage, string? ArticleDateAttribute, string? ArticleDateText);
+
+    private static bool IsEmpty(string? value) => string.IsNullOrWhiteSpace(value);
+
+    private string? DescriptionSuggestion => IsEmpty(FallbackDescription) ? Suggestions.SiteDescription : FallbackDescription;
+    private string? ImageSuggestion => IsEmpty(_contentImage) ? Suggestions.SiteImage : _contentImage;
+    private DateTime? PublishedSuggestion => _articleDate ?? Suggestions.Published;
+
+    /// <summary>The page's own share image, if it has one.</summary>
+    private string? OwnImage => IsEmpty(Model.OgImage) ? null : Model.OgImage!.Trim();
+
+    private Task Changed() => OnChanged.InvokeAsync();
+
+    /// <summary>
+    /// Fills every EMPTY field with what the page and Site Settings already know —
+    /// a field the author wrote is never touched — and says how many it filled.
+    /// </summary>
+    private async Task AutoFillAsync()
+    {
+        int filled = 0;
+        string? Fill(string? current, string? suggestion)
+        {
+            if (!IsEmpty(current) || IsEmpty(suggestion)) return current;
+            filled++;
+            return suggestion!.Trim();
+        }
+
+        Model.OgTitle = Fill(Model.OgTitle, FallbackTitle) ?? "";
+        Model.OgDescription = Fill(Model.OgDescription, DescriptionSuggestion) ?? "";
+
+        string? imageBefore = Model.OgImage;
+        Model.OgImage = Fill(Model.OgImage, ImageSuggestion);
+        await LoadImageFactsAsync();
+        if (OwnImage is not null && _image is { Width: > 0, Height: > 0 }
+            && (Model.OgImage != imageBefore || Model.Meta.ImageWidth is null || Model.Meta.ImageHeight is null))
+        {
+            WriteImageFacts();
+            filled++;
+        }
+        if (OwnImage is not null)
+            Model.Meta.ImageAlt = Fill(Model.Meta.ImageAlt, IsEmpty(_image?.Alt) ? Model.OgTitle : _image!.Alt);
+
+        // Not only when empty: the share address is the page's address, not
+        // something the author wrote, and after a slug or parent change the old one
+        // is simply wrong. Auto-fill brings it up to date.
+        if (!IsEmpty(Suggestions.PageLink) && Model.OgUrl?.Trim() != Suggestions.PageLink!.Trim())
+        {
+            Model.OgUrl = Suggestions.PageLink.Trim();
+            filled++;
+        }
+        Model.Meta.SiteName = Fill(Model.Meta.SiteName, SiteName);
+        Model.Meta.Locale = Fill(Model.Meta.Locale, Suggestions.Locale);
+        Model.TwitterSite = Fill(Model.TwitterSite, Suggestions.XHandle);
+        if (IsEmpty(Model.TwitterCard) && OwnImage is not null)
+        {
+            Model.TwitterCard = "summary_large_image";
+            filled++;
+        }
+
+        // A page with an Article block is an article to Facebook and LinkedIn too.
+        if (_articleDate is not null && Model.OgType == "website")
+        {
+            Model.OgType = "article";
+            filled++;
+        }
+        if (Model.OgType == "article")
+        {
+            // Filled in while the page is being edited: a page not published yet is
+            // published now, and the page is modified now — saving it makes that true.
+            // The modified time is brought up to date even when it holds an old one.
+            DateTime now = DateTime.UtcNow;
+            now = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0, DateTimeKind.Utc);
+            if (Model.Meta.ArticlePublishedTime is null)
+            {
+                Model.Meta.ArticlePublishedTime = PublishedSuggestion ?? now;
+                filled++;
+            }
+            if (Model.Meta.ArticleModifiedTime != now)
+            {
+                Model.Meta.ArticleModifiedTime = now;
+                filled++;
+            }
+            if (Model.Meta.ArticleTags.Count == 0 && Suggestions.Tags.Count > 0)
+            {
+                Model.Meta.ArticleTags = [.. Suggestions.Tags];
+                filled++;
+            }
+        }
+
+        _autoFillNote = filled == 0 ? L["Social_AutoFillNothing"] : string.Format(L["Social_AutoFillDone"], filled);
+        await Changed();
+    }
+
+    // ── Image: preview, size, type ───────────────────────────────────────────
+
+    /// <summary>What is known about <see cref="OwnImage"/>.</summary>
+    private sealed record ImageFacts(int? Width, int? Height, string? Type, string? Alt, bool FromLibrary);
+    private sealed record MeasuredSize(int Width, int Height);
+
+    private ImageFacts? _image;
+    private string? _imageFor;
+    private bool _imageBroken;
+    private bool _autoFilled;
+
+    // Measured, not in the library, or not yet written in: offer to write it.
+    private bool CanFillImageFacts => OwnImage is not null && _image is { Width: > 0, Height: > 0 }
+        && (Model.Meta.ImageWidth != _image.Width || Model.Meta.ImageHeight != _image.Height);
+
+    private string ImageFactsSource => _image?.FromLibrary == true ? L["Social_Src_MediaLibrary"] : L["Social_Src_ImageFile"];
+
+    /// <summary>A small window on the image, opening it full size on click.</summary>
+    private static RenderFragment ImageThumb(string? src, ImageFacts? facts, bool broken) => @<a class="social-thumb" href="@(src ?? "#")" target="_blank" rel="noopener" title="@src">
+        <span class="social-thumb-box" style="@ThumbStyle(src, broken)">
+            @if (src is null || broken)
+            {
+                <i class="bi bi-image"></i>
+            }
+        </span>
+        @if (facts is { Width: > 0, Height: > 0 })
+        {
+            <span class="social-thumb-size">@facts.Width × @facts.Height</span>
+        }
+    </a>;
+
+    private static string ThumbStyle(string? src, bool broken)
+    {
+        if (src is null || broken)
+            return "";
+        // An apostrophe would end the url('…') early.
+        string safe = src.Replace("'", "%27", StringComparison.Ordinal);
+        return "background-image:url('" + safe + "')";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        try
+        {
+            CanvasFacts? canvas = await JS.InvokeAsync<CanvasFacts?>("grapesEditor.getShareSuggestions");
+            _contentImage = canvas?.ContentImage;
+            _articleDate = HumanDateParser.ResolveArticleDate(canvas?.ArticleDateAttribute, canvas?.ArticleDateText);
+        }
+        catch (JSException)
+        {
+            // No editor on this screen: the canvas simply has nothing to offer.
+        }
+        await LoadImageFactsAsync();
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// The image's size, type and alt text: from the media library when it is a
+    /// library file (what the public site will use), otherwise measured by loading it.
+    /// </summary>
+    private async Task LoadImageFactsAsync()
+    {
+        string? src = OwnImage;
+        if (src == _imageFor)
+            return;
+        _imageFor = src;
+        _image = null;
+        _imageBroken = false;
+        if (src is null)
+            return;
+
+        MediaFileFacts? library = null;
+        (await Sender.Send(new GetMediaFileFactsQuery(src))).Match(f => library = f, _ => { });
+        if (library is { Width: > 0, Height: > 0 })
+        {
+            _image = new ImageFacts(library.Width, library.Height, library.MimeType, library.AltText, true);
+            return;
+        }
+
+        try
+        {
+            MeasuredSize? measured = await JS.InvokeAsync<MeasuredSize?>("cmsJs.measureImage", src);
+            if (measured is null)
+                _imageBroken = true;
+            else
+                _image = new ImageFacts(measured.Width, measured.Height, library?.MimeType ?? TypeFromExtension(src), library?.AltText, false);
+        }
+        catch (JSException)
+        {
+            _imageBroken = true;
+        }
+    }
+
+    /// <summary>
+    /// A new image makes the old size and type wrong, so they are replaced with the
+    /// new image's; the alt text only when there was none.
+    /// </summary>
+    private async Task OnOwnImageChanged()
+    {
+        _autoFilled = false;
+        await LoadImageFactsAsync();
+        if (OwnImage is not null && _image is { Width: > 0, Height: > 0 })
+            WriteImageFacts();
+        await Changed();
+    }
+
+    private async Task FillImageFactsAsync()
+    {
+        WriteImageFacts();
+        await Changed();
+    }
+
+    private void WriteImageFacts()
+    {
+        if (_image is null)
+            return;
+        Model.Meta.ImageWidth = _image.Width;
+        Model.Meta.ImageHeight = _image.Height;
+        if (_image.Type is not null)
+            Model.Meta.ImageType = _image.Type;
+        if (IsEmpty(Model.Meta.ImageAlt) && !IsEmpty(_image.Alt))
+            Model.Meta.ImageAlt = _image.Alt;
+        _autoFilled = true;
+    }
+
+    private static string? TypeFromExtension(string src)
+    {
+        string path = src;
+        if (Uri.TryCreate(src, UriKind.Absolute, out Uri? uri))
+            path = uri.AbsolutePath;
+        else if (src.IndexOfAny(['?', '#']) is int cut and >= 0)
+            path = src[..cut];
+        return Path.GetExtension(path).ToUpperInvariant() switch
+        {
+            ".JPG" or ".JPEG" => "image/jpeg",
+            ".PNG" => "image/png",
+            ".WEBP" => "image/webp",
+            ".GIF" => "image/gif",
+            ".AVIF" => "image/avif",
+            _ => null,
+        };
+    }
+
+    private string? PreviewImage => !string.IsNullOrWhiteSpace(Model.Meta.TwitterImage) && Model.TwitterCard is not null
+        ? Model.Meta.TwitterImage
+        : Model.OgImage;
+
+    private void OnTypeChanged(ChangeEventArgs e) => Model.OgType = e.Value?.ToString() ?? "website";
+
+    private static string FirstFilled(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "";
+
+    private string Host
+    {
+        get
+        {
+            string? url = Model.OgUrl;
+            return !string.IsNullOrWhiteSpace(url) && Uri.TryCreate(url, UriKind.Absolute, out Uri? uri) ? uri.Host : SiteName;
+        }
+    }
+
+    // ── list <-> text seams ──────────────────────────────────────────────────
+    private static string Lines(IEnumerable<string> items) => string.Join('\n', items);
+    private static List<string> SplitLines(string? text) =>
+        [.. (text ?? "").Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0)];
+    private static string Commas(IEnumerable<string> items) => string.Join(", ", items);
+    private static List<string> SplitCommas(string? text) =>
+        [.. (text ?? "").Split(',').Select(l => l.Trim()).Where(l => l.Length > 0)];
+
+    private string ArticleAuthorsText { get => Lines(Model.Meta.ArticleAuthors); set => Model.Meta.ArticleAuthors = SplitLines(value); }
+    private string ArticleTagsText { get => Commas(Model.Meta.ArticleTags); set => Model.Meta.ArticleTags = SplitCommas(value); }
+    private string BookAuthorsText { get => Lines(Model.Meta.BookAuthors); set => Model.Meta.BookAuthors = SplitLines(value); }
+    private string BookTagsText { get => Commas(Model.Meta.BookTags); set => Model.Meta.BookTags = SplitCommas(value); }
+    private string VideoDirectorsText { get => Lines(Model.Meta.VideoDirectors); set => Model.Meta.VideoDirectors = SplitLines(value); }
+    private string VideoWritersText { get => Lines(Model.Meta.VideoWriters); set => Model.Meta.VideoWriters = SplitLines(value); }
+    private string VideoTagsText { get => Commas(Model.Meta.VideoTags); set => Model.Meta.VideoTags = SplitCommas(value); }
+    private string MusicSongsText { get => Lines(Model.Meta.MusicSongs); set => Model.Meta.MusicSongs = SplitLines(value); }
+    private string MusicMusiciansText { get => Lines(Model.Meta.MusicMusicians); set => Model.Meta.MusicMusicians = SplitLines(value); }
+
+    // "https://profile | Role" per line; the role is optional.
+    private string VideoActorsText
+    {
+        get => string.Join('\n', Model.Meta.VideoActors.Select(a => string.IsNullOrWhiteSpace(a.Role) ? a.Url : $"{a.Url} | {a.Role}"));
+        set => Model.Meta.VideoActors = [.. SplitLines(value).Select(line =>
+        {
+            int bar = line.IndexOf('|');
+            return bar < 0
+                ? new SocialPerson { Url = line.Trim() }
+                : new SocialPerson { Url = line[..bar].Trim(), Role = line[(bar + 1)..].Trim() };
+        })];
+    }
+}

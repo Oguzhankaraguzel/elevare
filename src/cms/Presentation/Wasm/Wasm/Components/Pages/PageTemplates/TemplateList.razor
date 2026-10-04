@@ -1,0 +1,364 @@
+﻿@page "/templates"
+@layout CMSLayout
+
+<PageTitle>@L["Templates_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+            <h1>@L["Templates_Title"]</h1>
+            <p>@L["Templates_Subtitle"]</p>
+        </div>
+        <button class="btn-cms btn-primary-cms" @onclick="OpenCreate">
+            <i class="bi bi-plus-lg"></i> @L["Templates_New"]
+        </button>
+    </div>
+</div>
+
+<div class="form-group" style="max-width:260px;margin-bottom:12px">
+    <label class="cms-label">@L["Templates_FieldLanguage"]</label>
+    <select class="cms-input" @bind="_filterLanguageId" @bind:after="LoadTemplates">
+        <option value="">@L["Templates_LanguageAny"]</option>
+        @foreach (LanguageResponse lang in _languages)
+        {
+            <option value="@lang.Id">@lang.NameInNative</option>
+        }
+    </select>
+</div>
+
+<ElevareGrid TItem="PageTemplateListItemResponse"
+             Data="_templates"
+             Loading="_loading"
+             Title="@L["Templates_Title"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             OnRowDoubleClick="row => OpenEdit(row.Id)"
+             ShowGroupPanel="false"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Templates_Empty"]"
+             PageSize="20" />
+
+@* ── Create modal ────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Templates_CreateTitle"]" IsVisible="_showCreate" OnClose="CloseCreate" Size="md">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label">@L["Templates_FieldName"] <span style="color:var(--cms-danger)">*</span></label>
+            <input @bind="_createName" @bind:event="oninput" class="cms-input" placeholder="@L["Templates_FieldNamePlaceholder"]" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Templates_FieldType"]</label>
+            <select @bind="_createType" class="cms-input">
+                <option value="@PageTemplateType.Menu">@L["Templates_TypeMenu"]</option>
+                <option value="@PageTemplateType.FullPage">@L["Templates_TypeFullPage"]</option>
+                <option value="@PageTemplateType.Button">@L["Templates_TypeButton"]</option>
+                <option value="@PageTemplateType.Other">@L["Templates_TypeOther"]</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Templates_FieldLanguage"]</label>
+            <select @bind="_createLanguageId" class="cms-input">
+                <option value="0">@L["Templates_LanguageNone"]</option>
+                @foreach (LanguageResponse lang in _languages)
+                {
+                    <option value="@lang.Id">@lang.NameInNative</option>
+                }
+            </select>
+            <small style="color:var(--cms-text-muted);font-size:12px;display:block;margin-top:6px">
+                @L["Templates_FieldLanguageHint"]
+            </small>
+        </div>
+        <div class="form-group">
+            <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                <label class="cms-toggle">
+                    <input type="checkbox" @bind="_createIsLinked" />
+                    <span class="cms-toggle-slider"></span>
+                </label>
+                <span style="font-size:13.5px">@L["Templates_FieldIsLinked"]</span>
+            </label>
+            <small style="color:var(--cms-text-muted);font-size:12px;display:block;margin-top:6px">
+                @(_createIsLinked ? L["Templates_IsLinkedHintOn"] : L["Templates_IsLinkedHintOff"])
+            </small>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseCreate">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ConfirmCreate" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check2"></i>
+            }
+            @L["Pages_CreateBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete modal ────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Templates_DeleteTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-warning);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">@string.Format(L["Templates_DeleteConfirm"], _deleteTarget?.Name ?? "")</p>
+            <p style="font-size:13px;color:var(--cms-text-muted)">@L["Common_IrreversibleAction"]</p>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-trash3"></i>
+            }
+            @L["Common_Delete"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<PageTemplateListItemResponse> _templates = [];
+    private bool _loading = true;
+    private bool _saving;
+
+    private bool _showCreate;
+    private string _createName = "";
+    private PageTemplateType _createType = PageTemplateType.Other;
+    private bool _createIsLinked;
+    private int _createLanguageId;
+
+    private List<LanguageResponse> _languages = [];
+    private string _filterLanguageId = "";
+
+    private bool _showDelete;
+    private PageTemplateListItemResponse? _deleteTarget;
+
+    private List<GridColumnDef<PageTemplateListItemResponse>> _columns = [];
+    private RenderFragment<PageTemplateListItemResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildGridColumns();
+        await LoadLanguages();
+        await LoadTemplates();
+    }
+
+    private async Task LoadLanguages()
+    {
+        (await Sender.Send(new GetLanguagesQuery(IsActive: true))).Match(
+            success => _languages = [.. success.Items],
+            error => Toast.Error(L.Error(error)));
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<PageTemplateListItemResponse>
+            {
+                PropertyName  = "Name",
+                Title         = L["Templates_ColName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => t.Name,
+                CellTemplate  = NameTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<PageTemplateListItemResponse>
+            {
+                PropertyName  = "Type",
+                Title         = L["Templates_ColType"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => TypeLabel(t.Type),
+                CellTemplate  = TypeTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "170px",
+            },
+            new GridColumnDef<PageTemplateListItemResponse>
+            {
+                PropertyName  = "LanguageName",
+                Title         = L["Templates_ColLanguage"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => t.LanguageName ?? L["Templates_LanguageNone"],
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "140px",
+            },
+            new GridColumnDef<PageTemplateListItemResponse>
+            {
+                PropertyName  = "IsLinked",
+                Title         = L["Templates_ColLinked"],
+                PropertyType  = typeof(string),
+                ValueAccessor = t => t.IsLinked ? L["Templates_Linked"] : L["Templates_Copy"],
+                CellTemplate  = LinkedTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "150px",
+            },
+            new GridColumnDef<PageTemplateListItemResponse>
+            {
+                PropertyName  = "UpdateDate",
+                Title         = L["Pages_ColUpdated"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = t => (object?)(t.UpdateDate ?? t.CreateDate),
+                CellTemplate  = UpdatedTemplate,
+                Sortable      = true,
+                Width         = "160px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private RenderFragment<PageTemplateListItemResponse> NameTemplate => t => __builder =>
+    {
+        <span style="font-weight:600;cursor:pointer" @onclick="() => OpenEdit(t.Id)">@t.Name</span>
+    };
+
+    private RenderFragment<PageTemplateListItemResponse> TypeTemplate => t => __builder =>
+    {
+        @TypeBadge(t.Type)
+    };
+
+    private RenderFragment<PageTemplateListItemResponse> LinkedTemplate => t => __builder =>
+    {
+        @if (t.IsLinked)
+        {
+            <span class="badge-cms badge-accent"><i class="bi bi-link-45deg"></i> @L["Templates_Linked"]</span>
+        }
+        else
+        {
+            <span class="badge-cms badge-neutral"><i class="bi bi-files"></i> @L["Templates_Copy"]</span>
+        }
+    };
+
+    private static RenderFragment<PageTemplateListItemResponse> UpdatedTemplate => t => __builder =>
+    {
+        <span style="color:var(--cms-text-muted);font-size:13px">@((t.UpdateDate ?? t.CreateDate).ToLocalTime().ToString("dd.MM.yyyy HH:mm"))</span>
+    };
+
+    private RenderFragment<PageTemplateListItemResponse> ActionButtons => t => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]" @onclick="() => OpenEdit(t.Id)">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn-cms btn-danger-cms btn-sm-cms btn-icon" title="@L["Common_Delete"]" @onclick="() => OpenDelete(t)">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+    };
+
+    private string TypeLabel(PageTemplateType type) => type switch
+    {
+        PageTemplateType.Menu => L["Templates_TypeMenu"],
+        PageTemplateType.FullPage => L["Templates_TypeFullPage"],
+        PageTemplateType.Button => L["Templates_TypeButton"],
+        _ => L["Templates_TypeOther"],
+    };
+
+    private async Task LoadTemplates()
+    {
+        _loading = true;
+        try
+        {
+            int? languageFilter = int.TryParse(_filterLanguageId, out int lid) ? lid : null;
+            (await Sender.Send(new GetPageTemplatesQuery(LanguageId: languageFilter))).Match(
+                items => _templates = items,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Templates_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private RenderFragment TypeBadge(PageTemplateType type) => __builder =>
+    {
+        (string cls, string icon, string text) = type switch
+        {
+            PageTemplateType.Menu => ("badge-info", "bi-list-nested", L["Templates_TypeMenu"]),
+            PageTemplateType.FullPage => ("badge-success", "bi-file-earmark-text", L["Templates_TypeFullPage"]),
+            PageTemplateType.Button => ("badge-warning", "bi-hand-index", L["Templates_TypeButton"]),
+            _ => ("badge-neutral", "bi-box", L["Templates_TypeOther"])
+        };
+        <span class="badge-cms @cls"><i class="bi @icon"></i> @text</span>
+    };
+
+    private void OpenCreate()
+    {
+        _createName = "";
+        _createType = PageTemplateType.Other;
+        _createIsLinked = false;
+        _createLanguageId = 0;
+        _showCreate = true;
+    }
+
+    private void CloseCreate() => _showCreate = false;
+
+    private async Task ConfirmCreate()
+    {
+        if (_createName.IsNullOrWhiteSpace()) { Toast.Error(L["Templates_Validation_Name"]); return; }
+
+        _saving = true;
+        try
+        {
+            int? newId = null;
+            int? languageId = _createLanguageId > 0 ? _createLanguageId : null;
+            (await Sender.Send(new CreatePageTemplateCommand(_createName.Trim(), _createType, _createIsLinked, languageId)))
+                .Match(
+                    id => newId = id,
+                    error => Toast.Error(L.Error(error)));
+
+            if (newId is int id)
+            {
+                Toast.Success(L["Templates_Created"]);
+                _showCreate = false;
+                Nav.NavigateTo($"/templates/edit/{id}");
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private void OpenEdit(int id) => Nav.NavigateTo($"/templates/edit/{id}");
+
+    private void OpenDelete(PageTemplateListItemResponse template)
+    {
+        _deleteTarget = template;
+        _showDelete = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeletePageTemplateCommand(_deleteTarget.Id)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Templates_Deleted"]);
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadTemplates();
+            }
+        }
+        finally { _saving = false; }
+    }
+}

@@ -1,0 +1,286 @@
+@page "/admin/about"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_About"]</PageTitle>
+
+@* One continuous document, not a stack of cards. Every section here is prose the
+   reader goes through once, top to bottom — boxing each heading separately breaks
+   that into unrelated widgets and makes a short page look like a dashboard. The
+   single measured column and the ruled section headings are what make it read as
+   something written rather than something assembled. *@
+<article class="about-doc">
+
+    <header class="about-doc__masthead">
+        <img class="about-doc__mark" src="img/elevare-mark.png" alt="Elevare" />
+        <div>
+            <h1>Elevare</h1>
+            <p>@L["About_Subtitle"]</p>
+        </div>
+    </header>
+
+    <section class="about-doc__section">
+        <h2>@L["About_WhatIsElevareTitle"]</h2>
+        <p class="about-doc__lead">@L["About_WhatIsElevareBody"]</p>
+        <ul class="about-doc__list">
+            <li><i class="bi bi-check2"></i><span>@L["About_WhatIsElevarePoint1"]</span></li>
+            <li><i class="bi bi-check2"></i><span>@L["About_WhatIsElevarePoint2"]</span></li>
+            <li><i class="bi bi-check2"></i><span>@L["About_WhatIsElevarePoint3"]</span></li>
+            <li><i class="bi bi-check2"></i><span>@L["About_WhatIsElevarePoint4"]</span></li>
+        </ul>
+        <img class="about-doc__photo" src="img/about-project.jpg" alt="@L["About_Subtitle"]" />
+    </section>
+
+    <section class="about-doc__section">
+        <h2>@L["About_DeveloperTitle"]</h2>
+        @* The resx value carries a real <a href="mailto:..."> around the address —
+           plain @L[...] would have escaped it into inert text. This is CMS-authored
+           copy, not visitor input, so rendering it as markup carries no injection risk. *@
+        <p>@((MarkupString)L["About_DeveloperBody"])</p>
+    </section>
+
+    <section class="about-doc__section">
+        <h2>@L["About_ArchitectureTitle"]</h2>
+        <p>@L["About_ArchitectureBody"]</p>
+
+        @* The one place a diagram earns its keep on this page: "CMS writes, Web
+           reads" is the single architectural claim everything else rests on, and
+           two boxes with a one-way arrow state it faster than the paragraph can. *@
+        <div class="about-doc__diagram" role="img" aria-label="@L["About_DiagramAlt"]">
+            <div class="about-doc__node">
+                <i class="bi bi-pencil-square"></i>
+                <strong>CMS</strong>
+                <span>@L["About_DiagramWrites"]</span>
+            </div>
+            <div class="about-doc__flow">
+                <span class="about-doc__db"><i class="bi bi-database"></i> @L["About_DiagramDatabase"]</span>
+                <span class="about-doc__arrow" aria-hidden="true"></span>
+            </div>
+            <div class="about-doc__node">
+                <i class="bi bi-globe2"></i>
+                <strong>@L["About_DiagramPublicSite"]</strong>
+                <span>@L["About_DiagramReads"]</span>
+            </div>
+        </div>
+    </section>
+
+    <section class="about-doc__section">
+        <h2>@L["About_LoadBalancerTitle"]</h2>
+        <p>@L["About_LoadBalancerBody"]</p>
+    </section>
+
+    <footer class="about-doc__footer">
+        <i class="bi bi-journal-bookmark"></i>
+        <p>
+            <strong>@L["About_SeeKnowledgeBaseTitle"]</strong><br />
+            @L["About_SeeKnowledgeBaseBody"]
+            <a href="/admin/knowledge-base">@L["Nav_KnowledgeBase"]</a>
+        </p>
+    </footer>
+
+</article>
+
+<style>
+    .about-doc {
+        max-width: 720px;
+        margin: 0 auto;
+        padding-bottom: 40px;
+        color: var(--cms-text);
+        font-size: 14.5px;
+        line-height: 1.75;
+    }
+
+    .about-doc__masthead {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding-bottom: 28px;
+        margin-bottom: 8px;
+        border-bottom: 1px solid var(--cms-border);
+    }
+
+    .about-doc__mark {
+        flex-shrink: 0;
+        width: 52px;
+        height: auto;
+    }
+
+    .about-doc__photo {
+        display: block;
+        width: 100%;
+        height: auto;
+        max-height: 280px;
+        object-fit: cover;
+        border-radius: var(--radius);
+        margin-top: 18px;
+    }
+
+    .about-doc__masthead h1 {
+        margin: 0;
+        font-size: 27px;
+        font-weight: 700;
+        letter-spacing: -0.02em;
+    }
+
+    .about-doc__masthead p {
+        margin: 3px 0 0;
+        color: var(--cms-text-muted);
+        font-size: 14px;
+    }
+
+    .about-doc__section {
+        padding-top: 30px;
+    }
+
+    /* Numbered, ruled headings: they carry the reading order that the cards used
+       to imply with their borders, without walling each section off. */
+    .about-doc__section h2 {
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        color: var(--cms-text-muted);
+        margin: 0 0 14px;
+        padding-bottom: 9px;
+        border-bottom: 1px solid var(--cms-border);
+    }
+
+    .about-doc__section p {
+        margin: 0 0 14px;
+        color: var(--cms-text-muted);
+    }
+
+    .about-doc__lead {
+        font-size: 15.5px;
+        color: var(--cms-text) !important;
+    }
+
+    .about-doc__list {
+        list-style: none;
+        margin: 16px 0 0;
+        padding: 0;
+    }
+
+    .about-doc__list li {
+        display: flex;
+        gap: 11px;
+        align-items: flex-start;
+        padding: 7px 0;
+        color: var(--cms-text-muted);
+    }
+
+    .about-doc__list i {
+        color: var(--cms-success, #22c55e);
+        font-size: 15px;
+        line-height: 1.6;
+        flex-shrink: 0;
+    }
+
+    .about-doc__diagram {
+        display: flex;
+        align-items: stretch;
+        gap: 0;
+        margin: 22px 0 4px;
+        flex-wrap: wrap;
+    }
+
+    .about-doc__node {
+        flex: 1 1 170px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 4px;
+        text-align: center;
+        padding: 18px 14px;
+        border: 1px solid var(--cms-border);
+        border-radius: 10px;
+        background: var(--cms-bg-alt, var(--cms-card));
+    }
+
+    .about-doc__node i {
+        font-size: 19px;
+        color: var(--cms-accent);
+    }
+
+    .about-doc__node strong {
+        font-size: 14px;
+    }
+
+    .about-doc__node span {
+        font-size: 12px;
+        color: var(--cms-text-muted);
+    }
+
+    .about-doc__flow {
+        flex: 0 1 130px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        padding: 0 10px;
+    }
+
+    .about-doc__db {
+        font-size: 11.5px;
+        color: var(--cms-text-muted);
+        white-space: nowrap;
+    }
+
+    /* A single arrow pointing at the public site — the direction IS the point. */
+    .about-doc__arrow {
+        width: 100%;
+        min-width: 54px;
+        height: 2px;
+        background: var(--cms-border);
+        position: relative;
+    }
+
+    .about-doc__arrow::after {
+        content: "";
+        position: absolute;
+        right: -1px;
+        top: -4px;
+        border-left: 8px solid var(--cms-border);
+        border-top: 5px solid transparent;
+        border-bottom: 5px solid transparent;
+    }
+
+    .about-doc__footer {
+        display: flex;
+        gap: 13px;
+        align-items: flex-start;
+        margin-top: 36px;
+        padding: 16px 18px;
+        border: 1px solid var(--cms-border);
+        border-left: 3px solid var(--cms-accent);
+        border-radius: 8px;
+        background: var(--cms-bg-alt, transparent);
+    }
+
+    .about-doc__footer i {
+        color: var(--cms-accent);
+        font-size: 17px;
+        line-height: 1.6;
+    }
+
+    .about-doc__footer p {
+        margin: 0;
+        font-size: 13.5px;
+        color: var(--cms-text-muted);
+    }
+
+    @@media (max-width: 640px) {
+        .about-doc__diagram { flex-direction: column; }
+        .about-doc__flow { flex-basis: auto; padding: 10px 0; }
+        .about-doc__arrow { width: 2px; min-width: 0; height: 30px; }
+        .about-doc__arrow::after {
+            right: -4px;
+            top: auto;
+            bottom: -1px;
+            border-left: 5px solid transparent;
+            border-right: 5px solid transparent;
+            border-top: 8px solid var(--cms-border);
+            border-bottom: none;
+        }
+    }
+</style>

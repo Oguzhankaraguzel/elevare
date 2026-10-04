@@ -1,0 +1,155 @@
+﻿@page "/admin/cache"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Cache"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Cache"]</h1>
+    <p>@L["Cache_Subtitle"]</p>
+</div>
+
+@* ── Backend health ───────────────────────────────────────────────────────────
+   Shown up front and in full: the cache deliberately fails open on the public
+   site, so a broken Redis costs performance without ever surfacing as a visible
+   error to visitors. This panel is the only place an operator would notice. *@
+<div class="cms-card" style="padding:20px;max-width:760px;margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <h4 style="margin:0">@L["Cache_StatusTitle"]</h4>
+        <button class="btn-cms btn-ghost btn-sm-cms" @onclick="LoadStatus" disabled="@_loadingStatus">
+            <i class="bi bi-arrow-clockwise @(_loadingStatus ? "spin" : "")"></i> @L["Cache_RefreshStatusBtn"]
+        </button>
+    </div>
+
+    @if (_loadingStatus && _status is null && _statusError is null)
+    {
+        <div style="padding:16px 0;color:var(--cms-text-muted)">
+            <i class="bi bi-arrow-clockwise spin"></i> @L["Cache_StatusLoading"]
+        </div>
+    }
+    else if (_statusError is not null)
+    {
+        <div style="margin-top:12px;padding:14px;border:1px solid var(--cms-danger);border-radius:8px;background:color-mix(in srgb, var(--cms-danger) 8%, transparent)">
+            <div style="font-weight:600;color:var(--cms-danger);margin-bottom:6px">
+                <i class="bi bi-exclamation-triangle-fill"></i> @L["Cache_StatusUnavailable"]
+            </div>
+            <div style="font-size:13px;color:var(--cms-text);word-break:break-word">@_statusError</div>
+        </div>
+    }
+    else if (_status is not null)
+    {
+        <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:14px">
+            <div>
+                <div style="font-size:12px;color:var(--cms-text-muted);text-transform:uppercase;letter-spacing:.04em">@L["Cache_ProviderLabel"]</div>
+                <div style="font-weight:600;margin-top:2px">@_status.Provider</div>
+            </div>
+            <div>
+                <div style="font-size:12px;color:var(--cms-text-muted);text-transform:uppercase;letter-spacing:.04em">@L["Common_Status"]</div>
+                <div style="margin-top:2px">
+                    @if (_status.Healthy)
+                    {
+                        <span class="badge-cms badge-success"><i class="bi bi-circle-fill" style="font-size:7px"></i> @L["Cache_Healthy"]</span>
+                    }
+                    else
+                    {
+                        <span class="badge-cms badge-danger"><i class="bi bi-circle-fill" style="font-size:7px"></i> @L["Cache_Degraded"]</span>
+                    }
+                </div>
+            </div>
+            @if (_status.EntryCount.HasValue)
+            {
+                <div>
+                    <div style="font-size:12px;color:var(--cms-text-muted);text-transform:uppercase;letter-spacing:.04em">@L["Cache_EntryCountLabel"]</div>
+                    <div style="font-weight:600;margin-top:2px">@_status.EntryCount.Value</div>
+                </div>
+            }
+        </div>
+
+        @if (!_status.Healthy)
+        {
+            <div style="margin-top:14px;padding:14px;border:1px solid var(--cms-danger);border-radius:8px;background:color-mix(in srgb, var(--cms-danger) 8%, transparent)">
+                <div style="font-weight:600;color:var(--cms-danger);margin-bottom:6px">
+                    <i class="bi bi-exclamation-triangle-fill"></i> @L["Cache_DegradedTitle"]
+                </div>
+                <p style="margin:0 0 8px;font-size:13px;color:var(--cms-text)">@L["Cache_DegradedExplanation"]</p>
+                @if (!string.IsNullOrWhiteSpace(_status.Error))
+                {
+                    <pre style="margin:0;padding:10px;background:var(--cms-bg);border-radius:6px;font-size:12px;white-space:pre-wrap;word-break:break-word">@_status.Error</pre>
+                }
+            </div>
+        }
+    }
+</div>
+
+<div class="cms-card" style="padding:24px;max-width:760px">
+    <p style="color:var(--cms-text-muted);margin-bottom:20px">@L["Cache_Description"]</p>
+
+    <button class="btn-cms btn-primary-cms" @onclick="ClearCache" disabled="@_clearing">
+        @if (_clearing)
+        {
+            <i class="bi bi-arrow-clockwise spin"></i>
+        }
+        else
+        {
+            <i class="bi bi-lightning-charge"></i>
+        }
+        @L["Cache_ClearBtn"]
+    </button>
+</div>
+
+@code {
+    private bool _clearing;
+    private bool _loadingStatus = true;
+    private SiteCacheStatus? _status;
+    private string? _statusError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.CacheManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        await LoadStatus();
+    }
+
+    private async Task LoadStatus()
+    {
+        _loadingStatus = true;
+        try
+        {
+            (await Sender.Send(new GetSiteCacheStatusQuery())).Match(
+                status => { _status = status; _statusError = null; },
+                error => { _status = null; _statusError = L.Error(error); });
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _status = null;
+            _statusError = $"{ex.GetType().Name}: {ex.Message}";
+        }
+        finally
+        {
+            _loadingStatus = false;
+        }
+    }
+
+    private async Task ClearCache()
+    {
+        _clearing = true;
+        try
+        {
+            (await Sender.Send(new ClearSiteCacheCommand())).Match(
+                () => Toast.Success(L["Cache_ClearSuccess"]),
+                error => Toast.Error(L.Error(error)));
+        }
+        finally
+        {
+            _clearing = false;
+        }
+
+        // The clear itself can reveal a problem the status panel was unaware of
+        // (wrong secret, site down) — refresh so both views agree.
+        await LoadStatus();
+    }
+}

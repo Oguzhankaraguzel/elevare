@@ -1,0 +1,301 @@
+@using Microsoft.AspNetCore.Html
+@using Microsoft.AspNetCore.Http.Extensions
+@using Application.Services
+@model Application.Features.Queries.Pages.GetPublicPageBySlug.PublicPageResponse
+@{
+    ViewData["Title"] = Model.SeoTitle.Length > 0 ? Model.SeoTitle : "Page";
+    string? resolvedHtml = ViewData["ResolvedHtml"] as string ?? Model.GjsHtml;
+    @* Page CSS and linked-template CSS already merged and de-duplicated by the
+       controller. Falls back to the page's own CSS for the same reason resolvedHtml
+       falls back to Model.GjsHtml: if the resolve step did not run, raw is still
+       better than blank. *@
+    string pageCss = ViewData["PageCss"] as string ?? Model.GjsCss ?? string.Empty;
+
+    // Read by the site-wide header in _Layout.cshtml to resolve the language
+    // switcher's links for this exact page (its own translation, not just the
+    // target language's homepage).
+    ViewData["PageId"] = Model.Id;
+
+    // These reserved slugs are ordinary, publicly reachable pages (e.g. you can
+    // browse straight to /404 to preview it) so they'd otherwise be indexable,
+    // 200-status "thin content" pages — keep them out of search results.
+    // Compared on the LAST segment, because a translated system page carries its
+    // language prefix ("en/404") and would otherwise slip into the index.
+    string systemSlugCandidate = Model.FullSlug.Split('/')[^1];
+    bool isSystemPage = systemSlugCandidate is SystemPageProvider.NotFoundSlug
+        or SystemPageProvider.ServerErrorSlug
+        or SystemPageProvider.MaintenanceSlug;
+
+    // Set by PageController.Preview for signed-link previews of Draft/Archived
+    // pages — never true for a normal Index request.
+    bool isPreview = ViewData["IsPreview"] is true;
+
+    // Set by PageController.Index/Preview from the page's own "Sayfa Listesi"
+    // block, if it has one — null means this page isn't a paginated listing.
+    ListingPaginationInfo? listingPagination = ViewData["ListingPagination"] as ListingPaginationInfo;
+
+    // Canonical, hreflang and prev/next must be absolute — Google explicitly
+    // requires absolute hreflang URLs (a relative one can be ignored outright),
+    // and crawlers vary in whether they even attempt to resolve a relative
+    // canonical against the page's own address, so every link tag below is
+    // built through this rather than a bare "/{slug}".
+    string AbsoluteUrl(string path) =>
+        $"{Context.Request.Scheme}://{Context.Request.Host}/{path.TrimStart('/')}";
+
+    // og:locale wants "xx_XX", not the hyphenated "xx-xx" this site's own
+    // TwoLetterCode uses everywhere else. When a language's code already
+    // carries a region ("en-gb"), that region is authoritative and this is a
+    // pure reformat — no per-language table to keep in sync as languages are
+    // added. A bare code ("en") has no region to reformat, so the handful
+    // actually configured here fall back to a sane regional default; anything
+    // else is passed through as-is rather than guessed at.
+    string OgLocale(string twoLetterCode)
+    {
+        string code = twoLetterCode.ToLowerInvariant();
+        int dash = code.IndexOf('-');
+        if (dash > 0 && dash == code.Length - 3)
+            return $"{code[..dash]}_{code[(dash + 1)..].ToUpperInvariant()}";
+
+        return code switch
+        {
+            "tr" => "tr_TR",
+            "en" => "en_US",
+            _ => code,
+        };
+    }
+
+    // The page's own address for a given listing page: the tag filter the URL
+    // asked for (a filtered list is a list of its own) and the page number past 1 —
+    // never "?page=1", never a search term, never whatever else came along in the
+    // URL (utm_*, fbclid). Same order as the listing's own links (tag, then page).
+    string BuildPagedUrl(int pageNumber)
+    {
+        List<string> parts = [];
+        if (!string.IsNullOrEmpty(listingPagination?.Tag))
+            parts.Add($"{ListingQuery.TagKey}={Uri.EscapeDataString(listingPagination.Tag)}");
+        if (pageNumber > 1)
+            parts.Add($"{ListingQuery.PageKey}={pageNumber}");
+        string basePath = $"/{Model.FullSlug}";
+        string relative = parts.Count > 0 ? $"{basePath}?{string.Join("&", parts)}" : basePath;
+        return AbsoluteUrl(relative);
+    }
+
+    // Serialised, not concatenated: a title with a quote or "</script>" in it must
+    // stay data. The default encoder escapes "<" too.
+    string ItemListJson(ListingPaginationInfo listing)
+    {
+        var items = (listing.ItemPaths ?? []).Select((path, i) => new Dictionary<string, object>
+        {
+            ["@type"] = "ListItem",
+            ["position"] = listing.FirstPosition + i,
+            ["url"] = AbsoluteUrl(path),
+        });
+        return System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "ItemList",
+            ["itemListElement"] = items,
+        });
+    }
+}
+
+@section Head {
+    @* One robots tag, not several. Emitting two (a preview OF a system page used to
+       do exactly that) leaves crawlers to reconcile conflicting directives, and the
+       rule they apply is not the one the author had in mind. The reasons stack into
+       a single value instead: a preview must never be indexed or its links followed,
+       a system page must never be indexed but its links still carry signal, and on
+       top of that sits whatever the page itself asked for. *@
+    @{
+        // A listing's search results are a query, not a page: followed, not indexed.
+        bool noIndex = isPreview || isSystemPage || Model.SeoNoIndex || listingPagination is { IsSearch: true };
+        bool noFollow = isPreview || Model.SeoNoFollow;
+        string robots = (noIndex, noFollow) switch
+        {
+            (true, true) => "noindex, nofollow",
+            (true, false) => "noindex, follow",
+            (false, true) => "index, nofollow",
+            _ => "index, follow",
+        };
+    }
+    <meta name="robots" content="@robots" />
+    @if (!string.IsNullOrEmpty(Model.SeoMetaDescription))
+    {
+        <meta name="description" content="@Model.SeoMetaDescription" />
+    }
+    @if (!string.IsNullOrEmpty(Model.SeoMetaAuthor))
+    {
+        <meta name="author" content="@Model.SeoMetaAuthor" />
+    }
+    @if (Model.SeoIsCanonical)
+    {
+        // A custom canonical is an explicit author override — e.g. pointing a
+        // duplicate at another page entirely — and pagination has no business
+        // rewriting it. Only the default (self) canonical gets a "page" segment,
+        // and only past page 1: self-referencing per page, never consolidated to
+        // page 1, which is what keeps pages 2+ of a listing actually indexable.
+        string canonicalHref;
+        if (!string.IsNullOrEmpty(Model.SeoCanonicalLink))
+            canonicalHref = Model.SeoCanonicalLink.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? Model.SeoCanonicalLink
+                : AbsoluteUrl(Model.SeoCanonicalLink);
+        else if (listingPagination is not null)
+            canonicalHref = BuildPagedUrl(listingPagination.Page);
+        else
+            canonicalHref = AbsoluteUrl(Model.FullSlug);
+        <link rel="canonical" href="@canonicalHref" />
+    }
+
+    @if (listingPagination is { ItemPaths.Count: > 0 })
+    {
+        @* The pages this listing shows, as structured data: what a CollectionPage is a
+           collection of. Positions continue across pages (page 2 of ten per page
+           starts at 11), and the list is exactly what the visitor sees. *@
+        <script type="application/ld+json">@Html.Raw(ItemListJson(listingPagination))</script>
+    }
+
+    @if (listingPagination is not null)
+    {
+        if (listingPagination.Page > 1)
+        {
+            <link rel="prev" href="@BuildPagedUrl(listingPagination.Page - 1)" />
+        }
+        if (listingPagination.Page < listingPagination.TotalPages)
+        {
+            <link rel="next" href="@BuildPagedUrl(listingPagination.Page + 1)" />
+        }
+    }
+
+    @* ── Language alternates (hreflang) — only emitted when this page is linked ── *@
+    @* ── to a translation via the CMS's "Language Versions" panel.              ── *@
+    @{
+        string currentLang = Model.LanguageCode;
+    }
+    <link rel="alternate" hreflang="@currentLang" href="@AbsoluteUrl(Model.FullSlug)" />
+    @if (Model.IsDefaultLanguage)
+    {
+        <link rel="alternate" hreflang="x-default" href="@AbsoluteUrl(Model.FullSlug)" />
+    }
+    @foreach (Application.Features.Queries.Pages.GetPublicPageBySlug.PageAlternateResponse alt in Model.Alternates)
+    {
+        <link rel="alternate" hreflang="@alt.TwoLetterCode" href="@AbsoluteUrl(alt.FullSlug)" />
+        @if (alt.IsDefaultLanguage)
+        {
+            <link rel="alternate" hreflang="x-default" href="@AbsoluteUrl(alt.FullSlug)" />
+        }
+    }
+
+    @* ── Open Graph + X Cards — every tag comes from SocialMetaTagBuilder, and
+       every value from the page's own Social Sharing fields: an empty field writes
+       no tag. Nothing is filled in here — the CMS panel's "Otomatik doldur" is
+       where the page's title, description, image and the rest are offered, so what
+       the panel shows is exactly what ships. Type-specific properties (article:*,
+       profile:*, book:*, video:*, music:*) follow og:type. ── *@
+    @{
+        // og:locale:alternate pairs with og:locale — written only when the page
+        // states its own locale.
+        bool pageHasLocale = !string.IsNullOrWhiteSpace(Model.Social.Locale);
+        // A share image has to be an absolute address; the library stores "/uploads/…".
+        string? shareImage = null;
+        if (!string.IsNullOrWhiteSpace(Model.OgImage))
+            shareImage = Model.OgImage.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? Model.OgImage : AbsoluteUrl(Model.OgImage);
+        var socialTags = SocialMetaTagBuilder.Build(new SocialTagInput(
+            Model.OgTitle,
+            Model.OgDescription,
+            Model.OgType,
+            shareImage,
+            Model.OgLink,
+            Model.TwitterCard,
+            Model.TwitterSite,
+            "",
+            pageHasLocale ? Model.Alternates.Select(a => OgLocale(a.TwoLetterCode)).ToList() : [],
+            Model.Social));
+        // og:site_name is the page's own field too.
+        if (!string.IsNullOrWhiteSpace(Model.Social.SiteName)) { ViewData["OgSiteName"] = Model.Social.SiteName.Trim(); }
+    }
+    @foreach (SocialMetaTag tag in socialTags)
+    {
+        @if (tag.Attribute == "name")
+        {
+            <meta name="@tag.Key" content="@tag.Content" />
+        }
+        else
+        {
+            <meta property="@tag.Key" content="@tag.Content" />
+        }
+    }
+}
+
+@* Structured data is handed to the layout rather than emitted here: it belongs at
+   the end of <body>, and only the layout owns that position. *@
+@{ ViewData["StructuredData"] = Model.SeoStructuredData; }
+
+@section CriticalCss {
+    @if (!string.IsNullOrEmpty(pageCss))
+    {
+        <style>@Html.Raw(pageCss)</style>
+    }
+}
+
+@if (isPreview)
+{
+    @* A corner badge, not a top bar. The bar spanned the top edge and covered the
+       site's own header — a spacer div cannot push a fixed or sticky header down,
+       so part of the navigation was permanently hidden underneath it. Sitting in a
+       corner, this cannot collide with the layout at all.
+
+       No sentence in it either: the old bar carried a hardcoded Turkish paragraph
+       that every new language would have had to re-translate. The eye icon plus the
+       amber striped frame around the viewport already read as "this is a preview",
+       in any language. *@
+    <div class="elv-preview-frame" aria-hidden="true"></div>
+    <div class="elv-preview-badge" role="status" aria-label="Preview">
+        <svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true" focusable="false">
+            <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8zM1.173 8a13.133 13.133 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13.133 13.133 0 0 1 14.828 8c-.058.087-.122.183-.195.288-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5c-2.12 0-3.879-1.168-5.168-2.457A13.134 13.134 0 0 1 1.172 8z"/>
+            <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5zM4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0z"/>
+        </svg>
+    </div>
+    <style>
+        /* Striped amber border drawn just inside the viewport edges. Purely
+           decorative and pointer-transparent, so it never intercepts a click. */
+        .elv-preview-frame {
+            position: fixed;
+            inset: 0;
+            z-index: 2147483646;
+            pointer-events: none;
+            border: 3px solid transparent;
+            border-image: repeating-linear-gradient(45deg, #f59e0b 0 8px, #111827 8px 16px) 3;
+        }
+
+        .elv-preview-badge {
+            position: fixed;
+            left: 14px;
+            bottom: 14px;
+            z-index: 2147483647;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: #111827;
+            color: #fbbf24;
+            box-shadow: 0 2px 10px rgba(0,0,0,.35);
+            opacity: .75;
+            transition: opacity .15s ease;
+        }
+
+        .elv-preview-badge:hover { opacity: 1; }
+
+        @@media print { .elv-preview-frame, .elv-preview-badge { display: none; } }
+    </style>
+}
+
+@if (!string.IsNullOrEmpty(resolvedHtml))
+{
+    @Html.Raw(resolvedHtml)
+}
+
+@section Scripts {
+    <script>window.elevarePageId = @Model.Id;</script>
+}

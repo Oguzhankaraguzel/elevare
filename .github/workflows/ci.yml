@@ -1,0 +1,134 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  # Lets a maintainer re-run the whole thing from the Actions tab without pushing.
+  workflow_dispatch:
+
+# A new push to the same branch makes the previous run irrelevant. Cancelling it
+# keeps the queue short and the feedback fast.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  # Telemetry off by default in CI; nothing here needs it.
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    name: Build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          # Pinned to the version the projects target. Local machines may well have a
+          # newer preview SDK installed, and a preview compiler quietly accepts code
+          # that this one rejects — CI exists partly to catch exactly that gap.
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props', '**/*.csproj') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restore
+        run: dotnet restore Elevare.sln
+
+      # The build runs with TreatWarningsAsErrors, so this step is also the lint step:
+      # a Sonar or analyzer complaint fails the run rather than scrolling past.
+      - name: Build
+        run: dotnet build Elevare.sln -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Elevare.sln -c Release --no-build --verbosity normal
+
+  vulnerable-packages:
+    name: Vulnerable packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Restore
+        run: dotnet restore Elevare.sln
+
+      # `dotnet list package` reports advisories but always exits 0, so the check has
+      # to read its output. Transitive packages are included on purpose: the one
+      # advisory this repo has actually hit arrived through a dependency of a
+      # dependency, where nothing in the project files mentioned it.
+      - name: Fail on any known advisory
+        run: |
+          dotnet list Elevare.sln package --vulnerable --include-transitive > audit.txt 2>&1
+          cat audit.txt
+          if grep -qE '^\s+>' audit.txt; then
+            echo "::error::A dependency with a known security advisory is present. See the report above."
+            exit 1
+          fi
+          echo "No known advisories."
+
+  docker:
+    name: Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Both images are built from the repository root and compile the whole
+      # solution inside the container. That makes this the job that catches anything
+      # depending on the developer's own SDK, .editorconfig or file layout — the
+      # class of failure a local `dotnet build` cannot see.
+      - name: Build the CMS image
+        run: docker build -f src/cms/Presentation/Wasm/Wasm/Dockerfile -t elevare-cms:ci .
+
+      - name: Build the public site image
+        run: docker build -f src/web/Presentation/WebMvc/Dockerfile -t elevare-web:ci .
+
+  # ── Deploy ──────────────────────────────────────────────────────────────────
+  # The server does what you would do by hand: fetch, reset, rebuild, restart.
+  #
+  # `needs` is the one addition worth its weight — it holds the deploy until the
+  # tests, the advisory scan and both image builds are green, so a push that breaks
+  # the build never reaches the server. Everything else here is deliberately the
+  # smallest thing that works.
+  #
+  # Opt-in per repository: it runs only where the DEPLOY_ENABLED variable is
+  # "true" (Settings → Secrets and variables → Actions → Variables), next to
+  # DEPLOY_PATH, the checkout's folder on the server. A fork, or the public
+  # repository itself, has neither and simply skips it.
+  deploy:
+    name: Deploy to the server
+    runs-on: ubuntu-latest
+    needs: [build-and-test, vulnerable-packages, docker]
+    if: vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/master' && github.event_name != 'pull_request'
+    # One at a time, and never cancelled halfway: a killed `compose up` can leave
+    # half the stack on the new build and half on the old.
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          script: |
+            set -e
+            cd "${{ vars.DEPLOY_PATH }}"
+            git fetch origin master
+            git reset --hard origin/master
+            docker compose up -d --build
+            docker image prune -f

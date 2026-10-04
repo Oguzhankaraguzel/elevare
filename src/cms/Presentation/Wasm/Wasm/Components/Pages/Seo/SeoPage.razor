@@ -1,0 +1,274 @@
+﻿@page "/admin/seo"
+@layout CMSLayout
+@using Application.Features.Commands.Seo.SaveSeoSettings
+@using Application.Features.Queries.Seo.GenerateLlmsTxt
+@using Application.Features.Queries.Seo.GetSeoSettings
+
+<PageTitle>@L["Seo_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Seo_Title"]</h1>
+    <p>@L["Seo_Subtitle"]</p>
+</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else
+{
+    <div class="cms-tabs" style="display:flex;gap:4px;border-bottom:1px solid var(--cms-border);margin-bottom:20px;flex-wrap:wrap">
+        @foreach (SeoTab tab in Tabs)
+        {
+            <button class="cms-tab @(_activeTab == tab ? "active" : "")"
+                    style="padding:10px 18px;background:none;border:none;border-bottom:2px solid @(_activeTab == tab ? "var(--cms-accent)" : "transparent");color:@(_activeTab == tab ? "var(--cms-text)" : "var(--cms-text-muted)");font-weight:@(_activeTab == tab ? "600" : "400");cursor:pointer"
+                    @onclick="() => SwitchTab(tab)">
+                @TabLabel(tab)
+            </button>
+        }
+    </div>
+
+    <div class="cms-card" style="padding:24px">
+        <p style="color:var(--cms-text-muted);font-size:13px;margin:0 0 20px">@TabHint(_activeTab)</p>
+
+        @if (_activeTab == SeoTab.General)
+        {
+            <div class="form-group-cms">
+                <label class="form-label-cms">@L["Seo_FieldTitleSuffix"]</label>
+                <input class="form-control-cms" @bind="_metaTitleSuffix" @bind:event="oninput" />
+                <small style="color:var(--cms-text-dim)">@L["Seo_FieldTitleSuffixHint"]</small>
+            </div>
+
+            <div class="form-group-cms">
+                <label class="form-label-cms">@L["Seo_FieldMetaDescription"]</label>
+                <textarea class="form-control-cms" rows="3" @bind="_metaDescription" @bind:event="oninput"></textarea>
+                <small style="color:var(--cms-text-dim)">@L["Seo_FieldMetaDescriptionHint"]</small>
+            </div>
+
+            <div class="form-group-cms">
+                <label class="form-label-cms">@L["Seo_FieldOgImage"]</label>
+                <input class="form-control-cms" @bind="_ogImageUrl" @bind:event="oninput" />
+                <small style="color:var(--cms-text-dim)">@L["Seo_FieldOgImageHint"]</small>
+            </div>
+        }
+        else if (_activeTab == SeoTab.Robots)
+        {
+            <div class="form-group-cms">
+                <label class="form-label-cms">robots.txt</label>
+                <textarea class="form-control-cms" rows="14" spellcheck="false"
+                          style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px"
+                          placeholder="@DefaultRobotsPlaceholder"
+                          @bind="_robotsTxt" @bind:event="oninput"></textarea>
+                <small style="color:var(--cms-text-dim)">@L["Seo_RobotsHint"]</small>
+            </div>
+
+            @if (string.IsNullOrWhiteSpace(_robotsTxt))
+            {
+                <div class="alert-cms alert-info-cms" style="margin-bottom:16px">
+                    <i class="bi bi-info-circle"></i> @L["Seo_RobotsUsingDefault"]
+                </div>
+            }
+        }
+        else
+        {
+            <div class="form-group-cms">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                    <label class="form-label-cms" style="margin:0">llms.txt</label>
+                    <button class="btn-cms btn-ghost btn-sm-cms" @onclick="GenerateLlmsAsync" disabled="@_generating">
+                        <i class="bi bi-magic"></i> @L["Seo_LlmsGenerate"]
+                    </button>
+                </div>
+                <textarea class="form-control-cms" rows="16" spellcheck="false"
+                          style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px"
+                          @bind="_llmsTxt" @bind:event="oninput"></textarea>
+                <small style="color:var(--cms-text-dim)">@L["Seo_LlmsHint"]</small>
+            </div>
+
+            @if (string.IsNullOrWhiteSpace(_llmsTxt))
+            {
+                <div class="alert-cms alert-info-cms" style="margin-bottom:16px">
+                    <i class="bi bi-info-circle"></i> @L["Seo_LlmsNotServed"]
+                </div>
+            }
+        }
+
+        @if (_warnings.Count > 0)
+        {
+            <div class="alert-cms alert-warning-cms" style="margin-bottom:16px">
+                <i class="bi bi-exclamation-triangle"></i>
+                <ul style="margin:6px 0 0;padding-left:20px">
+                    @foreach (string warning in _warnings)
+                    {
+                        <li>@warning</li>
+                    }
+                </ul>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <div class="alert-cms alert-danger-cms" style="margin-bottom:16px">
+                <i class="bi bi-x-circle"></i> @_error
+            </div>
+        }
+
+        <div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--cms-border);padding-top:16px">
+            <button class="btn-cms btn-primary-cms" @onclick="SaveAsync" disabled="@_saving">
+                <i class="bi bi-check-lg"></i> @L["Settings_SaveBtn"]
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private enum SeoTab { General = 1, Robots, Llms }
+
+    private static readonly SeoTab[] Tabs = [SeoTab.General, SeoTab.Robots, SeoTab.Llms];
+
+    /// <summary>
+    /// Shown as placeholder text, not as a value: typing into the box must be an
+    /// explicit act, otherwise the first save silently freezes today's default in
+    /// place and later improvements to it never reach this site.
+    /// </summary>
+    private const string DefaultRobotsPlaceholder = "User-agent: *\nDisallow: /api/\nSitemap: (otomatik eklenir)";
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _generating;
+    private SeoTab _activeTab = SeoTab.General;
+
+    private string _metaTitleSuffix = "";
+    private string _metaDescription = "";
+    private string _ogImageUrl = "";
+    private string _robotsTxt = "";
+    private string _llmsTxt = "";
+
+    private List<string> _warnings = [];
+    private string _error = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.SeoManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetSeoSettingsQuery())).Match(
+                seo =>
+                {
+                    _metaTitleSuffix = seo.MetaTitleSuffix ?? "";
+                    _metaDescription = seo.MetaDescription ?? "";
+                    _ogImageUrl = seo.OgImage ?? "";
+                    _robotsTxt = seo.RobotsTxt ?? "";
+                    _llmsTxt = seo.LlmsTxt ?? "";
+                },
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        finally { _loading = false; }
+    }
+
+    private void SwitchTab(SeoTab tab)
+    {
+        _activeTab = tab;
+        _warnings = [];
+        _error = "";
+    }
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _warnings = [];
+        _error = "";
+
+        try
+        {
+            // Empty string rather than null: null means "not editing this field", and
+            // the user clearing a box is an edit that has to reach the database.
+            SaveSeoSettingsCommand command = new(
+                MetaTitleSuffix: _metaTitleSuffix,
+                MetaDescription: _metaDescription,
+                OgImage: _ogImageUrl,
+                RobotsTxt: _robotsTxt,
+                LlmsTxt: _llmsTxt);
+
+            (await Sender.Send(command)).Match(
+                () =>
+                {
+                    _warnings = LocalWarnings();
+                    Toast.Success(L["Settings_Saved"]);
+                },
+                error => _error = L.Error(error));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _error = ex.Message;
+        }
+        finally { _saving = false; }
+    }
+
+    /// <summary>
+    /// Advisory checks mirrored on the client so the author sees them next to the box
+    /// they typed in. The server runs the same rules and is the one that can refuse.
+    /// </summary>
+    private List<string> LocalWarnings()
+    {
+        List<string> warnings = [];
+
+        if (string.IsNullOrWhiteSpace(_robotsTxt))
+            return warnings;
+
+        string[] lines = _robotsTxt.ReplaceLineEndings("\n").Split('\n');
+        string agent = "";
+
+        foreach (string line in lines.Select(l => l.Trim()))
+        {
+            if (line.StartsWith("User-agent:", StringComparison.OrdinalIgnoreCase))
+                agent = line["User-agent:".Length..].Trim();
+            else if (agent == "*"
+                && line.Replace(" ", "").Equals("Disallow:/", StringComparison.OrdinalIgnoreCase))
+                warnings.Add(L["Seo_WarnBlocksEntireSite"]);
+        }
+
+        return warnings;
+    }
+
+    private async Task GenerateLlmsAsync()
+    {
+        _generating = true;
+        try
+        {
+            (await Sender.Send(new GenerateLlmsTxtQuery())).Match(
+                draft => _llmsTxt = draft,
+                error => _error = L.Error(error));
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        finally { _generating = false; }
+    }
+
+    private string TabLabel(SeoTab tab) => tab switch
+    {
+        SeoTab.General => L["Seo_Tab_General"],
+        SeoTab.Robots => "robots.txt",
+        _ => "llms.txt",
+    };
+
+    private string TabHint(SeoTab tab) => tab switch
+    {
+        SeoTab.General => L["Seo_TabHint_General"],
+        SeoTab.Robots => L["Seo_TabHint_Robots"],
+        _ => L["Seo_TabHint_Llms"],
+    };
+}

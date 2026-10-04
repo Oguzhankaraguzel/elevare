@@ -1,0 +1,701 @@
+﻿@page "/languages"
+@layout CMSLayout
+@implements IDisposable
+
+<PageTitle>@L["Languages_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Languages_Title"]</h1>
+    <p>@L["Languages_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="LanguageResponse"
+             Data="_languages"
+             Loading="_loading"
+             Title="@L["Languages_Title"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="false"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Languages_Empty"]"
+             PageSize="20"
+             AllowInlineEdit="true"
+             OnSaveChanges="OnGridSaveChanges">
+    <ToolbarEnd>
+        <button class="btn-cms btn-primary-cms" @onclick="OpenCreate">
+            <i class="bi bi-plus-lg"></i> @L["Languages_NewLanguage"]
+        </button>
+    </ToolbarEnd>
+</ElevareGrid>
+
+@* ── Create / Edit Modal ─────────────────────────────────────────────────── *@
+<CmsModal Title="@(_editId.HasValue? L["Languages_FormEdit"] : L["Languages_FormCreate"])"
+          IsVisible="_showForm"
+          OnClose="CloseForm"
+          Size="lg">
+    <Body>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["Languages_NativeName"] <span style="color:var(--cms-danger)">*</span></label>
+                <input @bind="_form.NameInNative" class="cms-input" placeholder="@L["Languages_PlaceholderNativeExample"]" />
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["Languages_EnglishName"] <span style="color:var(--cms-danger)">*</span></label>
+                <input @bind="_form.NameInEnglish" class="cms-input" placeholder="@L["Languages_PlaceholderEnglishExample"]" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Languages_TwoLetterCode"] <span style="color:var(--cms-danger)">*</span></label>
+            <input @bind="_form.TwoLetterCode" class="cms-input" placeholder="tr" maxlength="5" />
+            <small style="color:var(--cms-text-muted);font-size:12px">
+                @L["Languages_TwoLetterHint"]
+                <a href="/admin/knowledge-base#two-letter-code" target="_blank">@L["Languages_TwoLetterMoreInfo"]</a>
+            </small>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["Languages_ColOrder"]</label>
+                <input @bind="_form.DisplayOrder" type="number" class="cms-input" min="0" />
+            </div>
+            <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:4px">
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                        <label class="cms-toggle">
+                            <input type="checkbox" @bind="_form.IsDefault" />
+                            <span class="cms-toggle-slider"></span>
+                        </label>
+                        <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["Languages_IsDefault"]</span>
+                    </label>
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                        <label class="cms-toggle">
+                            <input type="checkbox" @bind="_form.IsRtl" />
+                            <span class="cms-toggle-slider"></span>
+                        </label>
+                        <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["Languages_IsRtl"]</span>
+                    </label>
+                    @* Both toggles show in both modes. They used to be split — published
+                       only when creating, active only when editing — which left no way at
+                       all to publish or unpublish a language once it existed. *@
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                        <label class="cms-toggle" style="margin-top:2px">
+                            <input type="checkbox" @bind="_form.IsActive" />
+                            <span class="cms-toggle-slider"></span>
+                        </label>
+                        <span style="font-size:13.5px;color:var(--cms-text-muted)">
+                            @L["Languages_IsActive"]
+                            <small style="display:block;font-size:12px;opacity:.8">@L["Languages_IsActive_Hint"]</small>
+                        </span>
+                    </label>
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer">
+                        <label class="cms-toggle" style="margin-top:2px">
+                            <input type="checkbox" @bind="_form.IsPublished" />
+                            <span class="cms-toggle-slider"></span>
+                        </label>
+                        <span style="font-size:13.5px;color:var(--cms-text-muted)">
+                            @L["Languages_IsPublished"]
+                            <small style="display:block;font-size:12px;opacity:.8">@L["Languages_IsPublished_Hint"]</small>
+                        </span>
+                    </label>
+                </div>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Languages_FlagIcon"]</label>
+            <div style="display:flex;align-items:center;gap:16px">
+                    <div style="width:64px;height:44px;border:1px solid var(--cms-border);border-radius:6px;overflow:hidden;background:var(--cms-bg-alt);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    @if (!string.IsNullOrEmpty(_form.FlagIcon))
+                    {
+                        <img src="@_form.FlagIcon" alt="@L["Languages_FlagAlt"]" style="width:100%;height:100%;object-fit:cover" />
+                    }
+                    else
+                    {
+                        <i class="bi bi-flag" style="font-size:20px;opacity:.3"></i>
+                    }
+                </div>
+                <div>
+                    <button class="btn-cms btn-ghost" @onclick="() => _showPicker = true">
+                        <i class="bi bi-folder2-open"></i> @L["Languages_SelectFile"]
+                    </button>
+                    @if (!string.IsNullOrEmpty(_form.FlagIcon))
+                    {
+                        <button class="btn-cms btn-ghost btn-sm-cms" style="margin-top:6px" @onclick="ClearFlag" type="button">
+                            <i class="bi bi-x"></i> @L["Languages_ClearFlag"]
+                        </button>
+                    }
+                </div>
+            </div>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseForm">@L["Languages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="SaveForm" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+
+                <i class="bi bi-check2"></i>
+            }
+            @L["Languages_SaveBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Default-language switch warning ─────────────────────────────────────── *@
+<CmsModal Title="@L["Languages_DefaultWarningTitle"]" IsVisible="_showDefaultWarning" OnClose="() => _showDefaultWarning = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-danger);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">
+                @string.Format(L["Languages_DefaultWarningBody"], _form.NameInNative)
+            </p>
+            <ul style="text-align:left;font-size:13.5px;color:var(--cms-text-muted);margin:12px 0 0;padding-left:20px;line-height:1.7">
+                <li>@L["Languages_DefaultWarningUrls"]</li>
+                <li>@L["Languages_DefaultWarningLinks"]</li>
+                <li>@L["Languages_DefaultWarningSeo"]</li>
+                <li>@L["Languages_DefaultWarningIndexing"]</li>
+            </ul>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDefaultWarning = false">@L["Languages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDefaultSwitch" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check2"></i>
+            }
+            @L["Languages_DefaultWarningConfirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Flag file picker ────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Languages_FilePicker"]" IsVisible="_showPicker" OnClose="() => _showPicker = false" Size="lg">
+    <Body>
+        <FilePicker MultiSelect="false" OnSelected="OnFilePickerSelected" OnCancel="CancelFilePicker" />
+    </Body>
+</CmsModal>
+
+@* ── Delete confirm modal ────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Languages_DeleteTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-warning);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">@string.Format(L["Languages_DeleteConfirm"], _deleteTarget?.NameInNative ?? "")</p>
+            <p style="font-size:13px;color:var(--cms-text-muted)">@L["Languages_DeleteHint"]</p>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["Languages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+
+                <i class="bi bi-trash3"></i>
+            }
+            @L["Languages_DeleteBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    // Auth state removed - not needed after removing explicit user id parameters
+
+    // ── State ──────────────────────────────────────────────────────────────
+    private List<LanguageResponse> _languages = [];
+    private bool _loading = true;
+
+    private bool _showForm;
+    private bool _saving;
+    private int? _editId;
+    private LanguageFormModel _form = new();
+    private int? _formFlagIconFileId;
+    private bool _originalIsDefault;
+    private bool _showDefaultWarning;
+
+    private bool _showDelete;
+    private LanguageResponse? _deleteTarget;
+    private bool _showPicker;
+
+    private List<GridColumnDef<LanguageResponse>> _columns = [];
+    private RenderFragment<LanguageResponse>? _actionTemplate;
+
+    // Caching and cancellation for safer/performant loading
+    private CancellationTokenSource? _loadCts;
+    private List<LanguageResponse> _languagesCache = [];
+    private DateTimeOffset? _languagesCachedAt;
+    private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(5);
+
+    // ── Lifecycle ──────────────────────────────────────────────────────────
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.LanguagesManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadLanguages();
+    }
+
+    // ── Grid column definitions ────────────────────────────────────────────
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<LanguageResponse>
+            {
+                PropertyName  = "NameInNative",
+                Title         = L["Languages_ColLanguage"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.NameInNative,
+                CellTemplate  = LangNameTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Editable      = true,
+            },
+            new GridColumnDef<LanguageResponse>
+            {
+                PropertyName  = "TwoLetterCode",
+                Title         = L["Languages_TwoLetterCode"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.TwoLetterCode,
+                CellTemplate  = TwoLetterCodeTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "140px",
+            },
+            new GridColumnDef<LanguageResponse>
+            {
+                PropertyName  = "DisplayOrder",
+                Title         = L["Languages_ColOrder"],
+                PropertyType  = typeof(int),
+                ValueAccessor = r => (object?)r.DisplayOrder,
+                Sortable      = true,
+                Filterable    = false,
+                Align         = TextAlign.Center,
+                Width         = "80px",
+                Editable      = true,
+            },
+            new GridColumnDef<LanguageResponse>
+            {
+                PropertyName  = "IsRtl",
+                Title         = L["Languages_ColRtl"],
+                PropertyType  = typeof(bool),
+                ValueAccessor = r => (object?)r.IsRtl,
+                CellTemplate  = RtlTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Align         = TextAlign.Center,
+                Width         = "80px",
+                Editable      = true,
+            },
+            new GridColumnDef<LanguageResponse>
+            {
+                PropertyName  = "IsActive",
+                Title         = L["Languages_ColStatus"],
+                PropertyType  = typeof(bool),
+                ValueAccessor = r => (object?)r.IsActive,
+                CellTemplate  = StatusTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "200px",
+                Editable      = true,
+            },
+            new GridColumnDef<LanguageResponse>
+            {
+                PropertyName  = "IsPublished",
+                Title         = L["Languages_ColPublished"],
+                PropertyType  = typeof(bool),
+                ValueAccessor = r => (object?)(r.IsPublished),
+                CellTemplate  = PublishedTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "140px",
+                Editable      = true,
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    // ── Cell templates ─────────────────────────────────────────────────────
+    private static RenderFragment<LanguageResponse> LangNameTemplate => lang => __builder =>
+    {
+        <div style="display:flex;align-items:center;gap:12px">
+            @if (!string.IsNullOrEmpty(lang.FlagIconPath))
+            {
+                <img src="@lang.FlagIconPath" alt="@lang.FlagIconAltText"
+                     style="width:32px;height:22px;object-fit:cover;border-radius:3px;border:1px solid var(--cms-border)" />
+            }
+            else
+            {
+                <div style="width:32px;height:22px;background:var(--cms-bg);border-radius:3px;border:1px solid var(--cms-border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                    <i class="bi bi-flag" style="font-size:11px;opacity:.4"></i>
+                </div>
+            }
+            <div>
+                <div style="font-weight:600">@lang.NameInNative</div>
+                <div style="font-size:14px;color:var(--cms-text-muted)">@lang.NameInEnglish</div>
+            </div>
+        </div>
+    };
+
+    private static RenderFragment<LanguageResponse> TwoLetterCodeTemplate => lang => __builder =>
+    {
+        <code style="font-size:12px;background:var(--cms-bg);padding:2px 6px;border-radius:4px;color:var(--cms-accent)">@lang.TwoLetterCode</code>
+    };
+
+    private static RenderFragment<LanguageResponse> RtlTemplate => lang => __builder =>
+    {
+        @if (lang.IsRtl)
+        {
+            <span class="badge-cms badge-info">RTL</span>
+        }
+        else
+        {
+            <span style="color:var(--cms-text-dim);font-size:12px">—</span>
+        }
+    };
+
+    private RenderFragment<LanguageResponse> StatusTemplate => lang => __builder =>
+    {
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            @if (lang.IsDefault)
+            {
+                <span class="badge-cms badge-accent">
+                    <i class="bi bi-star-fill" style="font-size:9px"></i> @L["Common_Default"]
+                </span>
+            }
+            @* "Active"/"Inactive" said nothing about which of the two flags this was.
+               Both columns read as the same word, which is exactly how the published
+               flag got mistaken for a duplicate of the active one. *@
+            @if (lang.IsActive)
+            {
+                <span class="badge-cms badge-success">
+                    <i class="bi bi-pencil-square" style="font-size:9px"></i> @L["Languages_Badge_Authorable"]
+                </span>
+            }
+            else
+            {
+                <span class="badge-cms badge-neutral">
+                    <i class="bi bi-slash-circle" style="font-size:9px"></i> @L["Languages_Badge_NotAuthorable"]
+                </span>
+            }
+        </div>
+    };
+
+    private RenderFragment<LanguageResponse> PublishedTemplate => lang => __builder =>
+    {
+        @if (lang.IsPublished)
+        {
+            <span class="badge-cms badge-success">
+                <i class="bi bi-globe2" style="font-size:9px"></i> @L["Languages_Badge_Live"]
+            </span>
+        }
+        else
+        {
+            <span class="badge-cms badge-warning">
+                <i class="bi bi-eye-slash" style="font-size:9px"></i> @L["Languages_Badge_NotLive"]
+            </span>
+        }
+    };
+
+    private RenderFragment<LanguageResponse> ActionButtons => lang => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]"
+                    @onclick="() => OpenEdit(lang)">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn-cms btn-danger-cms btn-sm-cms btn-icon" title="@L["Common_Delete"]"
+                    @onclick="() => OpenDelete(lang)"
+                    disabled="@lang.IsDefault">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+    };
+
+    // ── Data loading (with CancellationToken and simple in-component caching) ──
+    private async Task LoadLanguages(bool forceReload = false)
+    {
+        // Cancel any previous inflight request for this component (use CancelAfter to avoid analyzer warning)
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        // Serve from cache when fresh and not forced
+        if (!forceReload && _languagesCache.Count > 0 && _languagesCachedAt.HasValue
+            && DateTimeOffset.UtcNow - _languagesCachedAt.Value < _cacheDuration)
+        {
+            _languages = [.. _languagesCache];
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        try
+        {
+            // Sender.Send supports CancellationToken (as confirmed)
+            Result<PagedResult<LanguageResponse>> result = await Sender.Send(new GetLanguagesQuery(), ct);
+            result.Match(
+                success =>
+                {
+                    _languages = [.. success.Items];
+                    _languagesCache = [.. success.Items];
+                    _languagesCachedAt = DateTimeOffset.UtcNow;
+                },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            // request was cancelled - nothing to do
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Languages_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose()
+    {
+        // Use CancelAfter to avoid analyzer recommending an async cancel API
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+    }
+
+    // ── Modal helpers ──────────────────────────────────────────────────────
+    private void OpenCreate()
+    {
+        _editId = null;
+        _form = new LanguageFormModel();
+        _originalIsDefault = false;
+        _showForm = true;
+    }
+
+    private void OpenEdit(LanguageResponse lang)
+    {
+        _editId = lang.Id;
+        _originalIsDefault = lang.IsDefault;
+        _form = new LanguageFormModel
+        {
+            NameInNative = lang.NameInNative,
+            NameInEnglish = lang.NameInEnglish,
+            TwoLetterCode = lang.TwoLetterCode,
+            FlagIcon = lang.FlagIconPath,
+            IsDefault = lang.IsDefault,
+            IsRtl = lang.IsRtl,
+            DisplayOrder = lang.DisplayOrder,
+            IsActive = lang.IsActive,
+            IsPublished = lang.IsPublished,
+        };
+        _formFlagIconFileId = lang.FlagIconFileId;
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editId = null;
+        _form = new LanguageFormModel();
+    }
+
+    private void OpenDelete(LanguageResponse lang)
+    {
+        _deleteTarget = lang;
+        _showDelete = true;
+    }
+
+    // ── Flag picker ────────────────────────────────────────────────────────
+    private async Task OnFilePickerSelected(IEnumerable<(int Id, string Path)> items)
+    {
+        (int Id, string Path) first = items.FirstOrDefault();
+        if (first == default) return;
+        _form.FlagIcon = first.Path;
+        _formFlagIconFileId = first.Id;
+        _showPicker = false;
+        await Task.CompletedTask;
+    }
+
+    private void CancelFilePicker() => _showPicker = false;
+    private void ClearFlag() { _form.FlagIcon = null; _formFlagIconFileId = null; }
+
+    // ── Save ───────────────────────────────────────────────────────────────
+    private async Task SaveForm()
+    {
+        if (string.IsNullOrWhiteSpace(_form.NameInNative)) { Toast.Error(L["Languages_Validation_NameInNative"]); return; }
+        if (string.IsNullOrWhiteSpace(_form.NameInEnglish)) { Toast.Error(L["Languages_Validation_NameInEnglish"]); return; }
+        if (string.IsNullOrWhiteSpace(_form.TwoLetterCode)) { Toast.Error(L["Languages_Validation_TwoLetter"]); return; }
+
+        // Becoming default rewrites every published page's URL sitewide (see
+        // PageHierarchy.RecomputeAllSlugsForDefaultLanguageChangeAsync) — too serious
+        // an effect to let a stray toggle-and-save trigger without a second look.
+        if (_form.IsDefault && !_originalIsDefault)
+        {
+            _showDefaultWarning = true;
+            return;
+        }
+
+        await PerformSaveAsync();
+    }
+
+    private async Task ConfirmDefaultSwitch()
+    {
+        _showDefaultWarning = false;
+        await PerformSaveAsync();
+    }
+
+    private async Task PerformSaveAsync()
+    {
+        _saving = true;
+        try
+        {
+            Result<LanguageSaveResult> result = _editId.HasValue
+                ? await Sender.Send(new UpdateLanguageCommand(_editId.Value,
+                                                              _form.NameInNative,
+                                                              _form.NameInEnglish,
+                                                              _form.TwoLetterCode,
+                                                              _formFlagIconFileId,
+                                                              _form.IsDefault,
+                                                              _form.IsRtl,
+                                                              _form.IsPublished,
+                                                              _form.DisplayOrder,
+                                                              _form.IsActive)
+                )
+                : await Sender.Send(new CreateLanguageCommand(_form.NameInNative,
+                                                              _form.NameInEnglish,
+                                                              _form.TwoLetterCode,
+                                                              _formFlagIconFileId,
+                                                              _form.IsDefault,
+                                                              _form.IsRtl,
+                                                              _form.IsPublished,
+                                                              _form.DisplayOrder)
+                );
+
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                if (result.Value.DefaultChanged)
+                    Toast.Success(string.Format(L["Languages_Toast_DefaultChanged"], result.Value.MovedAddresses, result.Value.UpdatedRecords));
+                else
+                    Toast.Success(_editId.HasValue ? L["Languages_Toast_Updated"] : L["Languages_Toast_Created"]);
+                CloseForm();
+                await LoadLanguages(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    // ── Delete ─────────────────────────────────────────────────────────────
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            bool succeeded = false;
+
+            (await Sender.Send(new DeleteLanguageCommand(_deleteTarget.Id)))
+                .Match(() => succeeded = true,
+                       error => Toast.Error(L.Error(error))
+            ); 
+
+            if (succeeded)
+            {
+                Toast.Success(string.Format(L["Languages_Toast_Deleted"], _deleteTarget?.NameInNative ?? ""));
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadLanguages(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────
+    // GetCurrentUserIdAsync removed; command handlers now set user ids server-side.
+
+    // ── Inline edit save ───────────────────────────────────────────────────
+    private async Task OnGridSaveChanges(List<EditedRow<LanguageResponse>> edits)
+    {
+        _saving = true;
+        int errorCount = 0;
+        try
+        {
+            foreach (EditedRow<LanguageResponse> edit in edits)
+            {
+                LanguageResponse item = edit.Item;
+                string nameInNative = GetEditedString(edit.EditedValues, "NameInNative") ?? item.NameInNative;
+                int displayOrder    = GetEditedInt(edit.EditedValues, "DisplayOrder") ?? item.DisplayOrder;
+                bool isRtl          = GetEditedBool(edit.EditedValues, "IsRtl") ?? item.IsRtl;
+                bool isActive       = GetEditedBool(edit.EditedValues, "IsActive") ?? item.IsActive;
+                bool isPublished    = GetEditedBool(edit.EditedValues, "IsPublished") ?? item.IsPublished;
+
+                 (await Sender.Send(new UpdateLanguageCommand(item.Id,
+                                                                 nameInNative,
+                                                                 item.NameInEnglish,
+                                                                 item.TwoLetterCode,
+                                                                 item.FlagIconFileId,
+                                                                 item.IsDefault,
+                                                                 isRtl,
+                                                                 isPublished,
+                                                                 displayOrder,
+                                                                 isActive)
+                    ))
+                    .Match(
+                    () => { },
+                    error =>
+                    {
+                        Toast.Error(string.Format(L["Languages_Toast_SaveError"], item.NameInNative, L.Error(error)));
+                        errorCount++;
+                    }
+                );
+            }
+            if (errorCount == 0)
+                Toast.Success(L["Languages_Toast_InlineSaved"]);
+            await LoadLanguages();
+        }
+        finally { _saving = false; }
+    }
+
+    private static string? GetEditedString(IReadOnlyDictionary<string, object?> values, string key)
+        => values.TryGetValue(key, out object? v) ? v?.ToString() : null;
+
+    private static int? GetEditedInt(IReadOnlyDictionary<string, object?> values, string key)
+    {
+        if (!values.TryGetValue(key, out object? v)) return null;
+        if (v is int i) return i;
+        return int.TryParse(v?.ToString(), out int n) ? n : null;
+    }
+
+    private static bool? GetEditedBool(IReadOnlyDictionary<string, object?> values, string key)
+    {
+        if (!values.TryGetValue(key, out object? v)) return null;
+        if (v is bool b) return b;
+        return bool.TryParse(v?.ToString(), out bool b2) ? b2 : null;
+    }
+}

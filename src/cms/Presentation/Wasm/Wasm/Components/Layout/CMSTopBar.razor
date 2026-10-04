@@ -1,0 +1,177 @@
+@using System.IdentityModel.Tokens.Jwt
+@inject IJSRuntime JS
+
+<div class="cms-topbar @(!_pinned ? "tb-unpinned" : "")">
+    <div class="topbar-group">
+        <AnnouncementBell />
+    </div>
+
+    @* ── Left: site health warning · page title ── *@
+    <div class="topbar-left">
+        <SiteHealthIndicator />
+        <span class="topbar-title">@Title</span>
+    </div>
+
+    @* ── Center: productivity shortcuts ── *@
+    <div class="topbar-center">
+        <span class="topbar-sep" style="margin:0 8px"></span>
+        <button class="btn-cms btn-ghost btn-icon @(!_pinned ? "text-accent" : "")"
+                @onclick="TogglePin"
+                title="@(_pinned ? L["Layout_UnpinToolbar"] : L["Layout_PinToolbar"])">
+            <i class="bi @(_pinned ? "bi-pin-angle-fill" : "bi-pin-angle")"></i>
+        </button>
+        <span class="topbar-sep" style="margin:0 8px"></span>
+    </div>
+
+    @* ── Right: language · theme · profile ── *@
+    <div class="topbar-right">
+        <span class="topbar-sep"></span>
+
+        <div class="topbar-group">
+            <LanguageSwitcher />
+        </div>
+
+        <span class="topbar-sep"></span>
+
+        <div class="topbar-group">
+            <button class="btn-cms btn-ghost btn-icon"
+                    @onclick="ToggleTheme"
+                    title="@(_isDark ? L["Layout_ThemeSwitchToLight"] : L["Layout_ThemeSwitchToDark"])">
+                <i class="bi @(_isDark ? "bi-sun" : "bi-moon-stars-fill")"></i>
+            </button>
+        </div>
+
+        <span class="topbar-sep"></span>
+
+        <div class="topbar-group">
+            <div class="cms-dropdown" id="user-menu">
+                <button class="btn-cms btn-ghost" @onclick="ToggleUserMenu" type="button">
+                    @if (!string.IsNullOrEmpty(_avatarUrl))
+                    {
+                        <img class="avatar" src="@_avatarUrl" alt="" style="width:30px;height:30px" />
+                    }
+                    else
+                    {
+                        <div class="avatar" style="width:30px;height:30px;font-size:12px">
+                            @(_initials)
+                        </div>
+                    }
+                    <i class="bi bi-chevron-down" style="font-size:11px"></i>
+                </button>
+                <div id="user-dropdown" class="cms-dropdown-menu @(_userMenuOpen ? "" : "d-none")">
+                    <div class="dropdown-item-cms" style="flex-direction:column;align-items:flex-start;gap:2px;pointer-events:none">
+                        <span style="font-weight:600;color:var(--cms-text)">@_displayName</span>
+                        <span style="font-size:12px">@_email</span>
+                    </div>
+                    <div class="dropdown-divider"></div>
+                    <a href="/admin/profile" class="dropdown-item-cms">
+                        <i class="bi bi-person"></i> @L["TopBar_Profile"]
+                    </a>
+                    @* Site Ayarları deliberately not here: it configures the site, not
+                       the person, it already has its own entry in the sidebar, and it
+                       is permission-gated in a way this menu is not. *@
+                    <div class="dropdown-divider"></div>
+                    <form action="/account/logout" method="post" style="width:100%">
+                        <button type="submit" class="dropdown-item-cms danger w-100"
+                                style="background:none;border:none;width:100%;text-align:left">
+                            <i class="bi bi-box-arrow-right"></i> @L["TopBar_Logout"]
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    [Parameter] public string Title { get; set; } = "Dashboard";
+    [CascadingParameter] private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string _displayName = "";
+    private string _email = "";
+    private string _initials = "?";
+    private string? _avatarUrl;
+    private bool _isDark = true;
+    private bool _pinned = true;
+    private bool _userMenuOpen = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var prefs = await JS.InvokeAsync<LayoutPrefs>("cmsJs.getLayoutPrefs");
+                _isDark = prefs.Theme != "light";
+                _pinned = prefs.TopbarPinned;
+            }
+            catch { _isDark = true; _pinned = true; }
+
+            if (AuthState is not null)
+            {
+                AuthenticationState state = await AuthState;
+                // Claims come from the app's JWT (see JwtTokenProvider) with
+                // options.MapInboundClaims = false, so they keep their short JWT
+                // names ("email", "unique_name") instead of being auto-remapped to
+                // the long-form System.Security.Claims.ClaimTypes URIs.
+                _email = state.User.FindFirst(JwtRegisteredClaimNames.Email)?.Value ?? "";
+                string name = state.User.FindFirst(JwtRegisteredClaimNames.UniqueName)?.Value ?? _email;
+                _displayName = name;
+                _initials = GetInitials(name);
+
+                // The JWT above is only ever as fresh as the last login — first/last
+                // name and avatar are edited from the profile page without forcing a
+                // re-login, so this topbar has to read them from the database itself
+                // instead of trusting whatever the token happened to carry.
+                (await Sender.Send(new GetMyProfileQuery())).Match(
+                    profile =>
+                    {
+                        string fullName = string.Join(" ", new[] { profile.FirstName, profile.LastName }
+                            .Where(p => !string.IsNullOrWhiteSpace(p)));
+                        if (!string.IsNullOrWhiteSpace(fullName))
+                        {
+                            _displayName = fullName;
+                            _initials = GetInitials(fullName);
+                        }
+                        _avatarUrl = profile.Avatar;
+                    },
+                    _ => { });
+            }
+
+            StateHasChanged();
+        }
+    }
+
+    private sealed record LayoutPrefs(
+        string Theme, bool TopbarPinned, bool SidebarCollapsed, bool SidebarPinned,
+        bool RightbarPinned, bool RightbarExpanded, int UtcOffsetMinutes);
+
+    private async Task ToggleTheme()
+    {
+        _isDark = !_isDark;
+        await JS.InvokeVoidAsync("cmsJs.setTheme", _isDark ? "dark" : "light");
+    }
+
+    private async Task TogglePin()
+    {
+        _pinned = !_pinned;
+        await JS.InvokeVoidAsync("cmsJs.setTopbarPinned", _pinned);
+    }
+
+    private void ToggleUserMenu()
+    {
+        _userMenuOpen = !_userMenuOpen;
+    }
+
+    private static string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        string[] parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 2
+            ? $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+            : name[0].ToString().ToUpperInvariant();
+    }
+}
+
+

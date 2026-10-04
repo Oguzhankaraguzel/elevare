@@ -1,0 +1,257 @@
+﻿@page "/admin/profile"
+@layout CMSLayout
+
+<PageTitle>@L["TopBar_Profile"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["TopBar_Profile"]</h1>
+    <p>@L["Profile_Subtitle"]</p>
+</div>
+
+@if (_loading)
+{
+    <p style="color:var(--cms-text-muted)"><i class="bi bi-arrow-clockwise spin"></i></p>
+}
+else if (_profile is not null)
+{
+    <div class="profile-grid">
+
+        @* ── Identity summary — everything the account holder cannot edit ─────── *@
+        <div class="cms-card">
+            <div class="profile-identity">
+                @if (!string.IsNullOrWhiteSpace(_avatarUrl))
+                {
+                    <img class="profile-avatar" src="@_avatarUrl" alt="" />
+                }
+                else
+                {
+                    <div class="avatar profile-avatar">@Initials</div>
+                }
+                <div>
+                    <div class="profile-name">@DisplayName</div>
+                    <div class="profile-email">@_profile.Email</div>
+                </div>
+            </div>
+
+            <p class="profile-hint">@L["Profile_SectionAccountHint"]</p>
+
+            <dl class="profile-facts">
+                <dt>@L["Profile_UserName"]</dt>
+                <dd>@_profile.UserName</dd>
+
+                <dt>@L["Profile_Roles"]</dt>
+                <dd>
+                    @if (_profile.Roles.Count == 0)
+                    {
+                        <span style="color:var(--cms-text-muted)">@L["Profile_NoRoles"]</span>
+                    }
+                    else
+                    {
+                        <span style="display:flex;gap:6px;flex-wrap:wrap">
+                            @foreach (string role in _profile.Roles)
+                            {
+                                <span class="badge-cms badge-neutral">@role</span>
+                            }
+                        </span>
+                    }
+                </dd>
+
+                <dt>@L["Profile_MemberSince"]</dt>
+                <dd>@_profile.CreateDate.ToLocalTime().ToString("dd.MM.yyyy")</dd>
+
+                <dt>@L["Profile_LastLogin"]</dt>
+                <dd>@(_profile.LastLoginDate is { } last ? last.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : L["Profile_Never"])</dd>
+
+                <dt>@L["Profile_PagesAuthored"]</dt>
+                <dd>@_profile.PagesAuthored</dd>
+            </dl>
+        </div>
+
+        @* ── Editable fields ──────────────────────────────────────────────────── *@
+        <div class="cms-card">
+            <h2 class="profile-section-title">@L["Profile_SectionAccount"]</h2>
+
+            <div class="profile-row">
+                <div class="form-group">
+                    <label class="cms-label" for="pf-first">@L["Profile_FirstName"]</label>
+                    <input id="pf-first" class="cms-input" @bind="_firstName" @bind:event="oninput" maxlength="100" />
+                </div>
+                <div class="form-group">
+                    <label class="cms-label" for="pf-last">@L["Profile_LastName"]</label>
+                    <input id="pf-last" class="cms-input" @bind="_lastName" @bind:event="oninput" maxlength="100" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="cms-label" for="pf-phone">@L["Profile_Phone"]</label>
+                <input id="pf-phone" class="cms-input" @bind="_phone" @bind:event="oninput" maxlength="30" />
+                <p class="profile-hint">@L["Profile_PhoneHint"]</p>
+            </div>
+
+            <div class="form-group">
+                <label class="cms-label" for="pf-avatar">@L["Profile_Avatar"]</label>
+                <input id="pf-avatar" class="cms-input" @bind="_avatarUrl" @bind:event="oninput" maxlength="500" />
+                <p class="profile-hint">@L["Profile_AvatarHint"]</p>
+            </div>
+
+            <div class="form-group">
+                <label class="cms-label" for="pf-bio">@L["Profile_Bio"]</label>
+                <textarea id="pf-bio" class="cms-input" rows="3" @bind="_bio" @bind:event="oninput" maxlength="500"></textarea>
+                <p class="profile-hint">@L["Profile_BioHint"]</p>
+            </div>
+
+            <button class="btn-cms btn-primary-cms" @onclick="SaveProfile" disabled="@_saving">
+                @if (_saving)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                @L["Settings_SaveBtn"]
+            </button>
+        </div>
+
+        @* ── Password ─────────────────────────────────────────────────────────── *@
+        <div class="cms-card">
+            <h2 class="profile-section-title">@L["Profile_SectionPassword"]</h2>
+            <p class="profile-hint">@L["Profile_SectionPasswordHint"]</p>
+
+            <div class="form-group">
+                <label class="cms-label" for="pf-cur">@L["Profile_CurrentPassword"]</label>
+                <input id="pf-cur" type="password" class="cms-input" @bind="_currentPassword" @bind:event="oninput" autocomplete="current-password" />
+            </div>
+
+            <div class="profile-row">
+                <div class="form-group">
+                    <label class="cms-label" for="pf-new">@L["Profile_NewPassword"]</label>
+                    <input id="pf-new" type="password" class="cms-input" @bind="_newPassword" @bind:event="oninput" autocomplete="new-password" />
+                </div>
+                <div class="form-group">
+                    <label class="cms-label" for="pf-new2">@L["Profile_NewPasswordAgain"]</label>
+                    <input id="pf-new2" type="password" class="cms-input" @bind="_newPasswordAgain" @bind:event="oninput" autocomplete="new-password" />
+                </div>
+            </div>
+
+            <button class="btn-cms btn-primary-cms" @onclick="ChangePassword" disabled="@_changingPassword">
+                @if (_changingPassword)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                @L["Profile_ChangePasswordBtn"]
+            </button>
+        </div>
+
+    </div>
+}
+
+@code {
+    private MyProfileResponse? _profile;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _changingPassword;
+
+    private string? _firstName;
+    private string? _lastName;
+    private string? _phone;
+    private string? _avatarUrl;
+    private string? _bio;
+
+    private string _currentPassword = "";
+    private string _newPassword = "";
+    private string _newPasswordAgain = "";
+
+    private string DisplayName
+    {
+        get
+        {
+            string full = $"{_firstName} {_lastName}".Trim();
+            return full.Length > 0 ? full : _profile?.UserName ?? "";
+        }
+    }
+
+    private string Initials
+    {
+        get
+        {
+            string name = DisplayName;
+            if (string.IsNullOrWhiteSpace(name)) return "?";
+            string[] parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return parts.Length >= 2
+                ? $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant()
+                : name[0].ToString().ToUpperInvariant();
+        }
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadProfile();
+
+    private async Task LoadProfile()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetMyProfileQuery())).Match(
+                p =>
+                {
+                    _profile = p;
+                    _firstName = p.FirstName;
+                    _lastName = p.LastName;
+                    _phone = p.PhoneNumber;
+                    _avatarUrl = p.Avatar;
+                    _bio = p.Bio;
+                },
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Profile_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        _saving = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new UpdateMyProfileCommand(_firstName, _lastName, _phone, _avatarUrl, _bio)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Profile_Saved"]);
+                // Reload rather than patch the local copy: the name in the top bar
+                // comes from the JWT, so what this page shows must stay the server's
+                // answer and not a hopeful guess.
+                await LoadProfile();
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ChangePassword()
+    {
+        if (_newPassword != _newPasswordAgain)
+        {
+            Toast.Error(L["Profile_PasswordMismatch"]);
+            return;
+        }
+
+        _changingPassword = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new ChangeMyPasswordCommand(_currentPassword, _newPassword)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Profile_PasswordChanged"]);
+                _currentPassword = _newPassword = _newPasswordAgain = "";
+            }
+        }
+        finally { _changingPassword = false; }
+    }
+}

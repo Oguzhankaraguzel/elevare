@@ -1,0 +1,212 @@
+@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Domain.Entities.StructuredData
+
+@* Builds a JSON value for pasting into the structured data graph.
+   Deliberately standalone: it lives in the right bar so it can be open beside the
+   structured data window, and the editor moves the result across by copy/paste. *@
+
+<div class="sd-jsonbuilder">
+    <div class="sd-field">
+        <label class="cms-label">@L["StructuredData_JsonBuilderShape"]</label>
+        <select class="cms-input" value="@_shape" @onchange="OnShapeChanged">
+            <option value="object">@L["StructuredData_JsonBuilderShapeObject"]</option>
+            <option value="array">@L["StructuredData_JsonBuilderShapeArray"]</option>
+            <option value="custom">@L["StructuredData_JsonBuilderShapeCustom"]</option>
+        </select>
+    </div>
+
+    @if (_shape == "custom")
+    {
+        @* Straight paste-in: the editor already has JSON from somewhere else and
+           only wants it checked and tidied before it goes into the graph. *@
+        <div class="sd-field">
+            <label class="cms-label">@L["StructuredData_JsonBuilderCustomInput"]</label>
+            <textarea class="cms-input sd-jsonbuilder-custom" rows="8"
+                      placeholder="@L["StructuredData_JsonBuilderCustomPlaceholder"]"
+                      value="@_customJson" @onchange="SetCustomJson"></textarea>
+            <div class="sd-hint">@L["StructuredData_JsonBuilderCustomHint"]</div>
+        </div>
+
+        @if (_customError is not null)
+        {
+            <div class="sd-jsonbuilder-error">
+                <i class="bi bi-exclamation-triangle"></i> @_customError
+            </div>
+        }
+    }
+    else
+    {
+        @if (_shape == "object")
+        {
+            <div class="sd-field">
+                <label class="cms-label">@L["StructuredData_JsonBuilderType"]</label>
+                <input class="cms-input" placeholder="Person" value="@_entityType" @onchange="SetEntityType" />
+                <div class="sd-hint">@L["StructuredData_JsonBuilderTypeHint"]</div>
+            </div>
+        }
+
+        <div class="sd-jsonbuilder-rows">
+            @foreach (JsonBuilderRow row in _rows)
+            {
+                JsonBuilderRow current = row;
+                <div class="sd-jsonbuilder-row">
+                    @if (_shape == "object")
+                    {
+                        <input class="cms-input sd-jsonbuilder-key" placeholder="@L["StructuredData_JsonBuilderKey"]"
+                               value="@current.Key" @onchange="e => SetKey(current, e)" />
+                    }
+                    <select class="cms-input sd-jsonbuilder-kind" value="@current.Kind"
+                            @onchange="e => SetKind(current, e)">
+                        <option value="text">@L["StructuredData_JsonBuilderKindText"]</option>
+                        <option value="number">@L["StructuredData_JsonBuilderKindNumber"]</option>
+                        <option value="bool">@L["StructuredData_JsonBuilderKindBool"]</option>
+                        <option value="json">@L["StructuredData_JsonBuilderKindJson"]</option>
+                    </select>
+                    <input class="cms-input sd-jsonbuilder-value" placeholder="@L["StructuredData_JsonBuilderValue"]"
+                           value="@current.Value" @onchange="e => SetValue(current, e)" />
+                    <button type="button" class="btn-cms btn-ghost btn-sm-cms"
+                            title="@L["StructuredData_RemoveField"]" @onclick="() => RemoveRow(current)">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            }
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="AddRow">
+                <i class="bi bi-plus-lg"></i> @L["StructuredData_JsonBuilderAddRow"]
+            </button>
+        </div>
+    }
+
+    <div class="sd-jsonbuilder-output">
+        <textarea id="@_outputId" class="cms-input sd-jsonbuilder-result" rows="6" readonly>@Build()</textarea>
+
+        @* The copy runs from a delegated listener in cms.js, inside the real click.
+           Routing it through Blazor would put a SignalR round trip between the
+           gesture and the clipboard call, and the browser rejects it by then. *@
+        <button type="button" class="btn-cms btn-primary-cms btn-sm-cms"
+                data-copy-target="#@_outputId"
+                data-copy-idle-label="@L["StructuredData_JsonBuilderCopy"]"
+                data-copied-label="@L["StructuredData_JsonBuilderCopied"]"
+                data-copyfail-label="@L["StructuredData_JsonBuilderCopyFailed"]"
+                disabled="@string.IsNullOrWhiteSpace(Build())">
+            <i class="bi bi-clipboard"></i>
+            <span data-copy-label>@L["StructuredData_JsonBuilderCopy"]</span>
+        </button>
+    </div>
+</div>
+
+@code {
+    private sealed class JsonBuilderRow
+    {
+        public string Key { get; set; } = "";
+        public string Kind { get; set; } = "text";
+        public string Value { get; set; } = "";
+    }
+
+    private readonly List<JsonBuilderRow> _rows = [new JsonBuilderRow()];
+
+    /// <summary>Unique per instance so two open builders never target each other's box.</summary>
+    private readonly string _outputId = "sd-json-out-" + Guid.NewGuid().ToString("N")[..8];
+
+    private string _shape = "object";
+    private string _entityType = "";
+    private string _customJson = "";
+    private string? _customError;
+
+    private void OnShapeChanged(ChangeEventArgs e) => _shape = e.Value?.ToString() ?? "object";
+
+    private void SetEntityType(ChangeEventArgs e) => _entityType = e.Value?.ToString() ?? "";
+
+    private static void SetKey(JsonBuilderRow row, ChangeEventArgs e) => row.Key = e.Value?.ToString() ?? "";
+
+    private static void SetKind(JsonBuilderRow row, ChangeEventArgs e) => row.Kind = e.Value?.ToString() ?? "text";
+
+    private static void SetValue(JsonBuilderRow row, ChangeEventArgs e) => row.Value = e.Value?.ToString() ?? "";
+
+    private void SetCustomJson(ChangeEventArgs e)
+    {
+        _customJson = e.Value?.ToString() ?? "";
+        _customError = null;
+
+        if (string.IsNullOrWhiteSpace(_customJson))
+            return;
+
+        // Parsed here purely to report the problem. Build() re-parses rather than
+        // caching the node, so the box always shows what the input currently says.
+        try { JsonNode.Parse(_customJson); }
+        catch (JsonException ex) { _customError = ex.Message; }
+    }
+
+    private void AddRow() => _rows.Add(new JsonBuilderRow());
+
+    private void RemoveRow(JsonBuilderRow row) => _rows.Remove(row);
+
+    /// <summary>
+    /// Assembles the current input into JSON. Rebuilt on every render rather than
+    /// cached, so the preview can never drift from what the copy button hands over.
+    /// </summary>
+    private string Build()
+    {
+        JsonNode? result;
+
+        if (_shape == "custom")
+        {
+            if (string.IsNullOrWhiteSpace(_customJson)) return "";
+            try { result = JsonNode.Parse(_customJson); }
+            catch (JsonException) { return ""; }
+        }
+        else if (_shape == "array")
+        {
+            JsonArray array = [];
+            foreach (JsonBuilderRow row in _rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.Value)) continue;
+                array.Add(ValueOf(row));
+            }
+            if (array.Count == 0) return "";
+            result = array;
+        }
+        else
+        {
+            var node = new JsonObject();
+            if (!string.IsNullOrWhiteSpace(_entityType))
+                node["@type"] = _entityType.Trim();
+
+            foreach (JsonBuilderRow row in _rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.Key)) continue;
+                node[row.Key.Trim()] = ValueOf(row);
+            }
+
+            if (node.Count == 0) return "";
+            result = node;
+        }
+
+        // Same encoder as the graph, so what is built here and what ends up in the
+        // page read identically instead of differing in escaping alone.
+        return result?.ToJsonString(SchemaGraph.SerializerOptions) ?? "";
+    }
+
+    /// <summary>
+    /// The row's value as the type the editor picked. An unparseable "json" row
+    /// falls back to the raw text rather than throwing — the preview stays visible
+    /// and the editor can see what they typed and fix it.
+    /// </summary>
+    private static JsonNode? ValueOf(JsonBuilderRow row) => row.Kind switch
+    {
+        "number" => double.TryParse(row.Value, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out double n)
+                ? JsonValue.Create(n)
+                : JsonValue.Create(row.Value),
+        "bool" => JsonValue.Create(
+            row.Value.Trim() is "true" or "True" or "1" or "evet" or "doğru"),
+        "json" => TryParse(row.Value),
+        _ => JsonValue.Create(row.Value),
+    };
+
+    private static JsonNode? TryParse(string text)
+    {
+        try { return JsonNode.Parse(text); }
+        catch (JsonException) { return JsonValue.Create(text); }
+    }
+}

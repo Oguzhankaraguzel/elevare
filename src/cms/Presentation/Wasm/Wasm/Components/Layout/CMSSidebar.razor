@@ -1,0 +1,287 @@
+﻿@inject IJSRuntime JS
+@implements IDisposable
+
+@* Not IsFixed: the cascaded reference never changes, but IsFixed also tells the
+   renderer it may skip re-rendering this subtree, which is exactly what has to
+   happen when the URL changes and the highlight moves. *@
+<CascadingValue Value="this">
+<div class="cms-sidebar @(_collapsed ? "collapsed" : "") @(!_pinned ? "sb-unpinned" : "")">
+
+    <a class="sidebar-logo" href="/" style="text-decoration:none;color:inherit">
+        <div class="logo-icon"><img src="img/elevare-mark.png" alt="Elevare" /></div>
+        <span class="logo-text">Elevare CMS</span>
+    </a>
+
+    <nav class="sidebar-nav">
+        @* ── Ana Sayfa / Dashboard: no section header — these two are always visible
+             and not permission-gated, so grouping them under a collapsible title would
+             just be one more click to reach the page every session starts on. ── *@
+        <NavItem Href="/" Icon="bi-house-door" Label="@L["Nav_Home"]" Exact="true" />
+        <NavItem Href="/dashboard" Icon="bi-speedometer2" Label="@L["Nav_Dashboard"]" />
+
+        @* ── İçerik ── *@
+        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecContent)">
+            <span>@L["Nav_Content"]</span>
+            <i class="bi @(IsCollapsed(SecContent) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+        </button>
+        @if (!IsCollapsed(SecContent))
+        {
+            <NavItem Href="/pages" Icon="bi-file-earmark-text" Label="@L["Nav_Pages"]" />
+            <NavItem Href="/templates" Icon="bi-collection" Label="@L["Nav_Templates"]" />
+            @if (UserContext.HasPermission(PermissionKeys.BulkEditApply))
+            {
+                <NavItem Href="/pages/bulk-edit" Icon="bi-arrow-repeat" Label="@L["Nav_BulkContentEdit"]" />
+            }
+            @* Under İçerik rather than in a section of its own: what a page says about
+               itself to a crawler is the same job as what it says to a reader, and
+               Seo.Manage is an editor's permission, not an administrator's. *@
+            @if (UserContext.HasPermission(PermissionKeys.SeoManage))
+            {
+                <NavItem Href="/admin/seo" Icon="bi-graph-up-arrow" Label="@L["Nav_Seo"]" />
+            }
+            @* Next to SEO, and for the same reason: a redirect is what a renamed or
+               retired page still says to the visitors and crawlers holding its old
+               URL. Grouping it under System would put it a section away from the
+               Pages screen whose edits create most of these rules. *@
+            @if (UserContext.HasPermission(PermissionKeys.RedirectsManage))
+            {
+                <NavItem Href="/admin/redirects" Icon="bi-signpost-split" Label="@L["Nav_Redirects"]" />
+            }
+            @* Tags are created inline while writing a page and, until this screen
+               existed, could never be renamed or removed — a typo stayed in the
+               picker forever. Gated on the same permission as editing a page,
+               because that is what a tag is: page metadata. *@
+            @if (UserContext.HasPermission(PermissionKeys.PagesEdit))
+            {
+                <NavItem Href="/admin/tags" Icon="bi-tags" Label="@L["Nav_Tags"]" />
+            }
+        }
+
+        @* ── Etkileşim ── *@
+        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecEngagement)">
+            <span>@L["Nav_Engagement"]</span>
+            <i class="bi @(IsCollapsed(SecEngagement) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+        </button>
+        @if (!IsCollapsed(SecEngagement) && UserContext.HasPermission(PermissionKeys.FormsViewSubmissions))
+        {
+            @* Exact, otherwise /forms also lights up while on its reply-templates child. *@
+            <NavItem Href="/forms" Icon="bi-ui-checks" Label="@L["Nav_Forms"]" Exact="true" />
+            <NavItem Href="/forms/reply-templates" Icon="bi-chat-left-text" Label="@L["Nav_ReplyTemplates"]" />
+        }
+
+        @* ── Yönetim ── *@
+        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecManagement)">
+            <span>@L["Nav_Management"]</span>
+            <i class="bi @(IsCollapsed(SecManagement) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+        </button>
+        @if (!IsCollapsed(SecManagement))
+        {
+            @if (UserContext.HasPermission(PermissionKeys.UsersManage))
+            {
+                <NavItem Href="/users" Icon="bi-people" Label="@L["Nav_Users"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.RolesManage))
+            {
+                <NavItem Href="/admin/roles" Icon="bi-shield-lock" Label="@L["Nav_Roles"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.WorkflowsManage))
+            {
+                <NavItem Href="/admin/workflows" Icon="bi-signpost-split" Label="@L["Nav_Workflows"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.ApprovalsDecide))
+            {
+                <NavItem Href="/admin/approvals" Icon="bi-check2-square" Label="@L["Nav_Approvals"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.LanguagesManage))
+            {
+                <NavItem Href="/languages" Icon="bi-translate" Label="@L["Nav_Languages"]" />
+            }
+        }
+
+        @* ── Sistem ── *@
+        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecSystem)">
+            <span>@L["Nav_System"]</span>
+            <i class="bi @(IsCollapsed(SecSystem) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+        </button>
+        @if (!IsCollapsed(SecSystem))
+        {
+            @if (UserContext.HasPermission(PermissionKeys.SiteSettingsManage))
+            {
+                <NavItem Href="/admin/settings" Icon="bi-gear" Label="@L["Nav_Settings"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.CustomCodeAuthor))
+            {
+                <NavItem Href="/admin/site-code" Icon="bi-code-slash" Label="@L["Nav_SiteCode"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.TrashView))
+            {
+                <NavItem Href="/admin/trash" Icon="bi-trash3" Label="@L["Nav_Trash"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.LogsView))
+            {
+                <NavItem Href="/admin/logs" Icon="bi-journal-text" Label="@L["Nav_Logs"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.AuthLogsView))
+            {
+                <NavItem Href="/admin/auth-logs" Icon="bi-shield-lock" Label="@L["Nav_AuthLogs"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.HangfireAccess))
+            {
+                <NavItem Href="/admin/jobs/dashboard" Target="_blank" Icon="bi-clock-history" Label="@L["Nav_JobDashboard"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.CacheManage))
+            {
+                <NavItem Href="/admin/cache" Icon="bi-lightning-charge" Label="@L["Nav_Cache"]" />
+            }
+            @if (UserContext.HasPermission(PermissionKeys.BackupCreate))
+            {
+                <NavItem Href="/admin/backups" Icon="bi-database-down" Label="@L["Nav_Backups"]" />
+            }
+        }
+
+        <NavItem Href="/admin/about" Icon="bi-info-circle" Label="@L["Nav_About"]" />
+        <NavItem Href="/admin/guide" Icon="bi-question-circle" Label="@L["Nav_Guide"]" />
+        <NavItem Href="/admin/knowledge-base" Icon="bi-journal-bookmark" Label="@L["Nav_KnowledgeBase"]" />
+    </nav>
+
+    <div class="sidebar-toggle">
+        <button class="sidebar-toggle-btn" @onclick="ToggleCollapse"
+                title="@(_collapsed ? L["Layout_Expand"] : L["Layout_Collapse"])">
+            <i class="bi @(_collapsed ? "bi-chevron-double-right" : "bi-chevron-double-left")"></i>
+        </button>
+        <button class="sidebar-toggle-btn sidebar-toggle-pin @(!_pinned ? "text-accent" : "")"
+                @onclick="TogglePin"
+                title="@(_pinned ? L["Layout_UnpinSidebar"] : L["Layout_PinSidebar"])">
+            <i class="bi @(_pinned ? "bi-pin-angle-fill" : "bi-pin-angle")"></i>
+        </button>
+    </div>
+</div>
+</CascadingValue>
+
+@code {
+    private const string SecContent = "content";
+    private const string SecEngagement = "engagement";
+    private const string SecManagement = "management";
+    private const string SecSystem = "system";
+
+    private bool _collapsed;
+    private bool _pinned = true;
+    private Dictionary<string, bool> _sectionCollapsed = [];
+
+    // ── Which menu entry is highlighted ──────────────────────────────────────
+    // Every rendered NavItem's href, so the matcher below can tell "/pages" apart
+    // from "/pages/bulk-edit". Items register themselves rather than being listed
+    // here, because a hand-kept list drifts the moment someone adds an entry.
+    private readonly HashSet<string> _navHrefs = new(StringComparer.OrdinalIgnoreCase);
+    private bool _navHrefsChanged;
+
+    internal void RegisterNavHref(string href)
+    {
+        if (_navHrefs.Add(Normalize(href)))
+            _navHrefsChanged = true;
+    }
+
+    /// <summary>
+    /// True when <paramref name="href"/> is the menu entry that best describes the
+    /// current URL.
+    /// <para>
+    /// Matching is per path segment, so <c>/pages</c> covers <c>/pages/edit/12</c>
+    /// but not <c>/pages-archive</c>. Where several entries match, only the longest
+    /// wins — on <c>/pages/bulk-edit</c> that is "Toplu Güncelleme" alone, not it and
+    /// "Sayfalar" together.
+    /// </para>
+    /// </summary>
+    internal bool IsNavItemActive(string href, bool exact)
+    {
+        string current = Normalize(Nav.ToBaseRelativePath(Nav.Uri));
+        string target = Normalize(href);
+
+        if (exact)
+            return string.Equals(current, target, StringComparison.OrdinalIgnoreCase);
+
+        if (!Covers(target, current))
+            return false;
+
+        // A more specific entry, if one exists, owns this URL instead.
+        return !_navHrefs.Any(other =>
+            other.Length > target.Length && Covers(other, current));
+    }
+
+    /// <summary>Does <paramref name="route"/> own <paramref name="path"/> — as itself or as a parent segment?</summary>
+    private static bool Covers(string route, string path) =>
+        string.Equals(path, route, StringComparison.OrdinalIgnoreCase)
+        || path.StartsWith(route + "/", StringComparison.OrdinalIgnoreCase);
+
+    private static string Normalize(string path)
+    {
+        int query = path.IndexOfAny(['?', '#']);
+        if (query >= 0)
+            path = path[..query];
+
+        return path.Trim('/');
+    }
+
+    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+
+    // A NavItem never re-renders on its own when the URL changes — without this the
+    // menu keeps whatever highlight each entry last drew, so visiting three sections
+    // leaves three of them lit and the one you are actually on can go dark.
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
+        InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var prefs = await JS.InvokeAsync<LayoutPrefs>("cmsJs.getLayoutPrefs");
+                _collapsed = prefs.SidebarCollapsed;
+                _pinned    = prefs.SidebarPinned;
+                _sectionCollapsed = await JS.InvokeAsync<Dictionary<string, bool>>("cmsJs.getNavSectionsState");
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+            StateHasChanged();
+            return;
+        }
+
+        // Items register during the render that creates them, so the pass that drew
+        // them judged "longest match" against an incomplete set. Redraw once now that
+        // the set is settled — expanding a collapsed section adds entries the same way.
+        if (_navHrefsChanged)
+        {
+            _navHrefsChanged = false;
+            StateHasChanged();
+        }
+    }
+
+    private sealed record LayoutPrefs(
+        bool TopbarPinned, bool SidebarCollapsed, bool SidebarPinned,
+        bool RightbarPinned, bool RightbarExpanded);
+
+    private async Task ToggleCollapse()
+    {
+        _collapsed = !_collapsed;
+        await JS.InvokeVoidAsync("cmsJs.setSidebarCollapsed", _collapsed);
+    }
+
+    private async Task TogglePin()
+    {
+        _pinned = !_pinned;
+        await JS.InvokeVoidAsync("cmsJs.setSidebarPinned", _pinned);
+    }
+
+    // While the sidebar itself is icon-only (collapsed), per-section accordion
+    // state is irrelevant — there's no room for a chevron/header, so every item
+    // stays visible as an icon regardless of its group's collapsed flag.
+    private bool IsCollapsed(string key) => !_collapsed && _sectionCollapsed.GetValueOrDefault(key);
+
+    private async Task ToggleSection(string key)
+    {
+        bool collapsed = !_sectionCollapsed.GetValueOrDefault(key);
+        _sectionCollapsed[key] = collapsed;
+        await JS.InvokeVoidAsync("cmsJs.setNavSectionCollapsed", key, collapsed);
+    }
+}

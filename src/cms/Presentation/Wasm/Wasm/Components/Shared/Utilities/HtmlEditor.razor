@@ -1,0 +1,92 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@* Rich-text box for composing HTML outside the page builder (e-mail replies, reply
+   templates). Renders a plain <textarea> that CKEditor replaces on first render, so
+   the field still works — as a source box — if the editor script cannot load. *@
+<textarea id="@ElementId" class="cms-input elevare-html-editor" rows="10">@Value</textarea>
+
+@code {
+    /// <summary>Unique DOM id. Must be stable for the lifetime of the component — CKEditor keys its instance on it.</summary>
+    [Parameter, EditorRequired] public string ElementId { get; set; } = "";
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private DotNetObjectReference<HtmlEditor>? _ref;
+    private bool _attached;
+    private string? _lastPushedFromEditor;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _attached) return;
+        _attached = true;
+
+        _ref = DotNetObjectReference.Create(this);
+        try
+        {
+            await JS.InvokeAsync<bool>("elevareHtmlEditor.attach", ElementId, Value, _ref);
+        }
+        catch (JSException ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogWarning(ex, "Rich-text editor could not attach; the plain textarea stays usable.");
+        }
+    }
+
+    /// <summary>
+    /// Pushed from JS as the user types. The value is remembered so
+    /// <see cref="OnParametersSetAsync"/> can tell an echo of our own edit apart from
+    /// the parent genuinely replacing the content (applying a template, for example).
+    /// </summary>
+    [JSInvokable]
+    public async Task OnHtmlChanged(string? html)
+    {
+        _lastPushedFromEditor = html;
+        Value = html;
+        await ValueChanged.InvokeAsync(html);
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!_attached) return;
+
+        // Only write back when the parent set something the editor did not produce —
+        // otherwise every keystroke would round-trip and move the caret to the end.
+        if (Value == _lastPushedFromEditor) return;
+
+        try { await JS.InvokeAsync<bool>("elevareHtmlEditor.setData", ElementId, Value ?? ""); }
+        catch (JSException) { /* not attached yet, or already gone */ }
+    }
+
+    /// <summary>
+    /// Reads straight from the editor. CKEditor's change event can lag the final
+    /// keystroke, so callers about to SAVE should use this rather than the bound
+    /// value — losing the last sentence of a reply is not an acceptable trade.
+    /// </summary>
+    public async Task<string?> GetCurrentHtmlAsync()
+    {
+        try
+        {
+            string? html = await JS.InvokeAsync<string?>("elevareHtmlEditor.getData", ElementId);
+            if (html is not null)
+            {
+                _lastPushedFromEditor = html;
+                Value = html;
+            }
+            return html ?? Value;
+        }
+        catch (JSException)
+        {
+            return Value;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("elevareHtmlEditor.destroy", ElementId); }
+        catch (JSException) { /* the circuit may already be gone */ }
+        catch (InvalidOperationException) { /* prerendering / disconnected circuit */ }
+
+        _ref?.Dispose();
+    }
+}

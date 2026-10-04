@@ -1,0 +1,26 @@
+<div style="display:flex;gap:4px;align-items:center">
+    <a href="/culture/set?culture=tr&redirectUri=@Uri.EscapeDataString(_currentPath)"
+       class="@ButtonClass("tr")" title="Türkçe">
+        TR
+    </a>
+    <a href="/culture/set?culture=en&redirectUri=@Uri.EscapeDataString(_currentPath)"
+       class="@ButtonClass("en")" title="English">
+        EN
+    </a>
+</div>
+
+@code {
+    private string _currentCulture = "tr";
+    private string _currentPath    = "/";
+
+    protected override void OnInitialized()
+    {
+        _currentCulture = System.Globalization.CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        _currentPath    = new Uri(Nav.Uri).PathAndQuery;
+    }
+
+    private string ButtonClass(string culture) =>
+        culture == _currentCulture
+            ? "btn-cms btn-primary-cms btn-sm-cms"
+            : "btn-cms btn-ghost btn-sm-cms";
+}

@@ -1,0 +1,233 @@
+﻿@page "/users/create"
+@page "/users/edit/{Id:guid}"
+@layout CMSLayout
+
+<PageTitle>@(_isEdit? L["UserEdit_PageTitleEdit"] : L["UserEdit_PageTitleCreate"])</PageTitle>
+
+<div class="cms-breadcrumb">
+    <a href="/users"><i class="bi bi-people"></i> @L["UserEdit_BreadcrumbUsers"]</a>
+    <i class="bi bi-chevron-right"></i>
+    <span>@(_isEdit? L["Common_Edit"] : L["UserEdit_HeaderCreate"])</span>
+</div>
+
+<div class="page-header">
+    <h1>@(_isEdit? L["UserEdit_HeaderEdit"] : L["UserEdit_HeaderCreate"])</h1>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start">
+
+    <div class="cms-card">
+        <EditForm Model="_model" OnValidSubmit="Save" FormName="user-form">
+            <DataAnnotationsValidator />
+
+            <div class="form-row cols-2">
+                <div class="form-group">
+                    <label class="cms-label">@L["UserEdit_FirstName"]</label>
+                    <InputText @bind-Value="_model.FirstName" class="cms-input" @onfocusout="CorrectName" placeholder="@L["UserEdit_FirstNamePlaceholder"]" />
+                </div>
+                <div class="form-group">
+                    <label class="cms-label">@L["UserEdit_LastName"]</label>
+                    <InputText @bind-Value="_model.LastName" class="cms-input" @onfocusout="CorrectSurname" placeholder="@L["UserEdit_LastNamePlaceholder"]" />
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="cms-label">@L["UserEdit_Email"] <span style="color:var(--cms-danger)">*</span></label>
+                <InputText @bind-Value="_model.Email" class="cms-input" placeholder="@L["UserEdit_EmailPlaceholder"]"
+                           type="email" disabled="@_isEdit" />
+                <ValidationMessage For="() => _model.Email" style="color:var(--cms-danger);font-size:12px" />
+            </div>
+
+                <div class="form-group">
+                    <label class="cms-label">@L["UserEdit_UserName"] <span style="color:var(--cms-danger)">*</span></label>
+                    <InputText @bind-Value="_model.UserName" class="cms-input" placeholder="@L["UserEdit_UserNamePlaceholder"]"
+                               disabled="@_isEdit" />
+                    @if (CanUsernameBeCreated())
+                    {
+                        <button type="button" class="mt-1 btn-cms btn-ghost" disabled="@_saving" @onclick="GenerateUserName">@L["UserEdit_GenerateUserName"]</button>
+                    }
+                    <ValidationMessage For="() => _model.UserName" style="color:var(--cms-danger);font-size:12px" />
+                </div>
+
+            @if (!_isEdit)
+            {
+                <div class="cms-callout" style="margin-bottom:18px;padding:12px 14px;border:1px solid var(--cms-border);border-radius:6px;display:flex;gap:10px;align-items:flex-start">
+                    <i class="bi bi-envelope-check" style="color:var(--cms-accent);font-size:16px;margin-top:1px"></i>
+                    <small style="color:var(--cms-text-muted)">@L["UserEdit_PasswordEmailNotice"]</small>
+                </div>
+            }
+
+            <div class="form-group">
+                <label class="cms-label">@L["UserEdit_Bio"]</label>
+                <InputTextArea @bind-Value="_model.Bio" class="cms-textarea" rows="3" placeholder="@L["UserEdit_BioPlaceholder"]" />
+            </div>
+
+            <div style="display:flex;gap:10px;margin-top:8px">
+                <button type="submit" class="btn-cms btn-primary-cms" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <i class="bi bi-arrow-clockwise spin"></i>
+                    }
+                    else
+                    {
+
+                        <i class="bi bi-check2"></i>
+                    }
+                    @(_isEdit? L["UserEdit_UpdateBtn"] : L["UserEdit_SaveBtn"])
+                </button>
+                <a href="/users" class="btn-cms btn-ghost">@L["UserEdit_CancelBtn"]</a>
+            </div>
+        </EditForm>
+    </div>
+
+    <div>
+        <div class="cms-card">
+            <div class="cms-card-header"><h5>@L["UserEdit_RoleStatus"]</h5></div>
+            <div class="form-group">
+                <label class="cms-label">@L["UserEdit_RoleLabel"]</label>
+                <select @bind="_model.Role" class="cms-select">
+                    <option value="">@L["UserEdit_SelectRole"]</option>
+                    @foreach (RoleResponse role in _roles)
+                    {
+                        <option value="@role.Name">@RoleDisplayName(role)</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                    <label class="cms-toggle">
+                        <InputCheckbox @bind-Value="_model.IsActive" />
+                        <span class="cms-toggle-slider"></span>
+                    </label>
+                    <span style="color:var(--cms-text-muted)">@L["UserEdit_AccountActive"]</span>
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private UserFormModel _model = new();
+    /// <summary>Role the user had when the form loaded, to detect an actual change on save.</summary>
+    private string _originalRole = "";
+    private List<RoleResponse> _roles = []; 
+    private bool _saving;
+    private bool _isEdit => Id.HasValue;
+
+    // Built-in roles keep their existing localized labels; SuperAdmin-created
+    // custom roles (see /admin/roles) have no resx entry, so their raw name is
+    // the only sensible display — it's also literally what UserManager stores.
+    private string RoleDisplayName(RoleResponse role) => role.Name switch 
+    {
+        "SuperAdmin" => L["Roles_SuperAdmin"],
+        "Admin" => L["Roles_Admin"],
+        "Developer" => L["Roles_Developer"],
+        "Editor" => L["Roles_Editor"],
+        "Author" => L["Roles_Author"],
+        "Viewer" => L["Roles_Viewer"],
+        _ => role.Name,
+    };
+
+    private bool CanUsernameBeCreated()
+    {
+        if (_isEdit) return false;
+
+        bool firstValid = !string.IsNullOrWhiteSpace(_model.FirstName) && _model.FirstName!.Length > 3;
+        bool lastValid = !string.IsNullOrWhiteSpace(_model.LastName) && _model.LastName!.Length > 3;
+
+        return firstValid || lastValid;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.UsersManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        (await Sender.Send(new GetRolesQuery())).Match(
+            list => _roles = list,
+            error => Toast.Error(L.Error(error)));
+
+        if (_isEdit)
+        {
+            SharedKernel.Concrete.Result<PagedResult<UserResponse>> r =
+                await Sender.Send(new GetUsersQuery(Id: Id));
+            UserResponse? user = r.IsSuccess ? r.Value.Items.FirstOrDefault() : null;
+            if (user is null)
+            {
+                Toast.Error(L["UserEdit_Toast_NotFound"]);
+                Nav.NavigateTo("/users");
+                return;
+            }
+            _model = new UserFormModel
+            {
+                Email = user.Email ?? "",
+                UserName = user.UserName ?? "",
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Bio = user.Bio,
+                Role = user.Roles.FirstOrDefault() ?? "",
+                IsActive = user.IsActive
+            };
+            _originalRole = _model.Role;
+        }
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        try
+        {
+            if (_isEdit)
+            {
+                var cmd = new UpdateUserCommand(Id!.Value, _model.FirstName, _model.LastName,
+                    _model.Bio, _model.Role, _model.IsActive);
+                Result r = await Sender.Send(cmd);
+                if (r.IsSuccess)
+                {
+                    Toast.Success(L["UserEdit_Toast_Updated"]);
+                    if (!string.Equals(_originalRole, _model.Role, StringComparison.Ordinal))
+                        Toast.Warning(L["UserEdit_RoleChangeNeedsReLogin"]);
+                    Nav.NavigateTo("/users");
+                }
+                else Toast.Error(L.Error(r.Error));
+            }
+            else
+            {
+                var cmd = new CreateUserCommand(_model.Email, _model.UserName,
+                    _model.FirstName, _model.LastName, _model.Bio, _model.Role, Nav.BaseUri, _model.IsActive);
+                Result<CreateUserResult> r = await Sender.Send(cmd);
+                if (r.IsSuccess)
+                {
+                    if (r.Value.EmailSent)
+                        Toast.Success(L["UserEdit_Toast_Created"]);
+                    else
+                        Toast.Warning(L["UserEdit_Toast_CreatedEmailFailed"]);
+                    Nav.NavigateTo("/users");
+                }
+                else Toast.Error(L.Error(r.Error));
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private void GenerateUserName()
+    {
+        if (_model.FirstName.IsNullOrWhiteSpace() && _model.LastName.IsNullOrWhiteSpace()) return;
+        _model.UserName = SpectraUtil.NameEdit.CreateUserName(_model.FirstName + _model.LastName);
+    }
+
+    private void CorrectName()
+    {
+        _model.FirstName = SpectraUtil.NameEdit.NameCorrection(_model.FirstName);
+    }
+    private void CorrectSurname()
+    {
+        _model.LastName = SpectraUtil.NameEdit.SirNameCorrection(_model.LastName);
+    }
+
+    }

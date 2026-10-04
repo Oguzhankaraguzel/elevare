@@ -1,0 +1,83 @@
+# A local stand-in for outgoing mail, so Email (SMTP send, and Site Settings'
+# From-address/From-name override) can be tested end to end without a real
+# mailbox. NOT for production.
+#
+# The CDN stand-in that used to live here (a local nginx pretending to be a pull
+# CDN) was removed after it had done its one job — proving Integrations.CdnBaseUrl
+# and the CDN probe genuinely work end to end. A real CDN is always an external
+# service (Cloudflare, Medianova, Akamai...); nothing in normal operation ever
+# points at a local nginx, so it wasn't worth carrying forward as a permanent
+# fixture. Captcha's test keys need no container at all — see the provider's own
+# published test site key/secret pair instead.
+#
+# Usage — layer on top of the main stack:
+#   docker compose -f docker-compose.yml -f docker-compose.dev-tools.yml up -d
+#
+#   Mailpit UI (catches every email the CMS sends) → http://localhost:8025
+#   Seq UI (both apps' structured logs, searchable)  → http://localhost:5341
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8025/livez"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Somewhere for the Serilog Seq sink to actually reach. Both apps ship with it
+  # switched off (Serilog:SeqUrl empty) because the production stack should not be
+  # made to run a log server nobody asked for — but during development a searchable
+  # log beats scrolling `docker compose logs`, and this is one line of setup.
+  #
+  # Seq serves its UI and its ingestion API on the same port 80 inside the network,
+  # so the apps below write to http://seq while the browser uses the mapped port.
+  # No healthcheck and no `condition`: the sink buffers and retries on its own, so
+  # an app that starts first loses nothing.
+  seq:
+    image: datalust/seq:latest
+    environment:
+      ACCEPT_EULA: "Y"
+      # Current Seq refuses to start its first run without either an admin
+      # password or an explicit opt-out — it exits 1 with "No default admin
+      # password was supplied" rather than falling back to open access. No
+      # authentication is the right answer for THIS file: it is a local
+      # development fixture, the same posture as the mailpit above, and a password
+      # nobody chose is a password nobody remembers. Do not copy this service into
+      # the production stack; point SEQ_URL at a real, authenticated Seq instead.
+      SEQ_FIRSTRUN_NOAUTHENTICATION: "true"
+    ports:
+      - "${SEQ_UI_PORT:-5341}:80"
+    volumes:
+      # Without this, every rebuild starts from an empty log store — which makes
+      # the one thing this container is for (looking back at what happened) work
+      # only until the next `up --build`.
+      - seq-data:/data
+
+  cms:
+    depends_on:
+      mailpit:
+        condition: service_healthy
+      seq:
+        condition: service_started
+    environment:
+      Serilog__SeqUrl: http://seq
+      # Mailpit needs no auth and speaks plain SMTP on 1025 — nothing to fill in
+      # to get a real send/receive loop working locally.
+      Email__Host: mailpit
+      Email__Port: 1025
+      Email__EnableSsl: "false"
+      Email__UserName: ""
+      Email__Password: ""
+
+  web:
+    depends_on:
+      seq:
+        condition: service_started
+    environment:
+      Serilog__SeqUrl: http://seq
+
+volumes:
+  seq-data:

@@ -1,0 +1,59 @@
+@page "/admin/guide"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Guide"]</PageTitle>
+
+<div class="guide-hero">
+    <div class="guide-hero__scrim"></div>
+    <div class="guide-hero__text">
+        <h1>@L["Nav_Guide"]</h1>
+        <p>@L["Guide_PageSubtitle"]</p>
+    </div>
+</div>
+
+<div class="cms-card">
+    <GuideContent />
+</div>
+
+<style>
+    /* A path through a forest, for the page that walks you through the CMS —
+       otherwise identical in weight to About's masthead treatment so the two
+       "documentation" pages read as a pair. */
+    .guide-hero {
+        position: relative;
+        border-radius: var(--radius);
+        overflow: hidden;
+        margin-bottom: 20px;
+        min-height: 132px;
+        display: flex;
+        align-items: flex-end;
+        background-image: url('img/guide-hero-bg.jpg');
+        background-size: cover;
+        background-position: center 40%;
+    }
+
+    .guide-hero__scrim {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(180deg, rgba(11,17,29,.15) 0%, rgba(11,17,29,.82) 100%);
+    }
+
+    .guide-hero__text {
+        position: relative;
+        padding: 20px 24px;
+    }
+
+    .guide-hero__text h1 {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        color: #fff;
+        text-shadow: 0 1px 8px rgba(0,0,0,.35);
+    }
+
+    .guide-hero__text p {
+        margin: 4px 0 0;
+        color: rgba(255,255,255,.85);
+        font-size: 13.5px;
+    }
+</style>

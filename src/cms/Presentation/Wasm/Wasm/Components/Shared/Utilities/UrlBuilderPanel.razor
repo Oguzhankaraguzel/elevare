@@ -1,0 +1,407 @@
+﻿@using Application.Features.Queries.SiteSettings.GetSiteSettings
+@using Domain.Entities.SiteSettings
+@inject IJSRuntime JS
+
+@* Each tab owns only its input fields; the result row, clipboard handling and
+   validation reporting are shared, so every builder behaves identically and the
+   copy logic exists once. Adding a target means a new enum member, a fields
+   block and a Build* method. *@
+<div class="url-builder">
+
+    <div class="ub-tabs" role="tablist">
+        @foreach (BuilderKind kind in Enum.GetValues<BuilderKind>())
+        {
+            <button type="button"
+                    role="tab"
+                    class="ub-tab @(_kind == kind ? "ub-tab-active" : "")"
+                    aria-selected="@(_kind == kind ? "true" : "false")"
+                    @onclick="() => SwitchTo(kind)">
+                <i class="bi @IconFor(kind)"></i>
+                <span>@L[$"UrlBuilder_Tab_{kind}"]</span>
+            </button>
+        }
+    </div>
+
+    <div class="ub-hint-row">
+        <p class="ub-hint">@L[$"UrlBuilder_Hint_{_kind}"]</p>
+        @* Opens in a new tab rather than navigating: the panel is a modal over
+           whatever page the user was on, and sending them away would throw that
+           away along with anything half-typed here. *@
+        <a href="/admin/guide#url-builder-guide" target="_blank" rel="noopener noreferrer"
+           class="ub-guide-link" title="@L["UrlBuilder_GuideBtn"]">
+            <i class="bi bi-question-circle"></i> @L["UrlBuilder_GuideBtn"]
+        </a>
+    </div>
+
+    @if (_kind == BuilderKind.WhatsApp)
+    {
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_PhoneLabel"]</label>
+            <input class="cms-input" @bind="_waPhone" @bind:event="oninput"
+                   placeholder="@L["UrlBuilder_PhonePlaceholder"]" inputmode="tel" />
+            <div class="ub-field-hint">@L["UrlBuilder_PhoneHint"]</div>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_MessageLabel"]</label>
+            <textarea class="cms-input" rows="3" @bind="_message" @bind:event="oninput"
+                      placeholder="@L["UrlBuilder_MessagePlaceholder"]"></textarea>
+            <div class="ub-field-hint">@L["UrlBuilder_MessageHint"]</div>
+        </div>
+    }
+    else if (_kind == BuilderKind.Utm)
+    {
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_BaseUrlLabel"]</label>
+            <input class="cms-input" @bind="_baseUrl" @bind:event="oninput"
+                   placeholder="@L["UrlBuilder_BaseUrlPlaceholder"]" />
+            <div class="ub-field-hint">@L["UrlBuilder_BaseUrlHint"]</div>
+        </div>
+        <div class="ub-grid">
+            <div class="form-group">
+                <label class="cms-label">@L["UrlBuilder_UtmSourceLabel"]</label>
+                <input class="cms-input" @bind="_utmSource" @bind:event="oninput" placeholder="instagram" />
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["UrlBuilder_UtmMediumLabel"]</label>
+                <input class="cms-input" @bind="_utmMedium" @bind:event="oninput" placeholder="story" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_UtmCampaignLabel"]</label>
+            <input class="cms-input" @bind="_utmCampaign" @bind:event="oninput" placeholder="@L["UrlBuilder_UtmCampaignPlaceholder"]" />
+        </div>
+        <details class="ub-optional">
+            <summary>@L["UrlBuilder_UtmOptional"]</summary>
+            <div class="ub-grid">
+                <div class="form-group">
+                    <label class="cms-label">@L["UrlBuilder_UtmTermLabel"]</label>
+                    <input class="cms-input" @bind="_utmTerm" @bind:event="oninput" />
+                    <div class="ub-field-hint">@L["UrlBuilder_UtmTermHint"]</div>
+                </div>
+                <div class="form-group">
+                    <label class="cms-label">@L["UrlBuilder_UtmContentLabel"]</label>
+                    <input class="cms-input" @bind="_utmContent" @bind:event="oninput" />
+                    <div class="ub-field-hint">@L["UrlBuilder_UtmContentHint"]</div>
+                </div>
+            </div>
+        </details>
+        <div class="ub-note"><i class="bi bi-info-circle"></i> @L["UrlBuilder_UtmLowercaseNote"]</div>
+    }
+    else if (_kind == BuilderKind.Email)
+    {
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_ToLabel"]</label>
+            <input class="cms-input" @bind="_to" @bind:event="oninput"
+                   placeholder="@L["UrlBuilder_ToPlaceholder"]" inputmode="email" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_SubjectLabel"]</label>
+            <input class="cms-input" @bind="_subject" @bind:event="oninput"
+                   placeholder="@L["UrlBuilder_SubjectPlaceholder"]" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_BodyLabel"]</label>
+            <textarea class="cms-input" rows="3" @bind="_body" @bind:event="oninput"
+                      placeholder="@L["UrlBuilder_BodyPlaceholder"]"></textarea>
+            <div class="ub-field-hint">@L["UrlBuilder_BodyHint"]</div>
+        </div>
+    }
+    else if (_kind == BuilderKind.Phone)
+    {
+        <div class="form-group">
+            <label class="cms-label">@L["UrlBuilder_PhoneLabel"]</label>
+            <input class="cms-input" @bind="_telPhone" @bind:event="oninput"
+                   placeholder="@L["UrlBuilder_PhonePlaceholder"]" inputmode="tel" />
+            <div class="ub-field-hint">@L["UrlBuilder_PhoneHint"]</div>
+        </div>
+    }
+
+    @if (_error is not null)
+    {
+        <div class="ub-error"><i class="bi bi-exclamation-circle"></i> @_error</div>
+    }
+
+    <div class="ub-actions">
+        <button class="btn-cms btn-primary-cms" @onclick="Build" disabled="@(!CanBuild)">
+            <i class="bi bi-hammer"></i> @L["UrlBuilder_BuildBtn"]
+        </button>
+    </div>
+
+    <div class="form-group">
+        <label class="cms-label">@L["UrlBuilder_ResultLabel"]</label>
+        <div class="ub-result-row">
+            @* readonly, not disabled: the text stays selectable so it can be copied
+               by hand if the clipboard API is blocked. *@
+            <input id="ub-result-url" class="cms-input ub-result" readonly value="@_url"
+                   placeholder="@L["UrlBuilder_ResultPlaceholder"]" />
+            @* Copies from a delegated listener in cms.js, inside the real click.
+               Going through Blazor puts a SignalR round trip between the gesture
+               and the clipboard call, and the browser refuses it by then. *@
+            <button type="button" class="btn-cms btn-ghost" disabled="@(!HasUrl)"
+                    title="@L["UrlBuilder_CopyBtn"]"
+                    data-copy-target="#ub-result-url"
+                    data-copy-idle-label="@L["UrlBuilder_CopyBtn"]"
+                    data-copied-label="@L["UrlBuilder_Copied"]"
+                    data-copyfail-label="@L["UrlBuilder_CopyFailed"]">
+                <i class="bi bi-clipboard"></i>
+                <span data-copy-label>@L["UrlBuilder_CopyBtn"]</span>
+            </button>
+        </div>
+        @if (HasUrl)
+        {
+            <a href="@_url" target="_blank" rel="noopener noreferrer" class="ub-test-link">
+                <i class="bi bi-box-arrow-up-right"></i> @L["UrlBuilder_TestLink"]
+            </a>
+        }
+    </div>
+</div>
+
+@code {
+    private enum BuilderKind { WhatsApp, Utm, Email, Phone }
+
+    private const string PublicSiteBaseUrlKey = "Advanced.PublicSiteBaseUrl";
+    private const string WhatsappNumberKey = "Social.WhatsappNumber";
+    private const string ContactPhoneKey = "Contact.Phone";
+    private const string ContactEmailKey = "Contact.Email";
+
+    private BuilderKind _kind = BuilderKind.WhatsApp;
+
+    // WhatsApp and the dialler get their own field: the site's WhatsApp number and
+    // its switchboard number are separate settings and frequently differ, so one
+    // shared box would quietly hand the wrong number to whichever tab was used second.
+    private string _waPhone = "";
+    private string _telPhone = "";
+    private string _message = "";
+
+    private string _baseUrl = "";
+    private string _utmSource = "";
+    private string _utmMedium = "";
+    private string _utmCampaign = "";
+    private string _utmTerm = "";
+    private string _utmContent = "";
+
+    private string _to = "";
+    private string _subject = "";
+    private string _body = "";
+
+    private string _url = "";
+    private string? _error;
+
+    private bool HasUrl => !string.IsNullOrWhiteSpace(_url);
+
+    /// <summary>
+    /// Only the fields a target genuinely cannot do without. Everything else is
+    /// optional, so the button is not held hostage by a field the user does not need.
+    /// </summary>
+    private bool CanBuild => _kind switch
+    {
+        BuilderKind.WhatsApp => !string.IsNullOrWhiteSpace(_waPhone),
+        BuilderKind.Phone => !string.IsNullOrWhiteSpace(_telPhone),
+        BuilderKind.Utm => !string.IsNullOrWhiteSpace(_baseUrl)
+                           && !string.IsNullOrWhiteSpace(_utmSource)
+                           && !string.IsNullOrWhiteSpace(_utmMedium)
+                           && !string.IsNullOrWhiteSpace(_utmCampaign),
+        BuilderKind.Email => !string.IsNullOrWhiteSpace(_to),
+        _ => false,
+    };
+
+    /// <summary>
+    /// Seeds each field from the matching Site Setting. These are the same values on
+    /// nearly every link built here, and re-typing them is where typos come from —
+    /// a mistyped campaign URL or a wrong digit in a phone number is invisible until
+    /// someone clicks it. Every field stays editable: a one-off link to a different
+    /// number is still just an overwrite away.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery())).Match(
+                settings =>
+                {
+                    string? Value(string key) => settings.FirstOrDefault(s => s.Key == key)?.Value;
+
+                    _baseUrl = Value(PublicSiteBaseUrlKey) ?? "";
+                    _waPhone = Value(WhatsappNumberKey) ?? "";
+                    _telPhone = Value(ContactPhoneKey) ?? "";
+                    _to = Value(ContactEmailKey) ?? "";
+                },
+                // A settings read failure leaves every field blank, which is exactly
+                // the pre-fill-less behaviour — nothing to report to the user.
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    /// <summary>
+    /// Switching target clears the result — otherwise the box would still hold, say,
+    /// a WhatsApp link while the form in front of the user says "e-mail", and Copy
+    /// would hand them the wrong URL.
+    /// </summary>
+    private void SwitchTo(BuilderKind kind)
+    {
+        if (_kind == kind) return;
+        _kind = kind;
+        _url = "";
+        _error = null;
+    }
+
+    private static string IconFor(BuilderKind kind) => kind switch
+    {
+        BuilderKind.WhatsApp => "bi-whatsapp",
+        BuilderKind.Utm => "bi-graph-up-arrow",
+        BuilderKind.Email => "bi-envelope",
+        BuilderKind.Phone => "bi-telephone",
+        _ => "bi-link-45deg",
+    };
+
+    private void Build()
+    {
+        _error = null;
+        _url = "";
+
+        switch (_kind)
+        {
+            case BuilderKind.WhatsApp: BuildWhatsApp(); break;
+            case BuilderKind.Utm: BuildUtm(); break;
+            case BuilderKind.Email: BuildEmail(); break;
+            case BuilderKind.Phone: BuildPhone(); break;
+        }
+    }
+
+    private void BuildWhatsApp()
+    {
+        string digits = NormalisePhone(_waPhone);
+        // WhatsApp needs a full international number and rejects anything shorter,
+        // so catching it here beats sending the user off to an error page there.
+        if (digits.Length < 8)
+        {
+            _error = L["UrlBuilder_ErrorPhone"];
+            return;
+        }
+
+        _url = string.IsNullOrWhiteSpace(_message)
+            ? $"https://wa.me/{digits}"
+            : $"https://wa.me/{digits}?text={Uri.EscapeDataString(_message)}";
+    }
+
+    private void BuildPhone()
+    {
+        string digits = NormalisePhone(_telPhone);
+        if (digits.Length < 8)
+        {
+            _error = L["UrlBuilder_ErrorPhone"];
+            return;
+        }
+
+        // Leading "+" kept: it is what tells the dialler the number is international,
+        // so the link works when the visitor is in another country.
+        _url = $"tel:+{digits}";
+    }
+
+    private void BuildEmail()
+    {
+        string to = _to.Trim();
+        if (!IsPlausibleEmail(to))
+        {
+            _error = L["UrlBuilder_ErrorEmail"];
+            return;
+        }
+
+        List<string> parts = [];
+        if (!string.IsNullOrWhiteSpace(_subject))
+            parts.Add($"subject={Uri.EscapeDataString(_subject)}");
+        if (!string.IsNullOrWhiteSpace(_body))
+            parts.Add($"body={Uri.EscapeDataString(_body)}");
+
+        _url = parts.Count == 0 ? $"mailto:{to}" : $"mailto:{to}?{string.Join("&", parts)}";
+    }
+
+    private void BuildUtm()
+    {
+        if (!Uri.TryCreate(_baseUrl.Trim(), UriKind.Absolute, out Uri? uri)
+            || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+        {
+            _error = L["UrlBuilder_ErrorBaseUrl"];
+            return;
+        }
+
+        // Analytics tools treat utm values case-sensitively, so "Instagram" and
+        // "instagram" become two separate sources and split the same campaign's
+        // numbers in half. Lower-casing here removes a whole class of silently
+        // wrong reports.
+        List<KeyValuePair<string, string>> utm =
+        [
+            new("utm_source", _utmSource.Trim().ToLowerInvariant()),
+            new("utm_medium", _utmMedium.Trim().ToLowerInvariant()),
+            new("utm_campaign", _utmCampaign.Trim().ToLowerInvariant()),
+        ];
+        if (!string.IsNullOrWhiteSpace(_utmTerm))
+            utm.Add(new("utm_term", _utmTerm.Trim().ToLowerInvariant()));
+        if (!string.IsNullOrWhiteSpace(_utmContent))
+            utm.Add(new("utm_content", _utmContent.Trim().ToLowerInvariant()));
+
+        // Keep whatever query the page already carries, but drop any utm_* already
+        // there: re-tagging an already-tagged link is the normal case, and appending
+        // a second utm_source would leave the analytics tool to pick one at random.
+        List<KeyValuePair<string, string>> query =
+        [
+            .. ParseQuery(uri.Query).Where(p => !p.Key.StartsWith("utm_", StringComparison.OrdinalIgnoreCase)),
+            .. utm,
+        ];
+
+        string queryString = string.Join("&", query.Select(p =>
+            $"{Uri.EscapeDataString(p.Key)}={Uri.EscapeDataString(p.Value)}"));
+
+        // Fragment last: parameters after a "#" are never sent to the server, so a
+        // tagged link with an anchor would otherwise lose its tracking entirely.
+        _url = $"{uri.GetLeftPart(UriPartial.Path)}?{queryString}{uri.Fragment}";
+    }
+
+    private static List<KeyValuePair<string, string>> ParseQuery(string query)
+    {
+        List<KeyValuePair<string, string>> pairs = [];
+        foreach (string part in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            int eq = part.IndexOf('=', StringComparison.Ordinal);
+            pairs.Add(eq < 0
+                ? new KeyValuePair<string, string>(Uri.UnescapeDataString(part), "")
+                : new KeyValuePair<string, string>(
+                    Uri.UnescapeDataString(part[..eq]),
+                    Uri.UnescapeDataString(part[(eq + 1)..])));
+        }
+        return pairs;
+    }
+
+    /// <summary>
+    /// Reduces however the number was typed to the bare international digits.
+    /// Spaces, dashes, brackets, a leading plus and the double-zero prefix are all
+    /// things people legitimately type — silently accepting them is the difference
+    /// between a tool that works and one that scolds.
+    /// </summary>
+    private static string NormalisePhone(string raw)
+    {
+        string digits = new([.. raw.Where(char.IsDigit)]);
+        // A leading double zero is the spoken-out form of the plus sign, so it
+        // carries no extra meaning once the plus itself has been stripped.
+        if (digits.StartsWith("00", StringComparison.Ordinal))
+            digits = digits[2..];
+        return digits;
+    }
+
+    /// <summary>
+    /// Shape check only. Deliberately not a full RFC validator: those reject valid
+    /// addresses, and the real confirmation is the mail actually arriving. This
+    /// exists to catch the obvious slip (a missing @@ or domain).
+    /// </summary>
+    private static bool IsPlausibleEmail(string value)
+    {
+        int at = value.IndexOf('@', StringComparison.Ordinal);
+        return at > 0
+               && at == value.LastIndexOf('@')
+               && value.IndexOf('.', at) > at + 1
+               && !value.EndsWith('.')
+               && !value.Contains(' ', StringComparison.Ordinal);
+    }
+
+}

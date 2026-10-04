@@ -1,0 +1,334 @@
+﻿@page "/dashboard"
+@layout CMSLayout
+@using Application.Features.Queries.Analytics.GetPageViewStats
+@using Application.Features.Queries.Dashboard.GetDashboardOverview
+@using Application.Features.Queries.SiteHealth.GetSiteHealth
+
+<PageTitle>@L["Dashboard_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+            <h1>@L["Dashboard_Title"]</h1>
+            <p>@L["Dashboard_Subtitle"]</p>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <button class="btn-cms btn-sm-cms @(!_customRangeActive && _days == 1 ? "btn-primary-cms" : "btn-ghost")" @onclick="() => ChangePeriod(1)">@L["Dashboard_Period24h"]</button>
+            <button class="btn-cms btn-sm-cms @(!_customRangeActive && _days == 7 ? "btn-primary-cms" : "btn-ghost")" @onclick="() => ChangePeriod(7)">@L["Dashboard_Period7d"]</button>
+            <button class="btn-cms btn-sm-cms @(!_customRangeActive && _days == 30 ? "btn-primary-cms" : "btn-ghost")" @onclick="() => ChangePeriod(30)">@L["Dashboard_Period30d"]</button>
+            <span class="topbar-sep" style="height:20px"></span>
+            <input type="date" class="cms-input" style="width:150px" value="@_customFrom" max="@_customTo"
+                   @onchange="e => { _customFrom = e.Value?.ToString() ?? string.Empty; }" title="@L["Dashboard_CustomFrom"]" />
+            <span style="color:var(--cms-text-muted);font-size:12px">–</span>
+            <input type="date" class="cms-input" style="width:150px" value="@_customTo" min="@_customFrom"
+                   @onchange="e => { _customTo = e.Value?.ToString() ?? string.Empty; }" title="@L["Dashboard_CustomTo"]" />
+            <button class="btn-cms btn-sm-cms @(_customRangeActive ? "btn-primary-cms" : "btn-ghost")"
+                    disabled="@(string.IsNullOrEmpty(_customFrom) || string.IsNullOrEmpty(_customTo))"
+                    @onclick="ApplyCustomRange">
+                @L["Dashboard_ApplyRange"]
+            </button>
+        </div>
+    </div>
+</div>
+
+<MilestoneStrip />
+
+@* ── System health ────────────────────────────────────────────────────────
+   The header indicator only appears when something is wrong, which is right for
+   an alarm but leaves nowhere to answer "is everything actually fine?". This
+   panel always renders, so a clean board is itself the answer. *@
+<div class="cms-card dash-health">
+    <div class="dash-health-head">
+        <span><i class="bi bi-activity"></i> @L["Dashboard_SystemHealth"]</span>
+        @if (_health is not null)
+        {
+            <span class="badge-cms @HealthBadgeClass">
+                @(_health.HasIssues
+                    ? string.Format(L["Dashboard_HealthIssueCount"], _health.Issues.Count)
+                    : L["Dashboard_HealthAllClear"])
+            </span>
+        }
+    </div>
+
+    @if (_health is null)
+    {
+        <div class="dash-health-empty"><i class="bi bi-arrow-clockwise spin"></i></div>
+    }
+    else if (!_health.HasIssues)
+    {
+        <div class="dash-health-ok">
+            <i class="bi bi-check-circle-fill"></i> @L["Dashboard_HealthOkDetail"]
+        </div>
+    }
+    else
+    {
+        <div class="dash-health-list">
+            @foreach (SiteHealthIssue issue in _health.Issues)
+            {
+                <div class="dash-health-item @(issue.Severity == SiteHealthSeverity.Error ? "dhi-error" : "dhi-warning")">
+                    <i class="bi @(issue.Severity == SiteHealthSeverity.Error ? "bi-x-octagon-fill" : "bi-exclamation-triangle-fill")"></i>
+                    <div>
+                        <div class="dash-health-title">@L[$"SiteHealth_{issue.Code}_Title"]</div>
+                        <div class="dash-health-detail">@L[$"SiteHealth_{issue.Code}_Detail"]</div>
+                        @if (!string.IsNullOrWhiteSpace(issue.Detail))
+                        {
+                            <code class="dash-health-tech">@issue.Detail</code>
+                        }
+                    </div>
+                    @if (!string.IsNullOrWhiteSpace(issue.ActionPath))
+                    {
+                        <a href="@issue.ActionPath" class="dash-health-link">@L["SiteHealth_GoFix"] <i class="bi bi-arrow-right-short"></i></a>
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@* ── Site-wide content health (not personal — the rest of the personalized
+     overview lives on the home page at "/") ── *@
+@if (_overview is not null)
+{
+    <div style="margin-bottom:24px">
+        <div class="cms-card" style="padding:20px;max-width:420px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                <i class="bi bi-file-earmark-text"></i> @L["Dashboard_ContentHealth"]
+            </div>
+            @{
+                int contentTotal = Math.Max(1, _overview.ContentHealth.Draft + _overview.ContentHealth.Published + _overview.ContentHealth.Archived);
+                double draftPct = 100.0 * _overview.ContentHealth.Draft / contentTotal;
+                double publishedPct = 100.0 * _overview.ContentHealth.Published / contentTotal;
+                double archivedPct = 100.0 * _overview.ContentHealth.Archived / contentTotal;
+            }
+            <div style="display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--cms-bg);margin-bottom:12px">
+                <div style="width:@(draftPct)%;background:var(--cms-warning)" title="@L["Pages_StatusDraft"]"></div>
+                <div style="width:@(publishedPct)%;background:var(--cms-success)" title="@L["Pages_StatusPublished"]"></div>
+                <div style="width:@(archivedPct)%;background:var(--cms-text-dim)" title="@L["Pages_StatusArchived"]"></div>
+            </div>
+            <div style="display:flex;gap:14px;font-size:12px;color:var(--cms-text-muted);flex-wrap:wrap">
+                <span><i class="bi bi-circle-fill" style="color:var(--cms-warning);font-size:8px"></i> @L["Pages_StatusDraft"]: @_overview.ContentHealth.Draft</span>
+                <span><i class="bi bi-circle-fill" style="color:var(--cms-success);font-size:8px"></i> @L["Pages_StatusPublished"]: @_overview.ContentHealth.Published</span>
+                <span><i class="bi bi-circle-fill" style="color:var(--cms-text-dim);font-size:8px"></i> @L["Pages_StatusArchived"]: @_overview.ContentHealth.Archived</span>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else if (_stats is null)
+{
+    <div style="padding:48px;text-align:center;color:var(--cms-text-muted);border:1px dashed var(--cms-border);border-radius:8px">
+        @L["Dashboard_LoadError"]
+    </div>
+}
+else
+{
+    @* ── Stat cards ─────────────────────────────────────────────────────── *@
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:24px">
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted)">@L["Dashboard_TotalViews"]</div>
+            <div style="font-size:32px;font-weight:700;margin-top:6px">@_stats.TotalViews.ToString("N0")</div>
+        </div>
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted)">@L["Dashboard_UniqueVisitors"]</div>
+            <div style="font-size:32px;font-weight:700;margin-top:6px">@_stats.UniqueVisitors.ToString("N0")</div>
+        </div>
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted)">@L["Dashboard_AvgDuration"]</div>
+            <div style="font-size:32px;font-weight:700;margin-top:6px">@FormatDuration(_stats.AvgDurationSeconds)</div>
+        </div>
+    </div>
+
+    @* ── Daily bar chart ─────────────────────────────────────────────────── *@
+    @if (_stats.Daily.Count > 1)
+    {
+        int maxViews = Math.Max(1, _stats.Daily.Count > 0 ? _stats.Daily.Max(d => d.Views) : 1);
+        <div class="cms-card" style="padding:20px;margin-bottom:24px">
+            <div style="font-size:13px;font-weight:600;color:var(--cms-text-muted);margin-bottom:14px">
+                <i class="bi bi-bar-chart"></i> @L["Dashboard_DailyChart"]
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:4px;height:130px">
+                @foreach (DailyViewStat day in _stats.Daily)
+                {
+                    int heightPx = (int)Math.Round(120.0 * day.Views / maxViews);
+                    <div title="@($"{day.Date:dd.MM.yyyy} — {day.Views}")"
+                         style="flex:1;min-width:4px;height:@(Math.Max(heightPx, 2))px;border-radius:3px 3px 0 0;background:@(day.Views > 0 ? "var(--cms-accent)" : "var(--cms-border)");opacity:@(day.Views > 0 ? "1" : ".6")"></div>
+                }
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--cms-text-dim);margin-top:6px">
+                <span>@_stats.Daily.FirstOrDefault()?.Date.ToString("dd MMM")</span>
+                <span>@_stats.Daily.LastOrDefault()?.Date.ToString("dd MMM")</span>
+            </div>
+        </div>
+    }
+
+    @* ── Most read pages ─────────────────────────────────────────────────── *@
+    <div class="cms-card" style="overflow:hidden">
+        <div style="padding:16px 16px 0;font-size:13px;font-weight:600;color:var(--cms-text-muted)">
+            <i class="bi bi-fire"></i> @L["Dashboard_TopPages"]
+        </div>
+        @if (_stats.TopPages.Count == 0)
+        {
+            <div style="padding:32px;text-align:center;color:var(--cms-text-muted)">@L["Dashboard_NoData"]</div>
+        }
+        else
+        {
+            int topViews = Math.Max(1, _stats.TopPages[0].Views);
+            <table style="width:100%;border-collapse:collapse;margin-top:8px">
+                <thead>
+                    <tr style="text-align:left;border-bottom:1px solid var(--cms-border);color:var(--cms-text-muted);font-size:13px">
+                        <th style="padding:10px 16px">@L["Dashboard_ColPage"]</th>
+                        <th style="padding:10px 16px;width:220px">@L["Dashboard_ColViews"]</th>
+                        <th style="padding:10px 16px;width:110px;text-align:right">@L["Dashboard_ColAvgDuration"]</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (TopPageStat pageStat in _stats.TopPages)
+                    {
+                        int barPercent = (int)Math.Round(100.0 * pageStat.Views / topViews);
+                        <tr style="border-bottom:1px solid var(--cms-border)">
+                            <td style="padding:10px 16px">
+                                <div style="font-weight:600;font-size:13.5px">@(string.IsNullOrEmpty(pageStat.Title) ? pageStat.Path : pageStat.Title)</div>
+                                <div style="font-size:11.5px;color:var(--cms-text-muted)"><code>@pageStat.Path</code></div>
+                            </td>
+                            <td style="padding:10px 16px">
+                                <div style="display:flex;align-items:center;gap:10px">
+                                    <div style="flex:1;height:8px;border-radius:4px;background:var(--cms-bg);overflow:hidden">
+                                        <div style="width:@(barPercent)%;height:100%;background:var(--cms-accent)"></div>
+                                    </div>
+                                    <span style="font-size:13px;font-weight:600;min-width:40px;text-align:right">@pageStat.Views.ToString("N0")</span>
+                                </div>
+                            </td>
+                            <td style="padding:10px 16px;text-align:right;color:var(--cms-text-muted);font-size:13px">@FormatDuration(pageStat.AvgDurationSeconds)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    private PageViewStatsResponse? _stats;
+    private DashboardOverviewResponse? _overview;
+    private bool _loading = true;
+    private int _days = 7;
+    private bool _customRangeActive;
+    private string _customFrom = "";
+    private string _customTo = "";
+
+    private SiteHealthResponse? _health;
+
+    private string HealthBadgeClass
+    {
+        get
+        {
+            if (_health is null or { HasIssues: false }) return "badge-success";
+            return _health.WorstSeverity == SiteHealthSeverity.Error ? "badge-danger" : "badge-warning";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadStats();
+        await LoadOverview();
+        await LoadHealth();
+    }
+
+    private async Task LoadHealth()
+    {
+        try
+        {
+            (await Sender.Send(new GetSiteHealthQuery())).Match(
+                health => _health = health,
+                // Leaving it null shows the spinner rather than an "all clear" the
+                // check never actually established.
+                _ => _health = null);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _health = null;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadOverview()
+    {
+        try
+        {
+            (await Sender.Send(new GetDashboardOverviewQuery())).Match(
+                overview => _overview = overview,
+                _ => _overview = null);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _overview = null;
+        }
+        finally
+        {
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task ChangePeriod(int days)
+    {
+        _days = days;
+        _customRangeActive = false;
+        await LoadStats();
+    }
+
+    private async Task ApplyCustomRange()
+    {
+        if (!DateOnly.TryParse(_customFrom, System.Globalization.CultureInfo.InvariantCulture, out DateOnly from)
+            || !DateOnly.TryParse(_customTo, System.Globalization.CultureInfo.InvariantCulture, out DateOnly to))
+            return;
+
+        if (from > to)
+            (from, to) = (to, from);
+
+        _customRangeActive = true;
+        await LoadStats(from.ToDateTime(TimeOnly.MinValue), to.ToDateTime(TimeOnly.MaxValue));
+    }
+
+    private async Task LoadStats(DateTime? fromUtc = null, DateTime? toUtc = null)
+    {
+        _loading = true;
+        try
+        {
+            GetPageViewStatsQuery query = fromUtc.HasValue && toUtc.HasValue
+                ? new GetPageViewStatsQuery(_days, fromUtc, toUtc)
+                : new GetPageViewStatsQuery(_days);
+
+            (await Sender.Send(query)).Match(
+                stats => _stats = stats,
+                error =>
+                {
+                    _stats = null;
+                    Toast.Error(L.Error(error));
+                });
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _stats = null;
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string FormatDuration(int seconds) =>
+        seconds >= 60 ? $"{seconds / 60}:{seconds % 60:D2}" : $"0:{seconds:D2}";
+}

@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+		<PackageReference Include="Microsoft.Extensions.Http" />
+		<PackageReference Include="Microsoft.Extensions.Caching.Memory" />
+		<PackageReference Include="StackExchange.Redis" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="ArchitectureTests" />
+		<InternalsVisibleTo Include="Application.UnitTests" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Core\Application\Application.csproj" />
+	</ItemGroup>
+</Project>

@@ -1,0 +1,420 @@
+﻿@implements IDisposable
+
+<div class="note-panel-toolbar">
+    <div class="note-search-wrap">
+        <i class="bi bi-search note-search-icon"></i>
+        <input class="note-search-input" placeholder="@L["UserNotes_Search"]"
+               @bind="_search" @bind:event="oninput" />
+    </div>
+    <button class="btn-cms btn-ghost btn-sm-cms" @onclick="OpenAnnouncement">
+        <i class="bi bi-megaphone"></i> @L["Announcements_NewBtn"]
+    </button>
+    <button class="btn-cms btn-primary-cms btn-sm-cms" @onclick="OpenCreate">
+        <i class="bi bi-plus-lg"></i> @L["UserNotes_NewNote"]
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div style="display:flex;align-items:center;justify-content:center;padding:60px">
+        <div class="cms-loading-spinner"></div>
+    </div>
+}
+else if (!GetFilteredNotes().Any())
+{
+    <div style="text-align:center;padding:40px 20px;color:var(--cms-text-muted)">
+        <i class="bi bi-sticky" style="font-size:36px;display:block;margin-bottom:12px;opacity:.4"></i>
+        <p>@L["UserNotes_Empty"]</p>
+    </div>
+}
+else
+{
+    @* ── Pinned group ────────────────────────────────────────────────── *@
+    var pinned = GetFilteredNotes().Where(n => n.IsPinned).ToList();
+    @if (pinned.Count > 0)
+    {
+        <div class="note-group">
+            <div class="note-group-header">
+                <i class="bi bi-pin-angle-fill"></i>
+                <span>@L["UserNotes_GroupPinned"]</span>
+                <span class="note-group-count">@pinned.Count</span>
+            </div>
+            <div class="note-card-grid">
+                @foreach (var note in pinned) { @NoteCard(note) }
+            </div>
+        </div>
+    }
+
+    @* ── Per-type groups ─────────────────────────────────────────────── *@
+    @foreach (var group in GetFilteredNotes().Where(n => !n.IsPinned).GroupBy(n => n.Type).OrderBy(g => (int)g.Key))
+    {
+        <div class="note-group">
+            <div class="note-group-header">
+                <i class="@NoteTypeIcon(group.Key)"></i>
+                <span>@L[$"UserNotes_Group{group.Key}"]</span>
+                <span class="note-group-count">@group.Count()</span>
+            </div>
+            <div class="note-card-grid">
+                @foreach (var note in group) { @NoteCard(note) }
+            </div>
+        </div>
+    }
+}
+
+@* ── Create / Edit modal ──────────────────────────────────────────────────── *@
+<CmsModal Title="@ModalTitle"
+          IsVisible="_showForm"
+          OnClose="CloseForm"
+          Size="md">
+    <Body>
+        @if (_isAnnouncement)
+        {
+            <p class="ann-form-hint"><i class="bi bi-megaphone"></i> @L["Announcements_FormHint"]</p>
+        }
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["UserNotes_FormTitle"] <span style="color:var(--cms-danger)">*</span></label>
+                <input @bind="_form.Title" class="cms-input" placeholder="@L["UserNotes_FormTitlePlaceholder"]" />
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["UserNotes_FormColor"]</label>
+                <select @bind="_form.Color" class="cms-input">
+                    <option value="">@L["UserNotes_FormColorDefault"]</option>
+                    <option value="#FFF3CD">@L["UserNotes_FormColorYellow"]</option>
+                    <option value="#D1ECF1">@L["UserNotes_FormColorBlue"]</option>
+                    <option value="#D4EDDA">@L["UserNotes_FormColorGreen"]</option>
+                    <option value="#F8D7DA">@L["UserNotes_FormColorRed"]</option>
+                    <option value="#E2E3E5">@L["UserNotes_FormColorGray"]</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UserNotes_FormContent"] <span style="color:var(--cms-danger)">*</span></label>
+            <textarea @bind="_form.Content" class="cms-input" rows="5" placeholder="@L["UserNotes_FormContentPlaceholder"]"></textarea>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["UserNotes_FormType"]</label>
+                <select @bind="_form.Type" class="cms-input">
+                    @foreach (NoteType t in Enum.GetValues<NoteType>())
+                    {
+                        <option value="@t">@L[$"UserNotes_Type{t}"]</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["UserNotes_FormVisibility"]</label>
+                @* Announcements are defined by being visible to everyone, so the
+                   picker is pinned — letting it be switched back to Private would
+                   silently turn the announcement into an ordinary note. *@
+                <select @bind="_form.Visibility" class="cms-input" disabled="@_isAnnouncement">
+                    @foreach (NoteVisibility v in Enum.GetValues<NoteVisibility>())
+                    {
+                        <option value="@v">@L[$"UserNotes_Visibility{v}"]</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group" style="display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:4px">
+                <div style="display:flex;flex-direction:column;gap:12px">
+                    <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                        <label class="cms-toggle">
+                            <input type="checkbox" @bind="_form.IsPinned" />
+                            <span class="cms-toggle-slider"></span>
+                        </label>
+                        <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["UserNotes_FormPinned"]</span>
+                    </label>
+                    @if (_editId.HasValue)
+                    {
+                        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                            <label class="cms-toggle">
+                                <input type="checkbox" @bind="_form.IsArchived" />
+                                <span class="cms-toggle-slider"></span>
+                            </label>
+                            <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["UserNotes_FormArchived"]</span>
+                        </label>
+                    }
+                </div>
+            </div>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["UserNotes_FormActive"]</label>
+                <label class="cms-toggle">
+                    <input type="checkbox" @bind="_form.IsActive" />
+                    <span class="cms-toggle-slider"></span>
+                </label>
+            </div>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseForm">@L["UserNotes_FormCancel"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="SaveForm" disabled="@_saving">
+            @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+            else { <i class="bi bi-check2"></i> }
+            @L["UserNotes_FormSave"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete confirmation ─────────────────────────────────────────────────── *@
+<CmsModal Title="@L["UserNotes_DeleteTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-warning);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">@string.Format(L["UserNotes_DeleteConfirm"], _deleteTarget?.Title)</p>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["UserNotes_FormCancel"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_saving">
+            @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+            else { <i class="bi bi-trash3"></i> }
+            @L["UserNotes_DeleteConfirmBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<UserNoteResponse> _notes = [];
+    private bool _loading = true;
+    private CancellationTokenSource? _loadCts;
+    private string _search = "";
+
+    private IEnumerable<UserNoteResponse> GetFilteredNotes() =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _notes
+            : _notes.Where(n =>
+                n.Title.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                n.Content.Contains(_search, StringComparison.OrdinalIgnoreCase));
+
+    private bool _showForm;
+    private bool _saving;
+    private int? _editId;
+    private NoteFormModel _form = new();
+    private bool _showDelete;
+    private UserNoteResponse? _deleteTarget;
+
+    protected override async Task OnInitializedAsync() => await LoadNotes();
+
+    private async Task LoadNotes(bool forceReload = false)
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        if (!forceReload && _notes.Count > 0) { _loading = false; return; }
+
+        _loading = true;
+        try
+        {
+            Result<PagedResult<UserNoteResponse>> result = await Sender.Send(new GetUserNotesQuery(), ct);
+            result.Match(
+                success => { _notes = [.. success.Items]; },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException) { /* expected when cancelled */ }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(L["UserNotes_ErrorLoad"]); }
+        finally { _loading = false; }
+    }
+
+    private bool _isAnnouncement;
+
+    private string ModalTitle
+    {
+        get
+        {
+            if (_isAnnouncement) return L["Announcements_CreateTitle"];
+            return _editId.HasValue ? L["UserNotes_EditTitle"] : L["UserNotes_CreateTitle"];
+        }
+    }
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        _isAnnouncement = false;
+        _form = new NoteFormModel();
+        _showForm = true;
+    }
+
+    /// <summary>
+    /// Same note form, saved as an announcement: an announcement IS a note shared
+    /// with everyone, so this only pre-sets the fields that make it one.
+    /// </summary>
+    private void OpenAnnouncement()
+    {
+        _editId = null;
+        _isAnnouncement = true;
+        _form = new NoteFormModel
+        {
+            Type = NoteType.Internal,
+            Visibility = NoteVisibility.Everyone,
+        };
+        _showForm = true;
+    }
+
+    private void OpenEdit(UserNoteResponse note)
+    {
+        _editId = note.Id;
+        _isAnnouncement = false;
+        _form = new NoteFormModel
+        {
+            Title = note.Title,
+            Content = note.Content,
+            Type = note.Type,
+            Visibility = note.Visibility,
+            Color = note.Color ?? "",
+            IsPinned = note.IsPinned,
+            IsArchived = note.IsArchived,
+            IsActive = note.IsActive,
+        };
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editId = null;
+        _isAnnouncement = false;
+        _form = new NoteFormModel();
+    }
+
+    private void OpenDelete(UserNoteResponse note)
+    {
+        _deleteTarget = note;
+        _showDelete = true;
+    }
+
+    private async Task SaveForm()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Title)) { Toast.Error(L["UserNotes_ValidationTitleRequired"]); return; }
+        if (string.IsNullOrWhiteSpace(_form.Content)) { Toast.Error(L["UserNotes_ValidationContentRequired"]); return; }
+
+        _saving = true;
+        try
+        {
+            string? color = string.IsNullOrEmpty(_form.Color) ? null : _form.Color;
+            Result result = _editId.HasValue
+            ? await Sender.Send(new UpdateUserNoteCommand(
+                _editId.Value, _form.Title, _form.Content, _form.Type, _form.Visibility,
+                color, _form.IsPinned, _form.IsArchived, _form.IsActive))
+                : await Sender.Send(new CreateUserNoteCommand(
+                    _form.Title, _form.Content, _form.Type, _form.Visibility,
+                    color, _form.IsPinned));
+
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                Toast.Success(SuccessMessage());
+                CloseForm();
+                await LoadNotes(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private string SuccessMessage()
+    {
+        if (_isAnnouncement) return L["Announcements_Created"];
+        return _editId.HasValue ? L["UserNotes_SuccessUpdate"] : L["UserNotes_SuccessCreate"];
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new DeleteUserNoteCommand(_deleteTarget.Id));
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                Toast.Success(string.Format(L["UserNotes_SuccessDelete"], _deleteTarget.Title));
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadNotes(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+    }
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength] + "…";
+
+    private static string NoteTypeIcon(NoteType type) => type switch
+    {
+        NoteType.Personal   => "bi bi-person-circle",
+        NoteType.Internal   => "bi bi-building",
+        NoteType.Editorial  => "bi bi-pencil-square",
+        NoteType.Customer   => "bi bi-people",
+        NoteType.System     => "bi bi-gear",
+        _                   => "bi bi-sticky"
+    };
+
+    private RenderFragment NoteCard(UserNoteResponse note) => __builder =>
+    {
+        string bg        = string.IsNullOrEmpty(note.Color) ? "var(--cms-card)"       : note.Color;
+        string textColor = string.IsNullOrEmpty(note.Color) ? "var(--cms-text)"       : "#1a1a2e";
+        string muted     = string.IsNullOrEmpty(note.Color) ? "var(--cms-text-muted)" : "rgba(26,26,46,.65)";
+        <div class="note-card" style="background:@bg;color:@textColor" @onclick="() => OpenEdit(note)">
+            <div class="note-card-top">
+                <span class="note-card-title" style="color:@textColor">@note.Title</span>
+                <div style="display:flex;gap:4px;align-items:center">
+                    @if (note.IsPinned)
+                    {
+                        <i class="bi bi-pin-fill" style="font-size:13px;color:var(--cms-accent)"></i>
+                    }
+                    <button class="note-card-delete" @onclick:stopPropagation @onclick="() => OpenDelete(note)">
+                        <i class="bi bi-trash3"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="note-card-content" style="color:@textColor">@Truncate(note.Content, 120)</div>
+            <div class="note-card-badges">
+                @if (note.Visibility != NoteVisibility.Private)
+                {
+                    <span class="note-visibility-badge">
+                        <i class="bi bi-people-fill"></i> @L[$"UserNotes_Visibility{note.Visibility}"]
+                    </span>
+                }
+            </div>
+            <div class="note-card-meta">
+                <div class="note-card-meta-line" style="color:@muted">
+                    <i class="bi bi-person" style="font-size:10px"></i>
+                    <span>@note.CreatedBy</span>
+                    <span style="opacity:.5">·</span>
+                    <span>@note.CreateDate.ToString("dd MMM yyyy")</span>
+                </div>
+                @if (note.UpdateDate.HasValue && !string.IsNullOrWhiteSpace(note.UpdatedBy))
+                {
+                    <div class="note-card-meta-line note-card-meta-updated" style="color:@muted">
+                        <i class="bi bi-pencil" style="font-size:10px"></i>
+                        <span>@note.UpdatedBy</span>
+                        <span style="opacity:.5">·</span>
+                        <span>@note.UpdateDate.Value.ToString("dd MMM yyyy")</span>
+                    </div>
+                }
+            </div>
+        </div>
+    };
+
+    }

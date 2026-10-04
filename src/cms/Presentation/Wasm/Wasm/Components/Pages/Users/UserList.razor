@@ -1,0 +1,427 @@
+@page "/users"
+@layout CMSLayout
+
+<PageTitle>@L["Users_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+            <h1>@L["Users_Title"]</h1>
+            <p>@L["Users_Subtitle"]</p>
+        </div>
+        <a href="/users/create" class="btn-cms btn-primary-cms">
+            <i class="bi bi-person-plus-fill"></i> @L["Users_NewUser"]
+        </a>
+    </div>
+</div>
+
+@* Role/status stay server-side filters (they narrow the query); free-text search,
+   sorting and paging are handled by the grid over the fetched set — the same
+   pattern as the Logs and Form Submissions pages. *@
+<div class="cms-card" style="margin-bottom:16px">
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+        <select @bind="_roleFilter" @bind:after="LoadData" class="cms-select" style="width:200px">
+            <option value="">@L["Users_AllRoles"]</option>
+            @foreach (string role in _roles)
+            {
+                <option value="@role">@RoleDisplayName(role)</option>
+            }
+        </select>
+        <select @bind="_activeFilter" @bind:after="LoadData" class="cms-select" style="width:160px">
+            <option value="">@L["Users_AllStatus"]</option>
+            <option value="true">@L["Status_Active"]</option>
+            <option value="false">@L["Status_Inactive"]</option>
+        </select>
+    </div>
+</div>
+
+<ElevareGrid TItem="UserResponse"
+             Data="_users"
+             Loading="_loading"
+             Title="@L["Users_Title"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="false"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Users_Empty"]"
+             PageSize="20" />
+
+<!-- Manual password-set modal -->
+<CmsModal Title="@L["UserEdit_SetPasswordTitle"]" IsVisible="_setPasswordTarget is not null" OnClose="() => _setPasswordTarget = null">
+    <Body>
+        <p style="color:var(--cms-text-muted);font-size:13px">
+            @string.Format(L["UserEdit_SetPasswordHint"], _setPasswordTarget?.FullName ?? "")
+        </p>
+        <div class="form-group">
+            <label class="cms-label">@L["UserEdit_SetPasswordNewLabel"]</label>
+            <input class="cms-input" type="text" @bind="_newPassword" @bind:event="oninput" placeholder="@L["UserEdit_PasswordEmailNotice_ManualPlaceholder"]" />
+            <button type="button" class="mt-1 btn-cms btn-ghost" @onclick="GenerateManualPassword">@L["UserEdit_SetPasswordGenerate"]</button>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _setPasswordTarget = null">@L["Users_DeleteCancel"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ExecuteSetPassword" disabled="@(_settingPassword || _newPassword.Length < 8)">
+            @if (_settingPassword) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-check2"></i> }
+            @L["UserEdit_SetPasswordConfirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
+<!-- Delete Confirm Modal -->
+<CmsModal Title="@L["Users_DeleteTitle"]" IsVisible="_deleteTarget is not null" OnClose="() => _deleteTarget = null">
+    <Body>
+        <p>
+            @string.Format(L["Users_DeleteConfirm"], _deleteTarget?.FullName ?? "")
+        </p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _deleteTarget = null">@L["Users_DeleteCancel"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ExecuteDelete" disabled="@_deleting">
+            @if (_deleting) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-trash3"></i> }
+            @L["Users_DeleteConfirmBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    // Large enough to cover an internal CMS's whole user list in one fetch, so the
+    // grid can filter/sort/page client-side (see the comment above the filter card).
+    private const int FetchPageSize = 500;
+
+    private List<UserResponse> _users = [];
+    private bool _loading = true;
+    private string _roleFilter = "";
+    private string _activeFilter = "";
+    private UserResponse? _deleteTarget;
+    private bool _deleting;
+    private List<string> _roles = [];
+
+    private UserResponse? _setPasswordTarget;
+    private string _newPassword = "";
+    private bool _settingPassword;
+    private Guid? _resendingId;
+
+    private List<GridColumnDef<UserResponse>> _columns = [];
+    private RenderFragment<UserResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.UsersManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadRoles();
+        await LoadData();
+    }
+
+    private async Task LoadRoles()
+    {
+        // Includes custom roles a SuperAdmin created in /admin/roles, not just the
+        // built-in ones.
+        (await Sender.Send(new GetRolesQuery())).Match(
+            roles => _roles = [.. roles.Select(r => r.Name)],
+            _ => _roles = []);
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<UserResponse>
+            {
+                PropertyName  = "FullName",
+                Title         = L["Users_ColUser"],
+                PropertyType  = typeof(string),
+                ValueAccessor = u => $"{u.FullName} {u.Email}",
+                CellTemplate  = UserTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<UserResponse>
+            {
+                PropertyName  = "Roles",
+                Title         = L["Users_ColRole"],
+                PropertyType  = typeof(string),
+                ValueAccessor = u => string.Join(", ", u.Roles),
+                CellTemplate  = RolesTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "200px",
+            },
+            new GridColumnDef<UserResponse>
+            {
+                PropertyName  = "IsActive",
+                Title         = L["Common_Status"],
+                PropertyType  = typeof(string),
+                ValueAccessor = u => u.IsActive ? L["Status_Active"] : L["Status_Inactive"],
+                CellTemplate  = StatusTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "130px",
+            },
+            new GridColumnDef<UserResponse>
+            {
+                PropertyName  = "HasPassword",
+                Title         = L["Users_ColPasswordStatus"],
+                PropertyType  = typeof(string),
+                ValueAccessor = u => PasswordStatusLabel(u),
+                CellTemplate  = PasswordStatusTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "170px",
+            },
+            new GridColumnDef<UserResponse>
+            {
+                PropertyName  = "LastLoginDate",
+                Title         = L["Users_ColLastLogin"],
+                PropertyType  = typeof(DateTime?),
+                ValueAccessor = u => (object?)u.LastLoginDate,
+                CellTemplate  = LastLoginTemplate,
+                Sortable      = true,
+                Width         = "150px",
+            },
+            new GridColumnDef<UserResponse>
+            {
+                PropertyName  = "CreateDate",
+                Title         = L["Users_ColRegDate"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = u => (object?)u.CreateDate,
+                CellTemplate  = CreatedTemplate,
+                Sortable      = true,
+                Width         = "130px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private static RenderFragment<UserResponse> UserTemplate => u => __builder =>
+    {
+        <div style="display:flex;align-items:center;gap:12px">
+            @if (!string.IsNullOrEmpty(u.Avatar))
+            {
+                <img class="avatar" src="@u.Avatar" alt="" />
+            }
+            else
+            {
+                <div class="avatar">@GetInitials(u.FullName)</div>
+            }
+            <div>
+                <div style="font-weight:500">@u.FullName</div>
+                <div style="font-size:12px;color:var(--cms-text-muted)">@u.Email</div>
+            </div>
+        </div>
+    };
+
+    private RenderFragment<UserResponse> RolesTemplate => u => __builder =>
+    {
+        @foreach (string role in u.Roles)
+        {
+            <span class="badge-cms badge-accent" style="margin-right:4px">@RoleDisplayName(role)</span>
+        }
+    };
+
+    private RenderFragment<UserResponse> StatusTemplate => u => __builder =>
+    {
+        @if (u.IsActive)
+        {
+            <span class="badge-cms badge-success"><i class="bi bi-circle-fill" style="font-size:7px"></i> @L["Status_Active"]</span>
+        }
+        else
+        {
+            <span class="badge-cms badge-neutral"><i class="bi bi-circle-fill" style="font-size:7px"></i> @L["Status_Inactive"]</span>
+        }
+    };
+
+    private RenderFragment<UserResponse> PasswordStatusTemplate => u => __builder =>
+    {
+        @if (u.HasPassword)
+        {
+            <span class="badge-cms badge-success"><i class="bi bi-check-circle-fill" style="font-size:10px"></i> @L["Users_PasswordActive"]</span>
+        }
+        else if (u.PendingSetupExpiresAtUtc is null)
+        {
+            <span class="badge-cms badge-neutral">@L["Users_PasswordNoLink"]</span>
+        }
+        else if (u.PendingSetupExpiresAtUtc.Value > DateTime.UtcNow)
+        {
+            <span class="badge-cms badge-info" title="@u.PendingSetupExpiresAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")">
+                @string.Format(L["Users_PasswordPending"], DaysLeft(u.PendingSetupExpiresAtUtc.Value))
+            </span>
+        }
+        else
+        {
+            <span class="badge-cms badge-warning">@L["Users_PasswordExpired"]</span>
+        }
+    };
+
+    private string PasswordStatusLabel(UserResponse u)
+    {
+        if (u.HasPassword) return L["Users_PasswordActive"];
+        if (u.PendingSetupExpiresAtUtc is null) return L["Users_PasswordNoLink"];
+        if (u.PendingSetupExpiresAtUtc.Value > DateTime.UtcNow) return L["Users_PasswordPending"];
+        return L["Users_PasswordExpired"];
+    }
+
+    private static int DaysLeft(DateTime expiresAtUtc) =>
+        Math.Max(0, (int)Math.Ceiling((expiresAtUtc - DateTime.UtcNow).TotalDays));
+
+    private static RenderFragment<UserResponse> LastLoginTemplate => u => __builder =>
+    {
+        <span style="color:var(--cms-text-muted);font-size:12px">
+            @(u.LastLoginDate.HasValue ? u.LastLoginDate.Value.ToString("dd.MM.yyyy HH:mm") : "—")
+        </span>
+    };
+
+    private static RenderFragment<UserResponse> CreatedTemplate => u => __builder =>
+    {
+        <span style="color:var(--cms-text-muted);font-size:12px">@u.CreateDate.ToString("dd.MM.yyyy")</span>
+    };
+
+    private RenderFragment<UserResponse> ActionButtons => u => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            @if (!u.HasPassword)
+            {
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon"
+                        title="@L["Users_ResendSetupLink"]"
+                        disabled="@(_resendingId == u.Id)"
+                        @onclick="() => ResendSetupLink(u)">
+                    @if (_resendingId == u.Id) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-envelope-arrow-up"></i> }
+                </button>
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon"
+                        title="@L["Users_SetPasswordManually"]"
+                        @onclick="() => OpenSetPassword(u)">
+                    <i class="bi bi-key"></i>
+                </button>
+            }
+            <a href="/users/edit/@u.Id" class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]">
+                <i class="bi bi-pencil"></i>
+            </a>
+            <button class="btn-cms btn-danger-cms btn-sm-cms btn-icon"
+                    title="@L["Common_Delete"]"
+                    @onclick="() => ConfirmDelete(u)">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+    };
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            bool? isActive = _activeFilter switch { "true" => true, "false" => false, _ => null };
+
+            GetUsersQuery query = new(
+                Email: null,
+                Role: string.IsNullOrWhiteSpace(_roleFilter) ? null : _roleFilter,
+                IsActive: isActive,
+                Page: 1,
+                PageSize: FetchPageSize);
+
+            (await Sender.Send(query)).Match(
+                paged => _users = [.. paged.Items],
+                error => Toast.Error(L.Error(error)));
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ConfirmDelete(UserResponse user) => _deleteTarget = user;
+
+    private async Task ExecuteDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeleteUserCommand(_deleteTarget.Id, Guid.Empty)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Users_Toast_Deleted"]);
+                _deleteTarget = null;
+                await LoadData();
+            }
+        }
+        finally { _deleting = false; }
+    }
+
+    private void OpenSetPassword(UserResponse user)
+    {
+        _setPasswordTarget = user;
+        _newPassword = "";
+    }
+
+    private void GenerateManualPassword()
+    {
+        _newPassword = SpectraUtil.PasswordHelper.CreateStardartPassword;
+    }
+
+    private async Task ExecuteSetPassword()
+    {
+        if (_setPasswordTarget is null || _newPassword.Length < 8) return;
+        _settingPassword = true;
+        try
+        {
+            Result r = await Sender.Send(new SetUserPasswordManuallyCommand(_setPasswordTarget.Id, _newPassword));
+            if (r.IsSuccess)
+            {
+                Toast.Success(L["UserEdit_SetPasswordToast_Success"]);
+                _setPasswordTarget = null;
+                await LoadData();
+            }
+            else
+            {
+                Toast.Error(L.Error(r.Error));
+            }
+        }
+        finally { _settingPassword = false; }
+    }
+
+    private async Task ResendSetupLink(UserResponse user)
+    {
+        _resendingId = user.Id;
+        try
+        {
+            Result<bool> r = await Sender.Send(new ResendPasswordSetupCommand(user.Id, Nav.BaseUri));
+            r.Match(
+                emailSent => Toast.Success(emailSent
+                    ? L["Users_ResendSetupLink_Success"]
+                    : L["Users_ResendSetupLink_EmailFailed"]),
+                error => Toast.Error(L.Error(error)));
+            await LoadData();
+        }
+        finally { _resendingId = null; }
+    }
+
+    // Mirrors UserCreateEdit.razor: built-in roles get a translated label, custom
+    // roles created in /admin/roles show their raw name.
+    private string RoleDisplayName(string role) => role switch
+    {
+        "SuperAdmin" => L["Roles_SuperAdmin"],
+        "Admin" => L["Roles_Admin"],
+        "Developer" => L["Roles_Developer"],
+        "Editor" => L["Roles_Editor"],
+        "Author" => L["Roles_Author"],
+        "Viewer" => L["Roles_Viewer"],
+        _ => role,
+    };
+
+    private static string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        string[] p = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return p.Length >= 2 ? $"{p[0][0]}{p[^1][0]}".ToUpperInvariant() : name[0].ToString().ToUpperInvariant();
+    }
+}

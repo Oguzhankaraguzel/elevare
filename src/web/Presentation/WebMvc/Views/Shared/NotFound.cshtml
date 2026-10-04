@@ -1,0 +1,27 @@
+@{
+    ViewData["Title"] = "404 - Sayfa Bulunamadı";
+    Layout = "_Layout";
+    string? systemHtml = ViewData["SystemPageHtml"] as string;
+    string? systemCss = ViewData["SystemPageCss"] as string;
+}
+
+@section CriticalCss {
+    @if (!string.IsNullOrEmpty(systemCss))
+    {
+        <style>@Html.Raw(systemCss)</style>
+    }
+}
+
+@if (!string.IsNullOrEmpty(systemHtml))
+{
+    @* CMS-editable page: create & publish a builder page with the slug "404". *@
+    @Html.Raw(systemHtml)
+}
+else
+{
+    <section class="error-page">
+        <h1>404</h1>
+        <p>Aradığınız sayfa bulunamadı.</p>
+        <a href="/">Ana Sayfaya Dön</a>
+    </section>
+}

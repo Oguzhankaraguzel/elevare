@@ -1,0 +1,61 @@
+{
+  "//": "Copy to appsettings.Development.json and fill in. That file is git-ignored; this one is not, so never put a real value here. dotnet user-secrets works too and keeps secrets off disk entirely.",
+
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug",
+      "Override": {
+        "Microsoft.AspNetCore": "Information",
+        "Microsoft.EntityFrameworkCore": "Information"
+      }
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=ElevareDB;Username=postgres;Password=postgres;"
+  },
+  "Jwt": {
+    "Issuer": "https://localhost",
+    "Audience": "https://localhost",
+    "//SecretKey": "At least 32 characters. The CMS refuses to start below that.",
+    "SecretKey": ""
+  },
+  "DetailedErrors": true,
+  "Preview": {
+    "//SigningKey": "Must match the public site's Preview:SigningKey byte for byte. At least 32 characters — signs a JWT with HMAC-SHA256, which refuses shorter keys.",
+    "SigningKey": ""
+  },
+  "Cache": {
+    "//ClearSecret": "Must match the public site's Cache:ClearSecret. Empty means the site refuses every cache-clear request.",
+    "ClearSecret": ""
+  },
+  "Email": {
+    "//": "The mail server itself — this file (or the CMS's own 'Sırlar' screen, which overrides it at startup once a value is saved there — see IntegrationSecretsBootstrap) is where it's set, never a plain Site Settings field, same reasoning as any other credential. Email.FromAddress/FromDisplayName CAN be overridden per-site from Site Settings; the two below are only the fallback used when that Site Setting is empty. Leave Host blank to run without outgoing mail, or point it at a local Mailpit (docker compose -f docker-compose.yml -f docker-compose.dev-tools.yml up -d mailpit — SMTP on localhost:1025, inbox UI at http://localhost:8025, no auth, EnableSsl false).",
+    "Host": "",
+    "Port": 587,
+    "EnableSsl": true,
+    "UserName": "",
+    "Password": "",
+    "FromAddress": "",
+    "FromDisplayName": "CMS"
+  },
+  "ObjectStorage": {
+    "//": "Optional — leave Provider as 'Local' (or omit this whole section) to keep serving uploads from disk. Same 'file or Sırlar screen' story as Email above.",
+    "Provider": "Local",
+    "BucketName": "",
+    "Region": "",
+    "AccessKey": "",
+    "SecretKey": "",
+    "//ServiceUrl": "Only for non-AWS S3-compatible services (MinIO, DigitalOcean Spaces, Cloudflare R2, etc.); leave empty for AWS.",
+    "ServiceUrl": "",
+    "//PublicBaseUrl": "A CDN or custom domain fronting the bucket, if you have one.",
+    "PublicBaseUrl": ""
+  },
+  "Seed": {
+    "//SuperAdmin": "Created once, on the first run against an empty database. All three fields or none.",
+    "SuperAdmin": {
+      "UserName": "superadmin",
+      "Email": "",
+      "Password": ""
+    }
+  }
+}

@@ -1,0 +1,348 @@
+﻿@page "/admin/approvals"
+@layout CMSLayout
+@inject IJSRuntime JS
+
+<PageTitle>@L["Nav_Approvals"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Approvals"]</h1>
+    <p>@L["Approvals_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="ApprovalRequestResponse"
+             Data="_requests"
+             Loading="_loading"
+             Title="@L["Nav_Approvals"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Approvals_Empty"]"
+             PageSize="20" />
+
+@* ── Diff modal ───────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Approvals_DiffTitle"]" IsVisible="_showDiff" OnClose="() => _showDiff = false" Size="lg">
+    <Body>
+        @if (_diffLoading)
+        {
+            <p style="color:var(--cms-text-muted)"><i class="bi bi-arrow-clockwise spin"></i></p>
+        }
+        else if (_diff is not null)
+        {
+            <h3 class="diff-heading">@_diff.ContentTitle</h3>
+
+            @if (_diff.RequestedStatus is { } requested && requested != _diff.CurrentStatus)
+            {
+                <p class="diff-status">
+                    <i class="bi bi-broadcast"></i>
+                    @string.Format(L["Approvals_DiffStatusChange"], StatusLabel(_diff.CurrentStatus), StatusLabel(requested))
+                </p>
+            }
+
+            @if (!_diff.HasStagedContent)
+            {
+                <p class="diff-note">@L["Approvals_DiffNoStaged"]</p>
+            }
+            else if (_diff.AddedCount == 0 && _diff.RemovedCount == 0)
+            {
+                <p class="diff-note">@L["Approvals_DiffNoChange"]</p>
+            }
+            else
+            {
+                @if (_diff.IsFirstPublish)
+                {
+                    <p class="diff-note">@L["Approvals_DiffFirstPublish"]</p>
+                }
+
+                <div class="diff-toolbar">
+                    <span class="diff-summary">@string.Format(L["Approvals_DiffSummary"], _diff.AddedCount, _diff.RemovedCount)</span>
+                    <label class="diff-toggle">
+                        <input type="checkbox" @bind="_onlyChanges" />
+                        @L["Approvals_DiffOnlyChanges"]
+                    </label>
+                </div>
+
+                <div class="diff-body">
+                    @foreach (ApprovalDiffLine line in VisibleLines)
+                    {
+                        <div class="diff-line diff-@line.Kind.ToString().ToLowerInvariant()">
+                            <span class="diff-marker">@Marker(line.Kind)</span>
+                            <span class="diff-text">@line.Text</span>
+                        </div>
+                    }
+                </div>
+
+                <p class="diff-note">@L["Approvals_DiffNote"]</p>
+            }
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDiff = false">@L["Pages_CancelBtn"]</button>
+    </Footer>
+</CmsModal>
+
+@* ── Decision modal ───────────────────────────────────────────────────────── *@
+<CmsModal Title="@(_decisionType == ApprovalDecisionType.Approved ? L["Approvals_ApproveBtn"] : L["Approvals_RejectBtn"])"
+          IsVisible="_showDecision" OnClose="() => _showDecision = false" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["Approvals_DecisionConfirm"], _decisionTarget?.ContentTitle ?? "")</p>
+        <div class="form-group" style="margin-top:8px">
+            <label class="cms-label">@L["Approvals_CommentLabel"]</label>
+            <textarea @bind="_comment" @bind:event="oninput" class="cms-input" rows="3"></textarea>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDecision = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms @(_decisionType == ApprovalDecisionType.Approved ? "btn-primary-cms" : "btn-danger-cms")"
+                @onclick="ConfirmDecision" disabled="@_deciding">
+            @if (_deciding)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            @(_decisionType == ApprovalDecisionType.Approved ? L["Approvals_ApproveBtn"] : L["Approvals_RejectBtn"])
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<ApprovalRequestResponse> _requests = [];
+    private bool _loading = true;
+
+    private bool _showDiff;
+    private bool _diffLoading;
+    private bool _onlyChanges = true;
+    private ApprovalDiffResponse? _diff;
+
+    private bool _showDecision;
+    private ApprovalRequestResponse? _decisionTarget;
+    private ApprovalDecisionType _decisionType;
+    private string _comment = "";
+    private bool _deciding;
+
+    private List<GridColumnDef<ApprovalRequestResponse>> _columns = [];
+    private RenderFragment<ApprovalRequestResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.ApprovalsDecide))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadRequests();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<ApprovalRequestResponse>
+            {
+                PropertyName  = "ContentTitle",
+                Title         = L["Approvals_ColContent"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.ContentTitle,
+                CellTemplate  = ContentTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<ApprovalRequestResponse>
+            {
+                PropertyName  = "WorkflowName",
+                Title         = L["Approvals_ColWorkflow"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.WorkflowName,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "180px",
+            },
+            new GridColumnDef<ApprovalRequestResponse>
+            {
+                PropertyName  = "CurrentStepOrder",
+                Title         = L["Approvals_ColStep"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => string.Format(L["Approvals_StepOf"], r.CurrentStepOrder, r.TotalSteps, r.CurrentStepRoleName),
+                Sortable      = true,
+                Width         = "200px",
+            },
+            new GridColumnDef<ApprovalRequestResponse>
+            {
+                PropertyName  = "RequestedByUserName",
+                Title         = L["Approvals_ColRequestedBy"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.RequestedByUserName,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "170px",
+            },
+            new GridColumnDef<ApprovalRequestResponse>
+            {
+                PropertyName  = "CreateDate",
+                Title         = L["Approvals_ColDate"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = r => (object?)r.CreateDate,
+                CellTemplate  = DateTemplate,
+                Sortable      = true,
+                Width         = "150px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private RenderFragment<ApprovalRequestResponse> ContentTemplate => r => __builder =>
+    {
+        <span class="badge-cms badge-neutral" style="margin-right:6px">@ContentTypeLabel(r.ContentType)</span>
+        @r.ContentTitle
+    };
+
+    private static RenderFragment<ApprovalRequestResponse> DateTemplate => r => __builder =>
+    {
+        <span style="color:var(--cms-text-muted);font-size:12px">@r.CreateDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+    };
+
+    private RenderFragment<ApprovalRequestResponse> ActionButtons => r => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => OpenDiff(r)">
+                <i class="bi bi-file-diff"></i> @L["Approvals_DiffBtn"]
+            </button>
+            @if (r.ContentType == WorkflowContentType.Page)
+            {
+                <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => OpenPreview(r)">
+                    <i class="bi bi-eye"></i> @L["Approvals_PreviewBtn"]
+                </button>
+            }
+            @if (r.CanDecide)
+            {
+                <button class="btn-cms btn-danger-cms btn-sm-cms" @onclick="() => OpenDecision(r, ApprovalDecisionType.Rejected)">
+                    @L["Approvals_RejectBtn"]
+                </button>
+                <button class="btn-cms btn-primary-cms btn-sm-cms" @onclick="() => OpenDecision(r, ApprovalDecisionType.Approved)">
+                    @L["Approvals_ApproveBtn"]
+                </button>
+            }
+        </div>
+    };
+
+    private async Task LoadRequests()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetPendingApprovalsQuery())).Match(
+                list => _requests = list,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Approvals_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task OpenPreview(ApprovalRequestResponse req)
+    {
+        string? url = null;
+        (await Sender.Send(new GetPreviewLinkQuery(req.ContentId))).Match(
+            u => url = u,
+            error => Toast.Error(L.Error(error)));
+
+        if (url is not null)
+            await JS.InvokeVoidAsync("open", url, "_blank");
+    }
+
+    /// <summary>
+    /// Unchanged lines are kept in the payload so the reviewer can switch the filter
+    /// off and read the changes in context — a replaced sentence means little without
+    /// the paragraph around it.
+    /// </summary>
+    private IEnumerable<ApprovalDiffLine> VisibleLines =>
+        _onlyChanges && _diff is not null
+            ? _diff.Lines.Where(l => l.Kind != ApprovalDiffKind.Unchanged)
+            : _diff?.Lines ?? [];
+
+    private static string Marker(ApprovalDiffKind kind) => kind switch
+    {
+        ApprovalDiffKind.Added => "+",
+        ApprovalDiffKind.Removed => "−",
+        _ => " ",
+    };
+
+    private string StatusLabel(PageStatus? status) => status switch
+    {
+        PageStatus.Draft => L["Pages_StatusDraft"],
+        PageStatus.Published => L["Pages_StatusPublished"],
+        PageStatus.Archived => L["Pages_StatusArchived"],
+        _ => "—",
+    };
+
+    private async Task OpenDiff(ApprovalRequestResponse req)
+    {
+        _diff = null;
+        _onlyChanges = true;
+        _diffLoading = true;
+        _showDiff = true;
+
+        try
+        {
+            (await Sender.Send(new GetApprovalDiffQuery(req.Id))).Match(
+                d => _diff = d,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Approvals_DiffLoadError"]);
+        }
+        finally
+        {
+            _diffLoading = false;
+        }
+    }
+
+    private void OpenDecision(ApprovalRequestResponse req, ApprovalDecisionType decision)
+    {
+        _decisionTarget = req;
+        _decisionType = decision;
+        _comment = "";
+        _showDecision = true;
+    }
+
+    private async Task ConfirmDecision()
+    {
+        if (_decisionTarget is null) return;
+        _deciding = true;
+        try
+        {
+            bool ok = false;
+            string? comment = _comment.IsNullOrWhiteSpace() ? null : _comment.Trim();
+            (await Sender.Send(new DecideApprovalCommand(_decisionTarget.Id, _decisionType, comment)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(_decisionType == ApprovalDecisionType.Approved ? L["Approvals_Approved"] : L["Approvals_Rejected"]);
+                _showDecision = false;
+                _decisionTarget = null;
+                await LoadRequests();
+            }
+        }
+        finally { _deciding = false; }
+    }
+
+    private string ContentTypeLabel(WorkflowContentType type) => type switch
+    {
+        WorkflowContentType.Page => L["Workflows_ContentType_Page"],
+        WorkflowContentType.PageTemplate => L["Workflows_ContentType_PageTemplate"],
+        _ => type.ToString(),
+    };
+}

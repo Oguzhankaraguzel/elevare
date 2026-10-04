@@ -1,0 +1,185 @@
+﻿@using Application.Features.Queries.SiteHealth.GetSiteHealth
+@implements IDisposable
+
+@* Renders NOTHING while the site is healthy — the icon showing up at all is the
+   signal, so there is no reassuring green badge to learn to ignore. *@
+@if (_health is { HasIssues: true })
+{
+    <div class="site-health"
+         @onmouseenter="Open"
+         @onmouseleave="CloseAfterGrace">
+
+        @* Hover opens the panel, but hover alone is unreachable by keyboard and
+           touch — so this is a real button: focus opens it too, and it can be
+           tapped. aria-describedby ties it to the panel it reveals. *@
+        <button type="button"
+                class="site-health-btn @(_worstIsError ? "shi-error" : "shi-warning")"
+                aria-label="@Title"
+                aria-expanded="@(_open ? "true" : "false")"
+                aria-describedby="site-health-panel"
+                @onfocus="Open"
+                @onblur="CloseAfterGrace"
+                @onclick="Toggle">
+            <i class="bi bi-exclamation-triangle-fill"></i>
+            @if (_health.Issues.Count > 1)
+            {
+                <span class="site-health-count">@_health.Issues.Count</span>
+            }
+        </button>
+
+        <div id="site-health-panel" class="site-health-panel @(_open ? "" : "d-none")" role="tooltip">
+            <div class="shp-header">
+                <i class="bi bi-activity"></i>
+                <span>@L["SiteHealth_PanelTitle"]</span>
+            </div>
+
+            @foreach (SiteHealthIssue issue in _health.Issues)
+            {
+                <div class="shp-issue @(issue.Severity == SiteHealthSeverity.Error ? "shp-error" : "shp-warning")">
+                    <i class="bi @(issue.Severity == SiteHealthSeverity.Error ? "bi-x-octagon-fill" : "bi-exclamation-triangle-fill")"></i>
+                    <div class="shp-issue-body">
+                        <span class="shp-issue-title">@TitleFor(issue.Code)</span>
+                        <span class="shp-issue-detail">@DetailFor(issue.Code)</span>
+                        @if (!string.IsNullOrWhiteSpace(issue.Detail))
+                        {
+                            @* Provider's own words — the only real diagnostic clue,
+                               so it is shown verbatim rather than summarised. *@
+                            <code class="shp-issue-tech">@issue.Detail</code>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(issue.ActionPath))
+                        {
+                            <a href="@issue.ActionPath" class="shp-issue-link">
+                                @L["SiteHealth_GoFix"] <i class="bi bi-arrow-right-short"></i>
+                            </a>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    // The flag can be flipped from another browser/session, so the indicator polls
+    // instead of trusting whatever was true when this circuit connected.
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// How long the panel stays open after the pointer leaves.
+    /// <para>
+    /// The panel is offset below the button (see <c>.site-health-panel</c>), so the
+    /// pointer necessarily crosses a gap that belongs to neither — closing on the
+    /// first <c>mouseleave</c> meant the panel vanished before it could be reached,
+    /// and its "go fix this" link was unclickable. The same grace covers blur, which
+    /// otherwise fires and tears the panel down before the click on that link lands.
+    /// </para>
+    /// </summary>
+    private static readonly TimeSpan CloseGrace = TimeSpan.FromMilliseconds(400);
+
+    private SiteHealthResponse? _health;
+    private bool _open;
+    private PeriodicTimer? _timer;
+    private CancellationTokenSource? _cts;
+
+    /// <summary>Cancels the pending close when the pointer comes back in time.</summary>
+    private CancellationTokenSource? _closeCts;
+
+    private bool _worstIsError => _health?.WorstSeverity == SiteHealthSeverity.Error;
+
+    private string Title => _health is null or { HasIssues: false }
+        ? string.Empty
+        : string.Format(L["SiteHealth_IconLabel"], _health.Issues.Count);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        _cts = new CancellationTokenSource();
+        _timer = new PeriodicTimer(PollInterval);
+        _ = PollAsync(_cts.Token);
+    }
+
+    private async Task PollAsync(CancellationToken token)
+    {
+        try
+        {
+            while (await _timer!.WaitForNextTickAsync(token))
+            {
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) { /* component disposed */ }
+        catch (ObjectDisposedException) { /* circuit torn down mid-tick */ }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetSiteHealthQuery())).Match(
+                health => _health = health,
+                // A failed health check must not blank out an existing warning:
+                // keeping the last known state is safer than implying "all clear".
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    private string TitleFor(string code) => L[$"SiteHealth_{code}_Title"];
+
+    private string DetailFor(string code) => L[$"SiteHealth_{code}_Detail"];
+
+    // ── Open / close ─────────────────────────────────────────────────────────
+    private void Open()
+    {
+        CancelPendingClose();
+        _open = true;
+    }
+
+    private void Toggle()
+    {
+        CancelPendingClose();
+        _open = !_open;
+    }
+
+    /// <summary>
+    /// Starts the grace period. Returning the pointer (or focus) before it elapses
+    /// cancels the close, so crossing the gap between button and panel is harmless.
+    /// </summary>
+    private void CloseAfterGrace()
+    {
+        CancelPendingClose();
+        _closeCts = new CancellationTokenSource();
+        CancellationToken token = _closeCts.Token;
+
+        _ = CloseWhenGraceElapsesAsync(token);
+    }
+
+    private async Task CloseWhenGraceElapsesAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(CloseGrace, token);
+            _open = false;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { /* pointer came back — stay open */ }
+        catch (ObjectDisposedException) { /* circuit torn down mid-delay */ }
+    }
+
+    private void CancelPendingClose()
+    {
+        _closeCts?.Cancel();
+        _closeCts?.Dispose();
+        _closeCts = null;
+    }
+
+    public void Dispose()
+    {
+        CancelPendingClose();
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _timer?.Dispose();
+    }
+}

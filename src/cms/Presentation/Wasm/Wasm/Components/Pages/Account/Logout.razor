@@ -1,0 +1,6 @@
+@page "/logout"
+
+@code {
+    protected override void OnInitialized()
+        => Nav.NavigateTo("/account/logout", forceLoad: true);
+}

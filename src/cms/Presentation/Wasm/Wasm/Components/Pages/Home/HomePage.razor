@@ -1,0 +1,289 @@
+﻿@page "/"
+@layout CMSLayout
+@using Application.Features.Queries.Dashboard.GetDashboardOverview
+@using Application.Features.Queries.Announcements.GetAnnouncements
+@using Domain.Entities.PageInfos
+@using Domain.Entities.Workflows
+
+<PageTitle>@L["Home_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Home_Title"]</h1>
+    <p>@L["Home_Subtitle"]</p>
+</div>
+
+<MilestoneStrip />
+
+@* Announcements sit above everything and load on their own: they are the one thing
+   on this page that someone else put here for you, and they must not wait on the
+   dashboard aggregate to finish. *@
+@if (_announcements.Count > 0)
+{
+    <div class="cms-card ann-home">
+        <div class="ann-home-header">
+            <i class="bi bi-megaphone-fill"></i>
+            <span>@L["Announcements_Title"]</span>
+        </div>
+        @foreach (AnnouncementResponse a in _announcements)
+        {
+            <div class="ann-home-item @(a.IsRead ? "" : "ann-unread")"
+                 style="@(string.IsNullOrEmpty(a.Color) ? "" : $"background:{a.Color};color:#1a1a2e")">
+                <div class="ann-item-title">
+                    @if (a.IsPinned)
+                    {
+                        <i class="bi bi-pin-angle-fill"></i>
+                    }
+                    @a.Title
+                </div>
+                <div class="ann-item-body">@a.Content</div>
+                <div class="ann-item-meta">@a.CreatedBy · @a.CreateDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+            </div>
+        }
+    </div>
+}
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else if (_overview is null)
+{
+    <div style="padding:48px;text-align:center;color:var(--cms-text-muted);border:1px dashed var(--cms-border);border-radius:8px">
+        @L["Dashboard_LoadError"]
+    </div>
+}
+else
+{
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin-bottom:16px">
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                <i class="bi bi-check2-square"></i> @L["Dashboard_MyTasks"]
+            </div>
+            <div style="display:flex;gap:18px;flex-wrap:wrap">
+                <div>
+                    <div style="font-size:22px;font-weight:700">@_overview.MyTasks.New</div>
+                    <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_TaskNew"]</div>
+                </div>
+                <div>
+                    <div style="font-size:22px;font-weight:700;color:var(--cms-accent)">@_overview.MyTasks.InProgress</div>
+                    <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_TaskInProgress"]</div>
+                </div>
+                <div>
+                    <div style="font-size:22px;font-weight:700">@_overview.MyTasks.Waiting</div>
+                    <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_TaskWaiting"]</div>
+                </div>
+                <div>
+                    <div style="font-size:22px;font-weight:700;color:var(--cms-success)">@_overview.MyTasks.CompletedLast7Days</div>
+                    <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_TaskCompleted7d"]</div>
+                </div>
+            </div>
+            @if (_overview.MyTasks.Overdue > 0)
+            {
+                <div style="margin-top:12px;font-size:12px;font-weight:600;color:var(--cms-danger)">
+                    <i class="bi bi-exclamation-triangle-fill"></i> @string.Format(L["Dashboard_TaskOverdue"], _overview.MyTasks.Overdue)
+                </div>
+            }
+        </div>
+
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                <i class="bi bi-bell"></i> @L["Dashboard_UpcomingReminders"]
+            </div>
+            @if (_overview.OverdueReminders > 0)
+            {
+                @* Overdue ones are deliberately kept out of the list below — that list is
+                   what is still coming. They would otherwise crowd out every reminder that
+                   has not fired yet, which is the whole point of the card. *@
+                <div style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cms-danger);margin-bottom:10px">
+                    <i class="bi bi-exclamation-circle-fill"></i>
+                    <span>@string.Format(L["Dashboard_OverdueReminders"], _overview.OverdueReminders)</span>
+                </div>
+            }
+            @if (_overview.UpcomingReminders.Count == 0)
+            {
+                <div style="font-size:13px;color:var(--cms-text-dim)">@L["Dashboard_NoUpcomingReminders"]</div>
+            }
+            else
+            {
+                <div style="display:flex;flex-direction:column;gap:8px">
+                    @foreach (UpcomingReminderItem reminder in _overview.UpcomingReminders)
+                    {
+                        <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px">
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@reminder.Title</span>
+                            <span style="color:var(--cms-text-muted);white-space:nowrap">@reminder.RemindAt.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                <i class="bi bi-sticky"></i> @L["Dashboard_MyNotes"]
+            </div>
+            <div style="display:flex;gap:18px">
+                <div>
+                    <div style="font-size:22px;font-weight:700">@_overview.MyNotes.Pinned</div>
+                    <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_NotesPinned"]</div>
+                </div>
+                <div>
+                    <div style="font-size:22px;font-weight:700">@_overview.MyNotes.Total</div>
+                    <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_NotesTotal"]</div>
+                </div>
+            </div>
+        </div>
+
+        @if (_overview.LastPublishedPageStats is { } lastPage)
+        {
+            <div class="cms-card" style="padding:20px">
+                <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                    <i class="bi bi-graph-up"></i> @L["Home_LastPublishedPage"]
+                </div>
+                <a href="@($"/pages/edit/{lastPage.PageId}")" style="font-weight:600;font-size:13.5px;display:block;margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                    @lastPage.Title
+                </a>
+                <div style="display:flex;gap:16px;flex-wrap:wrap">
+                    <div>
+                        <div style="font-size:18px;font-weight:700">@lastPage.TotalViews.ToString("N0")</div>
+                        <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_TotalViews"]</div>
+                    </div>
+                    <div>
+                        <div style="font-size:18px;font-weight:700">@lastPage.UniqueVisitors.ToString("N0")</div>
+                        <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_UniqueVisitors"]</div>
+                    </div>
+                    <div>
+                        <div style="font-size:18px;font-weight:700">@FormatDuration(lastPage.AvgDurationSeconds)</div>
+                        <div style="font-size:12px;color:var(--cms-text-muted)">@L["Dashboard_AvgDuration"]</div>
+                    </div>
+                    <div>
+                        <div style="font-size:18px;font-weight:700">@lastPage.TotalClicks.ToString("N0")</div>
+                        <div style="font-size:12px;color:var(--cms-text-muted)">@L["Home_StatClicks"]</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+        @if (_overview.MyPendingApprovals.Count > 0)
+        {
+            <div class="cms-card" style="padding:20px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+                    <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted)">
+                        <i class="bi bi-check2-square"></i> @L["Home_PendingApprovals"]
+                    </div>
+                    <a href="/admin/approvals" style="font-size:12px">@L["Home_ViewAll"]</a>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    @foreach (WorkflowQueueItem item in _overview.MyPendingApprovals)
+                    {
+                        <div>
+                            <div style="font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@item.ContentTitle</div>
+                            <div style="font-size:11.5px;color:var(--cms-text-muted)">@FormatStep(item)</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        @if (_overview.MySubmittedContent.Count > 0)
+        {
+            <div class="cms-card" style="padding:20px">
+                <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                    <i class="bi bi-send-check"></i> @L["Home_SubmittedContent"]
+                </div>
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    @foreach (WorkflowQueueItem item in _overview.MySubmittedContent)
+                    {
+                        <div>
+                            <div style="font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">@item.ContentTitle</div>
+                            <div style="font-size:11.5px;color:var(--cms-text-muted)">@FormatStep(item)</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <div class="cms-card" style="padding:20px">
+            <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin-bottom:12px">
+                <i class="bi bi-clock-history"></i> @L["Home_RecentActivity"]
+            </div>
+            @if (_overview.MyRecentActivity.Count == 0)
+            {
+                <div style="font-size:13px;color:var(--cms-text-dim)">@L["Home_NoRecentActivity"]</div>
+            }
+            else
+            {
+                <div style="display:flex;flex-direction:column;gap:10px">
+                    @foreach (RecentActivityItem item in _overview.MyRecentActivity)
+                    {
+                        <a href="@RecentActivityHref(item)" style="display:flex;justify-content:space-between;gap:10px;font-size:13px">
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                                <i class="bi @(item.ContentType == WorkflowContentType.PageTemplate ? "bi-collection" : "bi-file-earmark-text")"></i>
+                                @item.Title@(" ")
+                                @if (item.Status is { } status)
+                                {
+                                    <span style="color:var(--cms-text-muted)">— @StatusLabel(status)</span>
+                                }
+                            </span>
+                            <span style="color:var(--cms-text-muted);white-space:nowrap">@item.UpdateDate.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                        </a>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private DashboardOverviewResponse? _overview;
+    private List<AnnouncementResponse> _announcements = [];
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetAnnouncementsQuery(Take: 5))).Match(
+                list => _announcements = [.. list.Items],
+                _ => { /* the page is still useful without them */ });
+
+            (await Sender.Send(new GetDashboardOverviewQuery())).Match(
+                overview => _overview = overview,
+                _ => _overview = null);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _overview = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatStep(WorkflowQueueItem item) =>
+        $"{item.WorkflowName} — {item.CurrentStepOrder}/{item.TotalSteps} · {item.CurrentStepRoleName}";
+
+    private static string RecentActivityHref(RecentActivityItem item) => item.ContentType switch
+    {
+        WorkflowContentType.PageTemplate => $"/templates/edit/{item.ContentId}",
+        _ => $"/pages/edit/{item.ContentId}",
+    };
+
+    private string StatusLabel(PageStatus status) => status switch
+    {
+        PageStatus.Draft => L["Pages_StatusDraft"],
+        PageStatus.Published => L["Pages_StatusPublished"],
+        _ => L["Pages_StatusArchived"],
+    };
+
+    private static string FormatDuration(double seconds)
+    {
+        int s = (int)Math.Round(seconds);
+        return s >= 60 ? $"{s / 60}:{s % 60:D2}" : $"0:{s:D2}";
+    }
+}

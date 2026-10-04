@@ -1,0 +1,199 @@
+@page "/admin/knowledge-base"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_KnowledgeBase"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_KnowledgeBase"]</h1>
+    <p>@L["KB_Subtitle"]</p>
+</div>
+
+<div class="cms-card" style="margin-bottom:16px;border:1px solid var(--cms-danger);background:color-mix(in srgb, var(--cms-danger) 8%, transparent)">
+    <h4 style="margin-top:0;color:var(--cms-danger)"><i class="bi bi-exclamation-triangle-fill"></i> @L["KB_XssWarningTitle"]</h4>
+    <p style="color:var(--cms-text)">@L["KB_XssWarningBody"]</p>
+</div>
+
+@* ── Sitemap language coverage ───────────────────────────────────────────────
+   Found while testing a default-language switch: a page that exists only in a
+   non-default language never gets its own sitemap section. Documented here
+   rather than "fixed" — tying section identity to whichever language a page
+   happens to be authored in first would make section URLs shift every time a
+   translation is added, which is a worse trade-off than the gap itself. *@
+<div class="cms-card" style="margin-bottom:16px">
+    <h4 style="margin-top:0"><i class="bi bi-diagram-3"></i> @L["KB_SitemapLanguageTitle"]</h4>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_SitemapLanguageBody"]</p>
+</div>
+
+@* ── Language: pages vs. templates ───────────────────────────────────────────
+   The two look like the same field (a Language picker) on two different admin
+   screens, but they do genuinely different jobs — a page's language drives
+   real infrastructure (sitemap hreflang, the Language Switcher block, URL
+   prefixing); a template's is filtering/bookkeeping only. Written up after a
+   user asked, mid-session, whether the two were the same mechanism. *@
+<div class="cms-card" style="margin-bottom:16px">
+    <h4 style="margin-top:0"><i class="bi bi-translate"></i> @L["KB_LanguageTitle"]</h4>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LanguagePagesSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_LanguagePagesBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LanguageTemplatesSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_LanguageTemplatesBody"]</p>
+</div>
+
+@* ── Templates: linked vs copied ─────────────────────────────────────────────
+   Written after a linked template got edited on the homepage and the edit went
+   nowhere: the public site and the editor both replace a linked wrapper's
+   content with the template's current content, so the page's own copy of it is
+   never read. The editor now locks it; this explains why, and what the two
+   toolbar buttons on a locked template do. *@
+<div class="cms-card" style="margin-bottom:16px" id="templates">
+    <h4 style="margin-top:0"><i class="bi bi-layout-text-window"></i> @L["KB_TemplatesTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_TemplatesIntro"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_TemplatesLinkedSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_TemplatesLinkedBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_TemplatesCopySubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_TemplatesCopyBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_TemplatesWhichSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_TemplatesWhichBody"]</p>
+</div>
+
+@* ── Site codes on one page ──────────────────────────────────────────────────
+   Every site code runs everywhere; the page editor's "Site Kodları" dialog is
+   where one page opts out. Documented because the natural first guess is the
+   other way round — "add this code to this page" — and that is the custom-code
+   block, not this. *@
+<div class="cms-card" style="margin-bottom:16px" id="site-codes-per-page">
+    <h4 style="margin-top:0"><i class="bi bi-code-square"></i> @L["KB_SiteCodesPerPageTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_SiteCodesPerPageBody"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_SiteCodesPerPageWarning"]</p>
+</div>
+
+@* ── Form attachments ─────────────────────────────────────────────────────────
+   Written with the feature: a public upload is the one place a site takes bytes
+   from strangers, so what is accepted, where it goes and who can open it should
+   be readable by the person who puts a file field on a form. *@
+<div class="cms-card" style="margin-bottom:16px" id="form-attachments">
+    <h4 style="margin-top:0"><i class="bi bi-paperclip"></i> @L["KB_FormAttachmentsTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_FormAttachmentsBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_FormAttachmentsLimitsSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_FormAttachmentsLimitsBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_FormAttachmentsWhereSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_FormAttachmentsWhereBody"]</p>
+</div>
+
+@* ── Lighthouse ──────────────────────────────────────────────────────────────
+   What a Lighthouse run on the live site found, and which of it is the site's
+   content (the operator's to fix) versus the platform (already handled) versus
+   the server (nginx). Written after a run that scored 85/86/100/92 and traced
+   every red item to one of those three. *@
+<div class="cms-card" style="margin-bottom:16px" id="lighthouse">
+    <h4 style="margin-top:0"><i class="bi bi-speedometer2"></i> @L["KB_LighthouseTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_LighthouseIntro"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LighthouseImagesSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_LighthouseImagesBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LighthouseContrastSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_LighthouseContrastBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LighthouseButtonsSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_LighthouseButtonsBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LighthouseThirdPartySubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_LighthouseThirdPartyBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_LighthouseServerSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_LighthouseServerBody"]</p>
+</div>
+
+@* ── Responsive images ────────────────────────────────────────────────────────
+   The media library links here from its own header. Written up rather than
+   turned into more UI because the interesting part is what the site does on its
+   own after an upload — which is invisible from the library screen. *@
+<div class="cms-card" style="margin-bottom:16px" id="responsive-images">
+    <h4 style="margin-top:0"><i class="bi bi-images"></i> @L["KB_ResponsiveImagesTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_ResponsiveImagesWhatBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_ResponsiveImagesHowSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_ResponsiveImagesHowBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_ResponsiveImagesAltSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_ResponsiveImagesAltBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_ResponsiveImagesPasteSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_ResponsiveImagesPasteBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_ResponsiveImagesCompressionSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_ResponsiveImagesCompressionBody"]</p>
+</div>
+
+@* ── Two-letter code ────────────────────────────────────────────────────────────
+   Written up after a user asked whether two English variants (GB/US) could be
+   configured — they can, today, with no code change, because this field was
+   always allowed to hold more than two characters. Documents why the field is
+   named the way it is despite that, and what actually reads it. *@
+<div class="cms-card" style="margin-bottom:16px" id="two-letter-code">
+    <h4 style="margin-top:0"><i class="bi bi-globe2"></i> @L["KB_TwoLetterCodeTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_TwoLetterCodeNameBody"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_TwoLetterCodeLengthBody"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_TwoLetterCodeRegionBody"]</p>
+</div>
+
+@* ── Skip link ────────────────────────────────────────────────────────────────
+   Why it targets the first <h1> instead of jumping straight to #main-content:
+   a linked header template resolves INTO the page's own HTML at render time
+   (see TemplateResolutionService), so the header ends up as <main>'s literal
+   first child — landing on #main-content itself would put a keyboard user
+   right back on the header they were trying to skip. *@
+<div class="cms-card" style="margin-bottom:16px">
+    <h4 style="margin-top:0"><i class="bi bi-arrow-bar-right"></i> @L["KB_SkipLinkTitle"]</h4>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_SkipLinkBody"]</p>
+</div>
+
+@* ── Redirects import ─────────────────────────────────────────────────────────
+   The Redirects screen links here from its own import dialog. Written up rather
+   than crammed into that dialog because the column format and the "empty new
+   path = 410" rule are worth having at hand independent of that one screen visit. *@
+<div class="cms-card" style="margin-bottom:16px" id="redirects-import">
+    <h4 style="margin-top:0"><i class="bi bi-signpost-split"></i> @L["KB_RedirectsImportTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_RedirectsImportFormatBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_RedirectsImportGoneSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_RedirectsImportGoneBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_RedirectsImportValidationSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_RedirectsImportValidationBody"]</p>
+</div>
+
+@* ── Integration secrets ──────────────────────────────────────────────────────
+   The "Sırlar" tab on Site Settings links here from its own intro banner. Written
+   up rather than said in full there because the "why a separate table" reasoning
+   is worth having at hand independent of that one screen visit — see
+   IntegrationSecret, IntegrationSecretsBootstrap, IntegrationSecretsConfigurationProvider
+   and IBlobStorageFactory for the code side (everything here applies live, no
+   restart — see IIntegrationSecretsReloader/IIntegrationSecretsChangeNotifier for
+   how a save propagates, including across to the Web app for CAPTCHA). *@
+<div class="cms-card" style="margin-bottom:16px" id="secrets">
+    <h4 style="margin-top:0"><i class="bi bi-shield-lock"></i> @L["KB_SecretsTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_SecretsWhatBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SecretsWhySeparateSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_SecretsWhySeparateBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SecretsWhoSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_SecretsWhoBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SecretsFileSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_SecretsFileBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SecretsRestartSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_SecretsRestartBody"]</p>
+</div>
+
+@* ── Restore procedure ─────────────────────────────────────────────────────────
+   Deliberately documentation rather than a button: restoring overwrites the live
+   database, and a one-click path to that is worth less than the risk it carries.
+   The steps live here so they are at hand when they are actually needed. *@
+<div class="cms-card" id="restore-guide">
+    <h4 style="margin-top:0">@L["KB_RestoreTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_RestoreBody"]</p>
+    @* The comments inside this block are the only part that changes per language
+       (see CmsMessages*.resx, KB_RestoreCommands) — the commands themselves are
+       copy-pasted into a terminal verbatim and must stay identical in every
+       language, so they are NOT part of the translated string. *@
+    <pre style="padding:12px;background:var(--cms-bg);border-radius:6px;font-size:12px;overflow-x:auto"><code>@L["KB_RestoreCommands1"]
+docker compose stop cms web
+
+@L["KB_RestoreCommands2"]
+docker compose exec db dropdb -U elevare ElevareDB
+docker compose exec db createdb -U elevare -O elevare ElevareDB
+docker compose exec cms pg_restore -h db -U elevare -d ElevareDB --no-owner \
+    "/app/Backups/&lt;@L["KB_RestoreCommandsFileHint"]&gt;"
+
+@L["KB_RestoreCommands3"]
+docker compose start cms web</code></pre>
+    <p style="color:var(--cms-text-muted);font-size:13px;margin-bottom:0">@L["KB_RestoreAfterNote"]</p>
+</div>

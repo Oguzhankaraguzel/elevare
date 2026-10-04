@@ -1,0 +1,219 @@
+@using Application.Features.Queries.SiteCodeSnippets.GetPublicSiteCodeSnippets
+@using Application.Features.Queries.SiteSettings.GetPublicSiteSettings
+@using Application.Services
+@inject MediatR.ISender Sender
+@inject Application.Abstraction.Services.ILanguageDirectory LanguageDirectory
+@{
+    Dictionary<string, string?> settings = [];
+    (await Sender.Send(new GetPublicSiteSettingsQuery())).Match(
+        s => settings = s,
+        _ => { });
+
+    string? Setting(string key) => settings.TryGetValue(key, out string? v) ? v : null;
+
+    // Third-party tags (analytics, consent, verification, chat widgets) — managed in
+    // the CMS under Site Codes, keyed by SiteCodePlacement and already in the order
+    // they must be emitted. Replaces the former one-setting-per-script arrangement,
+    // where each script was a separate free-text field that could not be named,
+    // switched off, reordered or checked.
+    Dictionary<int, List<PublicSiteCodeEntry>> codeSnippets = [];
+    (await Sender.Send(new GetPublicSiteCodeSnippetsQuery())).Match(
+        s => codeSnippets = s,
+        _ => { });
+
+    // What THIS page's author switched off (PageController / the error middleware
+    // put it here; a page rendered by neither carries every site code). The set is
+    // per page and the snippet cache is site-wide, which is why the filter lives
+    // here and not in the query.
+    HashSet<int> excludedSiteCodes = ViewData[SiteCodeExclusions.ViewDataKey] as HashSet<int> ?? [];
+
+    // 1 = HeadStart, 2 = HeadEnd, 3 = BodyStart, 4 = BodyEnd (SiteCodePlacement).
+    IEnumerable<string> CodeAt(int placement) =>
+        codeSnippets.TryGetValue(placement, out List<PublicSiteCodeEntry>? list)
+            ? list.Where(e => !excludedSiteCodes.Contains(e.Id)).Select(e => e.Content)
+            : [];
+
+    string siteName = !string.IsNullOrEmpty(Setting("General.SiteName")) ? Setting("General.SiteName")! : "Elevare";
+    string titleSuffix = !string.IsNullOrEmpty(Setting("Seo.DefaultMetaTitleSuffix")) ? Setting("Seo.DefaultMetaTitleSuffix")! : siteName;
+    string? faviconUrl = Setting("Appearance.FaviconUrl");
+    // Set by the CMS when the sized PNG set exists (see IFaviconService there).
+    string? faviconSetVersion = Setting("Appearance.FaviconSetVersion");
+    string captchaProvider = Setting("Integrations.CaptchaProvider") ?? "none";
+    string? captchaSiteKey = Setting("Integrations.CaptchaSiteKey");
+
+    // Opt-out, not opt-in: prefetching is the right default for almost every site,
+    // and the setting exists for the metered/low-traffic case where paying for
+    // requests nobody clicked is not worth the speed (see DatabaseSeeder).
+    bool instantPageEnabled = !string.Equals(Setting("Performance.InstantPageEnabled"), "false", StringComparison.OrdinalIgnoreCase);
+
+    // Set by PageController from the page's own SeoMeta. Emitted at the very end
+    // of <body> rather than in <head>: it is machine-only data with no bearing on
+    // first paint, and Google reads it in either place.
+    string? structuredData = ViewData["StructuredData"] as string;
+
+    string lang = ViewData["Lang"] as string ?? "tr";
+    string skipLinkText = lang == "en" ? "Skip to content" : "İçeriğe atla";
+    // This language's article feed (FeedController): /feed.xml for the default one.
+    string feedHref = string.Equals(lang, LanguageDirectory.DefaultLanguageCode, StringComparison.OrdinalIgnoreCase)
+        ? "/" + WebMvc.Controllers.FeedController.FeedFileName
+        : $"/{lang}/{WebMvc.Controllers.FeedController.FeedFileName}";
+}
+<!DOCTYPE html>
+<html lang="@lang">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - @titleSuffix</title>
+
+    @* One icon per size the browsers actually ask for, so a tab gets a 2 KB
+       32-pixel PNG rather than the 67 KB original — Lighthouse counted that
+       original against the page. The set exists once the CMS has generated it;
+       until then, or for an SVG favicon, the single link stays. *@
+    @if (!string.IsNullOrEmpty(faviconSetVersion))
+    {
+        <link rel="icon" type="image/png" sizes="32x32" href="/uploads/favicons/favicon-32.png?v=@faviconSetVersion" />
+        <link rel="icon" type="image/png" sizes="48x48" href="/uploads/favicons/favicon-48.png?v=@faviconSetVersion" />
+        <link rel="icon" type="image/png" sizes="192x192" href="/uploads/favicons/favicon-192.png?v=@faviconSetVersion" />
+        <link rel="apple-touch-icon" sizes="180x180" href="/uploads/favicons/favicon-180.png?v=@faviconSetVersion" />
+    }
+    else if (!string.IsNullOrEmpty(faviconUrl))
+    {
+        <link rel="icon" href="@faviconUrl" />
+    }
+
+    @* ── Site codes: top of head ───────────────────────────────────────────── *@
+    @* Consent tools belong here: they work by blocking other scripts until the   *@
+    @* visitor agrees, which they can only do if the browser parses them before   *@
+    @* the scripts they are meant to hold back. The base CSS the site ships with  *@
+    @* — brand color variables, critical/render-blocking rules, everything that   *@
+    @* used to be a hardcoded <style> block and a site.css file — lives here too,  *@
+    @* as three ordinary, editable Site Codes rows (see DatabaseSeeder). Nothing   *@
+    @* about this layout is CSS anymore; it is content, like the rest of the page. *@
+    @foreach (string snippet in CodeAt(1))
+    {
+        @Html.Raw(snippet)
+    }
+
+    @* ── Per-page SEO meta (description/canonical/OG/Twitter/JSON-LD) ── *@
+    @await RenderSectionAsync("Head", required: false)
+
+    @* Lets feed readers — and Google Discover's "Follow" — find the article feed. *@
+    <link rel="alternate" type="application/rss+xml" title="@siteName" href="@feedHref" />
+
+    @* ── og:site_name — the page's own "Site adı" field (Sosyal Paylaşım), right
+       after its OG block so all of it reads as one; nothing when the field is empty.
+       AFTER the section on purpose: the page says it through ViewData from inside
+       that section, which only exists once the section has rendered. ── *@
+    @if (ViewData["OgSiteName"] is string ogSiteName)
+    {
+        <meta property="og:site_name" content="@ogSiteName" />
+    }
+
+    @* ── Page-specific critical CSS section ── *@
+    @await RenderSectionAsync("CriticalCss", required: false)
+
+    @* ── Site codes: end of head ── *@
+    @foreach (string snippet in CodeAt(2))
+    {
+        @Html.Raw(snippet)
+    }
+</head>
+<body>
+
+    @* ── Skip link (WCAG 2.4.1 Bypass Blocks) — the literal first focusable thing
+       in the document, before even Site Codes' own Body Start snippets, so Tab
+       from the address bar reaches it before anything else. Hidden off-screen
+       until focused (.skip-link, in the "Kritik CSS" Site Codes row — see
+       DatabaseSeeder) rather than removed from flow, so it stays announced to
+       screen readers and reachable by keyboard either way.
+
+       Targets the page's own first heading, not just "#main-content" bodily:
+       the header/nav a visitor is trying to skip is itself the first child of
+       <main> (see TemplateResolutionService — a linked header template resolves
+       INTO the page's own HTML, main wraps all of it), so jumping to <main>
+       verbatim would land right back on the header. elevare-interactions.js's
+       skip-link handler looks for the first <h1> inside #main-content instead —
+       reliably the actual start of a page's unique content, since neither the
+       header nor footer templates built into this site contain one — and only
+       falls back to #main-content itself if a page genuinely has no H1 (already
+       its own separate SEO problem, flagged by the builder's SEO panel). *@
+    <a href="#main-content" class="skip-link">@skipLinkText</a>
+
+    @* ── Site codes: start of body ─────────────────────────────────────────── *@
+    @* Tag Manager's <noscript> half only counts a visit from here; anywhere else *@
+    @* it is inert, which is why the CMS creates it automatically alongside the   *@
+    @* head script rather than trusting anyone to remember it.                    *@
+    @foreach (string snippet in CodeAt(3))
+    {
+        @Html.Raw(snippet)
+    }
+
+    @* ── Page banner ─────────────────────────────────────────────────────────── *@
+    @* The page builder puts everything, menu included, into the page's own markup,  *@
+    @* which used to land wholesale inside <main>. A <header> nested in <main> is    *@
+    @* not the banner landmark — it is a generic box, and the menu that repeats on   *@
+    @* every page counts as part of each page's content. PageRegionSplitter lifts    *@
+    @* the page's top-level <header>/<footer> out so they sit here instead, as       *@
+    @* siblings of <main>. Empty for a page that has neither, which prints nothing.  *@
+    @Html.Raw(ViewData["PageHeaderHtml"] as string ?? string.Empty)
+
+    <main class="site-main" id="main-content">
+        @RenderBody()
+    </main>
+
+    @Html.Raw(ViewData["PageFooterHtml"] as string ?? string.Empty)
+
+    @* ── Site codes: end of body ── *@
+    @foreach (string snippet in CodeAt(4))
+    {
+        @Html.Raw(snippet)
+    }
+
+    @* ── Anonymous page-view telemetry (view + time-on-page beacon) ── *@
+    @* ── Skipped for signed preview links (ViewData["IsPreview"]) so a CMS  ── *@
+    @* ── editor testing Draft/Archived content never pollutes real analytics. ── *@
+    @if (ViewData["IsPreview"] is not true)
+    {
+        <script src="~/js/elevare-analytics.js" asp-append-version="true" defer></script>
+    }
+
+    @* ── Captcha (spam protection for managed forms — only emitted when a ── *@
+    @* ── provider + site key are configured in Site Settings) ──────────── *@
+    @if (captchaProvider == "recaptcha" && !string.IsNullOrEmpty(captchaSiteKey))
+    {
+        <script src="https://www.google.com/recaptcha/api.js?render=@captchaSiteKey" async defer></script>
+    }
+    else if (captchaProvider == "hcaptcha" && !string.IsNullOrEmpty(captchaSiteKey))
+    {
+        <script src="https://hcaptcha.com/1/api.js" async defer></script>
+    }
+    else if (captchaProvider == "turnstile" && !string.IsNullOrEmpty(captchaSiteKey))
+    {
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" async defer></script>
+    }
+    <script>
+        window.elevareCaptcha = {
+            provider: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(!string.IsNullOrWhiteSpace(captchaSiteKey) ? captchaProvider : "none")),
+            siteKey: @Html.Raw(System.Text.Json.JsonSerializer.Serialize(captchaSiteKey ?? ""))
+        };
+    </script>
+
+    <script src="~/js/elevare-interactions.js" asp-append-version="true" defer></script>
+    @if (instantPageEnabled)
+    {
+        <script src="~/js/instant-page.js" asp-append-version="true" defer></script>
+    }
+
+    @await RenderSectionAsync("Scripts", required: false)
+
+    @* ── Structured data (JSON-LD) ─────────────────────────────────────────── *@
+    @* Last thing in the body: it is read by crawlers, never by the layout engine *@
+    @* or the visitor, so it has no business competing with content for the first *@
+    @* bytes. Emitted verbatim — the CMS builder is what guarantees it is valid   *@
+    @* JSON, and re-encoding it here would corrupt the escaping it already has.   *@
+    @if (!string.IsNullOrWhiteSpace(structuredData))
+    {
+        <script type="application/ld+json">@Html.Raw(structuredData)</script>
+    }
+</body>
+</html>

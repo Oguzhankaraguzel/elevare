@@ -1,0 +1,42 @@
+# Keeping the build context small is not cosmetic: everything here would
+# otherwise be uploaded to the daemon on every build, and bin/obj from a Windows
+# host would collide with the Linux build inside the image.
+**/bin/
+**/obj/
+**/out/
+**/publish/
+
+.git/
+.github/
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# Generated code-graph artifact — large, and rebuilt by `graphify update .`
+graphify-out/
+
+**/*.user
+**/*.suo
+**/.DS_Store
+**/Thumbs.db
+
+# Local state that must never bake into an image.
+# These are spelled out rather than globbed: `**/Logs/` also matches the source
+# folder Application/Features/Commands/Logs, which silently broke the build.
+# Neither Dockerfile actually COPYs the repo root broadly enough to reach .env
+# (each names specific files/dirs one at a time — see src/cms/.../Dockerfile and
+# src/web/.../Dockerfile), so this is defense-in-depth against a future Dockerfile
+# change, not a fix for a live leak — but keeping .env out of the build context
+# is still the correct default.
+**/appsettings.Development.json
+.env
+.env.*
+!.env.example
+src/cms/Presentation/Wasm/Wasm/wwwroot/uploads/
+src/cms/Presentation/Wasm/Wasm/Logs/
+src/cms/Presentation/Wasm/Wasm/Backups/
+src/web/Presentation/WebMvc/Logs/
+docker-compose*.yml
+Dockerfile*
+.dockerignore

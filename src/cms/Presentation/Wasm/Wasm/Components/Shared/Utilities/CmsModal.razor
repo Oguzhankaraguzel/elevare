@@ -1,0 +1,154 @@
+﻿@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@if (IsVisible)
+{
+    <div class="cms-window @SizeClass @(_isMaximized ? "cms-window-maximized" : "") @(_isMinimized ? "cms-window-minimized" : "")"
+         @ref="_windowEl"
+         id="@_windowId">
+
+        <div class="cms-window-titlebar">
+            <span class="cms-window-title">@Title</span>
+            <div class="cms-window-controls">
+                <button class="cms-window-btn" @onclick="ToggleMinimize" @onclick:stopPropagation>
+                    <i class="bi bi-dash-lg"></i>
+                </button>
+                <button class="cms-window-btn" @onclick="ToggleMaximize" @onclick:stopPropagation>
+                    <i class="bi @(_isMaximized ? "bi-fullscreen-exit" : "bi-square")"></i>
+                </button>
+                @if (ShowCloseButton)
+                {
+                    <button class="cms-window-btn cms-window-btn-close" @onclick="Close" @onclick:stopPropagation>
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (!_isMinimized)
+        {
+            <div class="cms-window-body">
+                @Body
+            </div>
+            @if (Footer is not null)
+            {
+                <div class="cms-window-footer">
+                    @Footer
+                </div>
+            }
+        }
+
+        <div class="cms-window-resize cms-window-resize-n"  data-dir="n"></div>
+        <div class="cms-window-resize cms-window-resize-s"  data-dir="s"></div>
+        <div class="cms-window-resize cms-window-resize-e"  data-dir="e"></div>
+        <div class="cms-window-resize cms-window-resize-w"  data-dir="w"></div>
+        <div class="cms-window-resize cms-window-resize-ne" data-dir="ne"></div>
+        <div class="cms-window-resize cms-window-resize-nw" data-dir="nw"></div>
+        <div class="cms-window-resize cms-window-resize-se" data-dir="se"></div>
+        <div class="cms-window-resize cms-window-resize-sw" data-dir="sw"></div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public RenderFragment? Body { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public bool ShowCloseButton { get; set; } = true;
+
+    /// <summary>sm | md (default) | lg | xl</summary>
+    [Parameter] public string Size { get; set; } = "md";
+
+    // Legacy parameter kept for backward compatibility — no longer used.
+    [Parameter] public bool CloseOnOverlayClick { get; set; } = true;
+
+    private readonly string _windowId = "cmswin_" + Guid.NewGuid().ToString("N")[..8];
+    private ElementReference _windowEl;
+    private DotNetObjectReference<CmsModal>? _dotNetRef;
+    private bool _jsInitialized;
+    private bool _isMinimized;
+    private bool _isMaximized;
+    private bool _prevVisible;
+
+    private string SizeClass => Size switch
+    {
+        "sm" => "cms-window-sm",
+        "lg" => "cms-window-lg",
+        "xl" => "cms-window-xl",
+        _    => "cms-window-md"
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (IsVisible && !_jsInitialized)
+        {
+            _dotNetRef = DotNetObjectReference.Create(this);
+            try
+            {
+                await JS.InvokeVoidAsync("cmsJs.initWindow", _windowEl, _windowId, _dotNetRef);
+                _jsInitialized = true;
+            }
+            catch (Exception ex)
+            {
+                LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            }
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        // Reset JS state when the window is hidden then shown again
+        if (IsVisible && !_prevVisible)
+        {
+            _jsInitialized = false;
+            _isMinimized = false;
+            _isMaximized = false;
+        }
+        _prevVisible = IsVisible;
+    }
+
+    [JSInvokable]
+    public void ToggleMaximizeFromJs()
+    {
+        _isMaximized = !_isMaximized;
+        if (_isMaximized) _isMinimized = false;
+        StateHasChanged();
+    }
+
+    private void ToggleMinimize()
+    {
+        _isMinimized = !_isMinimized;
+        if (_isMinimized) _isMaximized = false;
+    }
+
+    private void ToggleMaximize()
+    {
+        _isMaximized = !_isMaximized;
+        if (_isMaximized) _isMinimized = false;
+    }
+
+    private async Task Close()
+    {
+        _isMinimized = false;
+        _isMaximized = false;
+        await DestroyJs();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task DestroyJs()
+    {
+        if (_jsInitialized)
+        {
+            try { await JS.InvokeVoidAsync("cmsJs.destroyWindow", _windowId); }
+            catch (JSDisconnectedException) { /* expected during dispose */ }
+            _jsInitialized = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DestroyJs();
+        _dotNetRef?.Dispose();
+    }
+}

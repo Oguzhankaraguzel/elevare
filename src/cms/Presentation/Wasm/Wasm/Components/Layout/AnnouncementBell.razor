@@ -1,0 +1,86 @@
+﻿@using Application.Features.Queries.Announcements.GetAnnouncements
+@using Application.Features.Commands.Announcements.MarkAnnouncementsRead
+
+<div class="ann-bell">
+    <button type="button"
+            class="btn-cms btn-ghost btn-icon @(_unread > 0 ? "ann-has-unread" : "")"
+            title="@L["Announcements_Tooltip"]"
+            aria-label="@L["Announcements_Tooltip"]"
+            aria-expanded="@(_open ? "true" : "false")"
+            @onclick="Toggle">
+        <i class="bi @(_unread > 0 ? "bi-bell-fill" : "bi-bell")"></i>
+        @if (_unread > 0)
+        {
+            @* Capped so a long absence cannot stretch the badge past the icon. *@
+            <span class="ann-badge">@(_unread > 9 ? "9+" : _unread.ToString())</span>
+        }
+    </button>
+
+    <div class="ann-panel @(_open ? "" : "d-none")">
+        <div class="ann-panel-header">
+            <span><i class="bi bi-megaphone"></i> @L["Announcements_Title"]</span>
+            @if (_unread > 0)
+            {
+                <span class="ann-panel-new">@_unread @L["Announcements_New"]</span>
+            }
+        </div>
+
+        @if (_items.Count == 0)
+        {
+            <div class="ann-empty">@L["Announcements_Empty"]</div>
+        }
+        else
+        {
+            <div class="ann-list">
+                @foreach (AnnouncementResponse a in _items)
+                {
+                    <div class="ann-item @(a.IsRead ? "" : "ann-unread")">
+                        <div class="ann-item-title">
+                            @if (a.IsPinned)
+                            {
+                                <i class="bi bi-pin-angle-fill"></i>
+                            }
+                            @a.Title
+                        </div>
+                        <div class="ann-item-body">@a.Content</div>
+                        <div class="ann-item-meta">@a.CreatedBy · @a.CreateDate.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _open;
+    private int _unread;
+    private List<AnnouncementResponse> _items = [];
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        try
+        {
+            (await Sender.Send(new GetAnnouncementsQuery())).Match(
+                list => { _items = [.. list.Items]; _unread = list.UnreadCount; },
+                _ => { /* the bell is ambient — a failure here must not shout */ });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    private async Task Toggle()
+    {
+        _open = !_open;
+        if (!_open) return;
+
+        // Opening the panel IS the acknowledgement — no separate "mark as read"
+        // button to hunt for. The list keeps its unread styling for this viewing so
+        // you can still see what was new; the count clears.
+        if (_unread > 0)
+        {
+            await Sender.Send(new MarkAnnouncementsReadCommand());
+            _unread = 0;
+        }
+    }
+}

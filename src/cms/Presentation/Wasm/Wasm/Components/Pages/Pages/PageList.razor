@@ -1,0 +1,1891 @@
+﻿@page "/pages"
+@layout CMSLayout
+
+<PageTitle>@L["Pages_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+            <h1>@L["Pages_Title"]</h1>
+            <p>@L["Pages_Subtitle"]</p>
+            <button type="button" class="pe-slug-hint-btn" @onclick="() => _showSlugInfo = true">
+                <i class="bi bi-info-circle"></i> @L["Pages_SystemSlugHint"]
+            </button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+            @* Filters live here, next to Yeni Sayfa — not in the view-mode row below,
+               where they used to sit alongside Düz Liste/Ağaç Görünümü as if they were
+               a third view. They are a modifier of whichever view is showing, not a
+               view of their own, so they get their own spot. *@
+            <button type="button" class="btn-cms btn-ghost @(_filterPanelOpen ? "pe-filter-btn-active" : "")" @onclick="() => _filterPanelOpen = !_filterPanelOpen">
+                <i class="bi bi-funnel"></i> @L["Pages_Filters"]
+                @if (ActiveFilterCount > 0)
+                {
+                    <span class="pe-filter-count">@ActiveFilterCount</span>
+                }
+            </button>
+            <button class="btn-cms btn-primary-cms" @onclick="OpenCreate">
+                <i class="bi bi-plus-lg"></i> @L["Pages_New"]
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="pe-toggle-row">
+    <div class="pe-view-toggle">
+        <button type="button" class="pe-view-toggle-btn @(_viewMode == PageViewMode.Flat ? "active" : "")" @onclick='() => _viewMode = PageViewMode.Flat'>
+            <i class="bi bi-list-ul"></i> @L["Pages_ViewFlat"]
+        </button>
+        <button type="button" class="pe-view-toggle-btn @(_viewMode == PageViewMode.Tree ? "active" : "")" @onclick='() => _viewMode = PageViewMode.Tree'>
+            <i class="bi bi-diagram-3"></i> @L["Pages_ViewTree"]
+        </button>
+    </div>
+    @* Grouped: one row per page, every language stacked together — the natural unit
+       an editor thinks in ("the About page", not "the About page in Turkish").
+       Individual: one row per language version, for when you need to act on (or
+       just count) each translation on its own. Applies to whichever tab above is
+       active, so it works the same in both List and Tree. *@
+    <div class="pe-view-toggle" title="@L["Pages_LayoutModeHint"]">
+        <button type="button" class="pe-view-toggle-btn @(_layoutMode == PageLayoutMode.Grouped ? "active" : "")" @onclick='() => _layoutMode = PageLayoutMode.Grouped'>
+            <i class="bi bi-layers"></i> @L["Pages_LayoutGrouped"]
+        </button>
+        <button type="button" class="pe-view-toggle-btn @(_layoutMode == PageLayoutMode.Individual ? "active" : "")" @onclick='() => _layoutMode = PageLayoutMode.Individual'>
+            <i class="bi bi-file-earmark-text"></i> @L["Pages_LayoutIndividual"]
+        </button>
+    </div>
+</div>
+
+@if (_filterPanelOpen)
+{
+    <div class="cms-card pe-filter-panel">
+        <p class="pe-filter-intro">@L["Pages_FiltersIntro"]</p>
+
+        <div class="pe-filter-row">
+            <div class="pe-filter-group">
+                <label>@L["Pages_FilterStatus"]</label>
+                <select class="cms-input" @bind="_filterStatus" @bind:after="LoadPages">
+                    <option value="">@L["Pages_FilterAny"]</option>
+                    <option value="@PageStatus.Draft">@L["Pages_StatusDraft"]</option>
+                    <option value="@PageStatus.Published">@L["Pages_StatusPublished"]</option>
+                    <option value="@PageStatus.Archived">@L["Pages_StatusArchived"]</option>
+                </select>
+            </div>
+            <div class="pe-filter-group">
+                <label>@L["Pages_FilterLanguage"]</label>
+                <select class="cms-input" @bind="_filterLanguageId" @bind:after="LoadPages">
+                    <option value="">@L["Pages_FilterAny"]</option>
+                    @foreach (LanguageResponse lang in _languages)
+                    {
+                        <option value="@lang.Id">@lang.NameInNative</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        @* Include-only, no exclude mode: "not a landing page" is expressed by
+           leaving landing page unticked, which is one concept for the reader
+           instead of two. *@
+        <div class="pe-filter-block">
+            <label>@L["Pages_FilterKind"]</label>
+            <span class="pe-filter-hint">@L["Pages_FilterKindHint"]</span>
+            <div class="pe-chip-row">
+                @foreach (PageKind kind in AllPageKinds)
+                {
+                    bool on = _filterKinds.Contains(kind);
+                    <button type="button" class="pe-chip @(on ? "pe-chip-on" : "")" @onclick="() => ToggleKind(kind)">
+                        @L[$"PageKind_{kind}"]
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="pe-filter-block">
+            <label>@L["Pages_FilterSignals"]</label>
+            <span class="pe-filter-hint">@L["Pages_FilterSignalsHint"]</span>
+            <div class="pe-chip-row">
+                @foreach (PageSignal signal in FilterableSignals)
+                {
+                    bool on = _filterSignals.HasFlag(signal);
+                    <button type="button" class="pe-chip @(on ? "pe-chip-on" : "")" @onclick="() => ToggleSignal(signal)">
+                        @L[$"PageSignal_{signal}"]
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (ActiveFilterCount > 0)
+        {
+            <div class="pe-filter-footer">
+                <span>@string.Format(L["Pages_FilterResultCount"], _pages.Count)</span>
+                <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="ClearFilters">
+                    <i class="bi bi-x-lg"></i> @L["Pages_FilterClear"]
+                </button>
+            </div>
+        }
+    </div>
+}
+
+@if (_viewMode == PageViewMode.Flat && _layoutMode == PageLayoutMode.Grouped)
+{
+    <ElevareGrid TItem="PageListItemResponse"
+                 Data="_pages"
+                 Loading="_loading"
+                 Title="@L["Pages_Title"]"
+                 Columns="_columns"
+                 ActionTemplate="_actionTemplate"
+                 ShowRowNumbers
+                 ShowImport="false"
+                 EmptyText="@L["Pages_Empty"]"
+                 PageSize="20" />
+}
+else if (_viewMode == PageViewMode.Flat && _layoutMode == PageLayoutMode.Individual)
+{
+    <ElevareGrid TItem="PageListItemResponse"
+                 Data="_allItems"
+                 Loading="_loading"
+                 Title="@L["Pages_Title"]"
+                 Columns="_individualColumns"
+                 ActionTemplate="_individualActionTemplate"
+                 ShowRowNumbers
+                 ShowImport="false"
+                 EmptyText="@L["Pages_Empty"]"
+                 PageSize="20" />
+}
+else if (_loading)
+{
+    <div class="cms-card" style="display:flex;justify-content:center;padding:40px;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else if (_layoutMode == PageLayoutMode.Grouped)
+{
+    <div class="cms-card pe-tree-card">
+        @if (_treeRoots.Count == 0)
+        {
+            <div style="text-align:center;padding:60px;color:var(--cms-text-muted)">@L["Pages_Empty"]</div>
+        }
+        else
+        {
+            @foreach (PageListItemResponse root in _treeRoots)
+            {
+                @TreeNode(root, 0)
+            }
+        }
+    </div>
+}
+else
+{
+    <div class="cms-card pe-tree-card">
+        @if (_treeRootsIndividual.Count == 0)
+        {
+            <div style="text-align:center;padding:60px;color:var(--cms-text-muted)">@L["Pages_Empty"]</div>
+        }
+        else
+        {
+            @foreach (PageListItemResponse root in _treeRootsIndividual)
+            {
+                @IndividualTreeNode(root, 0)
+            }
+        }
+    </div>
+}
+
+@* ── Reserved slug info modal ────────────────────────────────────────────── *@
+<CmsModal Title="@L["Pages_SystemSlugInfoTitle"]" IsVisible="_showSlugInfo" OnClose="() => _showSlugInfo = false" Size="md">
+    <Body>
+        <p>@L["Pages_SystemSlugInfoWhat"]</p>
+        <p>@L["Pages_SystemSlugInfoHow"]</p>
+        <p style="color:var(--cms-warning)"><i class="bi bi-exclamation-triangle"></i> @L["Pages_SystemSlugInfoLanguage"]</p>
+        <p>@L["Pages_SystemSlugInfoWhen"]</p>
+        <p style="color:var(--cms-text-muted);font-size:13px">@L["Pages_SystemSlugInfoFallback"]</p>
+        <div class="pe-slug-example">
+            <strong><i class="bi bi-lightbulb"></i> @L["Pages_SystemSlugInfoExampleTitle"]</strong>
+            <p>@L["Pages_SystemSlugInfoExample"]</p>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-primary-cms" @onclick="() => _showSlugInfo = false">@L["Common_Close"]</button>
+    </Footer>
+</CmsModal>
+
+@* ── Deleted twin found ──────────────────────────────────────────────────── *@
+@* Two different intentions used to share one button: "bring back what I deleted"
+   and "start this translation over". Asking makes the choice explicit, and it is
+   what stops a delete/recreate loop from leaving a pile of tombstones nobody can
+   restore. *@
+<CmsModal Title="@L["Pages_DeletedTwinTitle"]" IsVisible="@(_deletedTwin is not null)"
+          OnClose="() => { _deletedTwin = null; _pendingTranslation = null; }" Size="md">
+    <Body>
+        @if (_deletedTwin is { } twin)
+        {
+            <p>@string.Format(L["Pages_DeletedTwinIntro"], twin.Title ?? twin.Slug)</p>
+            <ul style="font-size:13px;color:var(--cms-text-muted);line-height:1.9;margin:0 0 4px 18px">
+                <li>@string.Format(L["Pages_DeletedTwinWhen"],
+                        twin.DeletedAtUtc?.ToLocalTime().ToString("dd.MM.yyyy HH:mm") ?? "—")</li>
+                @if (twin.DeletedByName is { } who)
+                {
+                    <li>@string.Format(L["Pages_DeletedTwinWho"], who)</li>
+                }
+            </ul>
+            <p style="font-size:13px;color:var(--cms-text-muted)">@L["Pages_DeletedTwinExplain"]</p>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => { _deletedTwin = null; _pendingTranslation = null; }">
+            @L["Pages_CancelBtn"]
+        </button>
+        <button class="btn-cms btn-ghost" @onclick="CreateFreshOverTwin">
+            <i class="bi bi-file-earmark-plus"></i> @L["Pages_DeletedTwinFresh"]
+        </button>
+        <button class="btn-cms btn-primary-cms" @onclick="RestoreDeletedTwin">
+            <i class="bi bi-arrow-counterclockwise"></i> @L["Pages_DeletedTwinRestore"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Create modal ────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Pages_CreateTitle"]" IsVisible="_showCreate" OnClose="CloseCreate" Size="md">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label">@L["Pages_FieldTitle"] <span style="color:var(--cms-danger)">*</span></label>
+            <input @bind="_createTitle" @bind:event="oninput" class="cms-input" placeholder="@L["Pages_FieldTitlePlaceholder"]" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Pages_FieldSlug"]</label>
+            <input @bind="_createSlug" class="cms-input" placeholder="@(_createTitle.HasValue() ? _createTitle.ToSlug() : "")" />
+            <small style="color:var(--cms-text-muted);font-size:12px">@L["Pages_FieldSlugHint"]</small>
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["Pages_FieldLanguage"] <span style="color:var(--cms-danger)">*</span></label>
+            <select @bind="_createLanguageId" class="cms-input">
+                <option value="0">—</option>
+                @foreach (LanguageResponse lang in _languages)
+                {
+                    <option value="@lang.Id">@lang.NameInNative</option>
+                }
+            </select>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseCreate">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ConfirmCreate" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check2"></i>
+            }
+            @L["Pages_CreateBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete modal (scoped to ONE language version, never the whole group) ── *@
+<CmsModal Title="@L["Pages_DeleteTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-warning);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">@string.Format(L["Pages_DeleteLanguageConfirm"], _deleteTarget?.Title ?? "", _deleteTargetLanguage?.NameInNative ?? "")</p>
+            @* Deleting a page is a soft delete: the row keeps IsDeleted and shows up in
+               the Trash with a Restore button. Saying "cannot be undone" here was simply
+               untrue, and it hid the Trash from the people most likely to need it. *@
+            <p style="font-size:13px;color:var(--cms-text-muted)">@L["Pages_DeleteGoesToTrash"]</p>
+        </div>
+        @if (_deleteTarget?.Status == PageStatus.Published)
+        {
+            <div class="form-group" style="margin-top:12px;text-align:left">
+                <label class="cms-label">@L["Pages_RedirectUrlLabel"]</label>
+                <input @bind="_deleteRedirectUrl" @bind:event="oninput" class="cms-input" placeholder="@L["Pages_RedirectUrlPlaceholder"]" />
+                <small style="color:var(--cms-text-muted);font-size:12px">@L["Pages_RedirectUrlHint"]</small>
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-trash3"></i>
+            }
+            @L["Common_Delete"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Status-change redirect prompt (only shown when leaving Published) ──── *@
+<CmsModal Title="@L["Pages_RedirectUrlLabel"]" IsVisible="_showStatusRedirectPrompt" OnClose="CancelStatusRedirectPrompt" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@L["Pages_StatusRedirectPrompt"]</p>
+        <div class="form-group" style="margin-top:12px;text-align:left">
+            <label class="cms-label">@L["Pages_RedirectUrlLabel"]</label>
+            <input @bind="_statusRedirectUrl" @bind:event="oninput" class="cms-input" placeholder="@L["Pages_RedirectUrlPlaceholder"]" />
+            <small style="color:var(--cms-text-muted);font-size:12px">@L["Pages_RedirectUrlHint"]</small>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CancelStatusRedirectPrompt">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ConfirmStatusRedirectPrompt" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check2"></i>
+            }
+            @L["Common_Confirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Per-page stats popover ────────────────────────────────────────────── *@
+<CmsModal Title="@L["Pages_StatsTitle"]" IsVisible="_showStats" OnClose="() => _showStats = false" Size="sm">
+    <Body>
+        @if (_statsLoading)
+        {
+            <div style="display:flex;justify-content:center;padding:24px"><i class="bi bi-arrow-clockwise spin"></i></div>
+        }
+        else if (_statsData is not null)
+        {
+            <div class="pe-stats-grid">
+                <div class="pe-stats-item">
+                    <span class="pe-stats-label">@L["Pages_Stats_SeoScore"]</span>
+                    @if (_statsData.SeoScore.HasValue)
+                    {
+                        <span class="pe-stats-value" style="color:@ScoreColor(_statsData.SeoScore.Value)">@_statsData.SeoScore</span>
+                    }
+                    else
+                    {
+                        <span class="pe-stats-value pe-stats-value-muted">@L["Pages_Stats_SeoScoreNone"]</span>
+                    }
+                </div>
+                <div class="pe-stats-item">
+                    <span class="pe-stats-label">@L["Pages_Stats_TotalViews"]</span>
+                    <span class="pe-stats-value">@_statsData.TotalViews</span>
+                </div>
+                <div class="pe-stats-item">
+                    <span class="pe-stats-label">@L["Pages_Stats_UniqueVisitors"]</span>
+                    <span class="pe-stats-value">@_statsData.UniqueVisitors</span>
+                </div>
+                <div class="pe-stats-item">
+                    <span class="pe-stats-label">@L["Pages_Stats_AvgDuration"]</span>
+                    <span class="pe-stats-value">@FormatDuration(_statsData.AvgDurationSeconds)</span>
+                </div>
+                <div class="pe-stats-item">
+                    <span class="pe-stats-label">@L["Pages_Stats_TotalClicks"]</span>
+                    <span class="pe-stats-value">@_statsData.TotalClicks</span>
+                </div>
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showStats = false">@L["Common_Close"]</button>
+    </Footer>
+</CmsModal>
+
+<style>
+    .pe-slug-hint-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        padding: 0;
+        border: none;
+        background: none;
+        font-size: 12px;
+        color: var(--cms-text-dim);
+        cursor: pointer;
+        text-decoration: underline dotted;
+        text-underline-offset: 3px;
+    }
+
+    .pe-slug-hint-btn:hover {
+        color: var(--cms-accent);
+    }
+
+    .pe-slug-example {
+        margin-top: 12px;
+        padding: 12px 14px;
+        background: var(--cms-bg);
+        border: 1px solid var(--cms-border);
+        border-radius: var(--radius-sm);
+    }
+
+    .pe-slug-example strong {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 6px;
+        font-size: 13px;
+    }
+
+    .pe-slug-example p {
+        margin: 0;
+        font-size: 13px;
+        color: var(--cms-text-muted);
+    }
+
+    .pe-lang-rows {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .pe-lang-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .pe-lang-status {
+        font-size: 10px;
+        padding: 1px 6px;
+    }
+
+    .pe-lang-status-none {
+        font-size: 11px;
+        color: var(--cms-text-dim);
+    }
+
+    .pe-lang-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .03em;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-family: inherit;
+        text-decoration: none;
+        transition: opacity var(--transition);
+    }
+
+    .pe-lang-badge:hover {
+        opacity: 0.8;
+    }
+
+    .pe-lang-badge-yes {
+        background: color-mix(in srgb, var(--cms-success) 18%, transparent);
+        color: var(--cms-success);
+        border-color: color-mix(in srgb, var(--cms-success) 40%, transparent);
+    }
+
+    .pe-lang-badge-no {
+        background: color-mix(in srgb, var(--cms-danger) 12%, transparent);
+        color: var(--cms-danger);
+        border-color: color-mix(in srgb, var(--cms-danger) 35%, transparent);
+        border-style: dashed;
+    }
+
+    .pe-lang-badge-no:disabled {
+        opacity: 0.6;
+        cursor: default;
+    }
+
+    .pe-lang-badge-plus {
+        font-size: 9px;
+        margin-right: 2px;
+    }
+
+    .pe-lang-badge:focus-visible {
+        outline: 2px solid var(--cms-accent);
+        outline-offset: 1px;
+    }
+
+    /* Marks a language that is authorable but not live on the public site. */
+    .pe-lang-unpublished {
+        font-size: 11px;
+        color: var(--cms-warning);
+        cursor: help;
+    }
+
+    .pe-lang-status-select {
+        font-size: 11px;
+        padding: 1px 4px;
+        border-radius: 4px;
+        border: 1px solid var(--cms-border);
+        background: var(--cms-bg);
+        color: var(--cms-text);
+        cursor: pointer;
+    }
+
+    .pe-lang-delete-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 22px;
+        height: 22px;
+        padding: 0;
+        border: none;
+        background: none;
+        color: var(--cms-text-dim);
+        cursor: pointer;
+        border-radius: 4px;
+        font-size: 12px;
+        transition: color var(--transition), background var(--transition);
+    }
+
+    .pe-lang-delete-btn:hover {
+        color: var(--cms-danger);
+        background: color-mix(in srgb, var(--cms-danger) 12%, transparent);
+    }
+
+    /* Holds the view toggle (List/Tree) and the layout toggle (Grouped/Individual)
+       side by side — two independent axes, kept visually distinct from each other
+       (a gap, not a shared box) so they don't read as one four-way choice. */
+    .pe-toggle-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 14px;
+    }
+
+    .pe-view-toggle {
+        display: inline-flex;
+        gap: 2px;
+        padding: 3px;
+        background: var(--cms-bg);
+        border: 1px solid var(--cms-border);
+        border-radius: var(--radius-sm);
+    }
+
+    .pe-view-toggle-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border: none;
+        border-radius: 5px;
+        background: none;
+        color: var(--cms-text-muted);
+        font-size: 13px;
+        cursor: pointer;
+        transition: background var(--transition), color var(--transition);
+    }
+
+    /* A background-color swap alone (--cms-bg on the strip → --cms-card on the
+       active button) is a strong cue in dark mode, where the two are far apart in
+       lightness — but in light mode --cms-card is plain white sitting on a barely
+       lighter-than-white strip, so the same swap was nearly invisible. Accent-
+       colored, bolder text and a matching bottom bar are cues that read the same in
+       both themes, independent of how close the two background shades happen to be. */
+    .pe-view-toggle-btn.active {
+        background: var(--cms-card);
+        color: var(--cms-accent);
+        font-weight: 600;
+        box-shadow: inset 0 -2px 0 var(--cms-accent);
+    }
+
+    /* Stacked per-language cells (Title/Slug/Categories/Full Slug in the Grouped
+       view) — one row per language, aligned the same way in every one of those
+       columns so the Nth row always means the same language across the whole grid
+       row. */
+    .pe-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .pe-stack-row {
+        min-height: 20px;
+        display: flex;
+        align-items: center;
+        line-height: 1.3;
+    }
+
+    .pe-stack-title {
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .pe-stack-title:hover {
+        color: var(--cms-accent);
+    }
+
+    .pe-stack-mono {
+        font-size: 12px;
+        font-family: ui-monospace, Consolas, monospace;
+        color: var(--cms-text-muted);
+    }
+
+    .pe-stack-accent {
+        color: var(--cms-accent);
+    }
+
+    .pe-stack-muted {
+        font-size: 12.5px;
+        color: var(--cms-text-muted);
+    }
+
+    .pe-tree-lang-badge {
+        font-size: 10px;
+        padding: 1px 6px;
+        flex-shrink: 0;
+    }
+
+    /* ── Filters ──────────────────────────────────────────────────────────── */
+    .pe-filter-btn-active {
+        background: var(--cms-accent-light) !important;
+        color: var(--cms-accent) !important;
+        border-color: var(--cms-accent) !important;
+    }
+
+    .pe-filter-count {
+        display: inline-grid;
+        place-items: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        border-radius: 9px;
+        background: var(--cms-accent);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+    }
+
+    .pe-filter-panel {
+        padding: 18px;
+        margin-bottom: 14px;
+    }
+
+    .pe-filter-intro {
+        margin: 0 0 16px;
+        font-size: 12.5px;
+        line-height: 1.6;
+        color: var(--cms-text-muted);
+    }
+
+    .pe-filter-row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 16px;
+    }
+
+    .pe-filter-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 180px;
+    }
+
+    .pe-filter-block {
+        margin-bottom: 16px;
+    }
+
+    .pe-filter-group label,
+    .pe-filter-block > label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--cms-text);
+    }
+
+    .pe-filter-hint {
+        display: block;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--cms-text-dim);
+        margin: 2px 0 8px;
+    }
+
+    .pe-chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+    }
+
+    .pe-chip {
+        padding: 5px 11px;
+        border: 1px solid var(--cms-border);
+        border-radius: 20px;
+        background: var(--cms-bg);
+        color: var(--cms-text-muted);
+        font-size: 12px;
+        cursor: pointer;
+        transition: background var(--transition), color var(--transition), border-color var(--transition);
+    }
+
+    .pe-chip:hover {
+        border-color: var(--cms-accent);
+        color: var(--cms-text);
+    }
+
+    .pe-chip-on {
+        background: var(--cms-accent);
+        border-color: var(--cms-accent);
+        color: #fff;
+        font-weight: 600;
+    }
+
+    .pe-filter-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-top: 1px solid var(--cms-border);
+        padding-top: 12px;
+        font-size: 12.5px;
+        color: var(--cms-text-muted);
+    }
+
+    .pe-kind-chip {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 20px;
+        background: var(--cms-bg);
+        border: 1px solid var(--cms-border);
+        color: var(--cms-text-muted);
+        font-size: 11.5px;
+        white-space: nowrap;
+    }
+
+    .pe-signal-row {
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
+        align-items: center;
+    }
+
+    .pe-tree-card {
+        padding: 16px;
+    }
+
+    .pe-tree-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 6px;
+        border-radius: 6px;
+    }
+
+    .pe-tree-row:hover {
+        background: var(--cms-bg);
+    }
+
+    .pe-tree-title {
+        font-weight: 600;
+        cursor: pointer;
+    }
+
+    .pe-tree-slug {
+        font-size: 12px;
+        color: var(--cms-accent);
+        background: var(--cms-bg);
+        padding: 2px 6px;
+        border-radius: 4px;
+    }
+
+    .pe-tree-actions {
+        margin-left: auto;
+        display: flex;
+        gap: 4px;
+    }
+
+    .pe-stats-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .pe-stats-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 10px;
+        border-bottom: 1px solid var(--cms-border);
+    }
+
+    .pe-stats-label {
+        font-size: 13px;
+        color: var(--cms-text-muted);
+    }
+
+    .pe-stats-value {
+        font-weight: 700;
+        font-size: 15px;
+    }
+
+    .pe-stats-value-muted {
+        color: var(--cms-text-dim);
+        font-weight: 400;
+        font-size: 13px;
+    }
+</style>
+
+@code {
+    private enum PageViewMode { Flat, Tree }
+
+    /// <summary>Grouped: one row per page, every language stacked together. Individual: one row per language version.</summary>
+    private enum PageLayoutMode { Grouped, Individual }
+
+    private PageViewMode _viewMode = PageViewMode.Flat;
+    private PageLayoutMode _layoutMode = PageLayoutMode.Grouped;
+    private List<PageListItemResponse> _treeRoots = [];
+    private Dictionary<int, List<PageListItemResponse>> _treeChildrenByParentId = [];
+    private List<PageListItemResponse> _treeRootsIndividual = [];
+    private Dictionary<int, List<PageListItemResponse>> _treeChildrenByParentIdIndividual = [];
+
+    private bool _showStats;
+    private PageStatsResponse? _statsData;
+    private bool _statsLoading;
+
+    private List<PageListItemResponse> _pages = [];
+    private Dictionary<string, List<PageListItemResponse>> _groupsByKey = [];
+    // The full, un-collapsed result — every language's own row. Powers the
+    // Individual view (list and tree) and category-chain lookups (an ancestor is
+    // frequently not itself one of the collapsed representatives in _pages).
+    private List<PageListItemResponse> _allItems = [];
+    private Dictionary<int, PageListItemResponse> _allById = [];
+    // Bumped on every LoadPages() and used as part of each status <select>'s @key,
+    // forcing Blazor to recreate the element (not just diff it) on reload. Needed
+    // because a rejected status change (e.g. CannotUnpublishHomePage) leaves the
+    // <select>'s native DOM value showing the picked-but-rejected option — a same-value
+    // re-render wouldn't otherwise correct it since Blazor only diffs against its own
+    // last-rendered value, not the possibly-externally-changed live DOM value.
+    private int _reloadVersion;
+    private List<LanguageResponse> _languages = [];
+    private bool _loading = true;
+    private bool _saving;
+    private (int SourceId, int LanguageId)? _creatingTranslationFor;
+
+    private bool _showSlugInfo;
+
+    private bool _showCreate;
+    private string _createTitle = "";
+    private string _createSlug = "";
+    private int _createLanguageId;
+
+    private bool _showDelete;
+    private PageListItemResponse? _deleteTarget;
+    private LanguageResponse? _deleteTargetLanguage;
+    private string _deleteRedirectUrl = "";
+
+    private bool _showStatusRedirectPrompt;
+    private PageListItemResponse? _statusChangeTarget;
+    private PageStatus _statusChangeNewStatus;
+    private string _statusRedirectUrl = "";
+
+    private List<GridColumnDef<PageListItemResponse>> _columns = [];
+    private RenderFragment<PageListItemResponse>? _actionTemplate;
+    private List<GridColumnDef<PageListItemResponse>> _individualColumns = [];
+    private RenderFragment<PageListItemResponse>? _individualActionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildGridColumns();
+        BuildIndividualColumns();
+        // Sequential, not Task.WhenAll: both go through the same scoped DbContext,
+        // which is not thread-safe — concurrent queries would throw.
+        await LoadLanguages();
+        await LoadPages();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<PageListItemResponse>
+            {
+                // Every language's title, one below the other — an editor thinks of
+                // this row as "the About page", not as "the About page in Turkish"
+                // and a separate unrelated "About page in English".
+                //
+                // Not Groupable: the grid's own "group by column" bucket a row under
+                // ValueAccessor's single value, but this cell shows several (one per
+                // language) — grouping by it would silently group by only the
+                // representative language's title while the row visibly shows more,
+                // which reads as broken rather than as a real grouping.
+                PropertyName  = "Title",
+                Title         = L["Pages_ColTitle"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.Title,
+                CellTemplate  = TitleTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Groupable     = false,
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                // The RAW value typed into "Slug" when the page was created — not the
+                // computed path. Own row per language, same stacking as Title.
+                PropertyName  = "Slug",
+                Title         = L["Pages_ColSlug"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.Slug,
+                CellTemplate  = SlugStackTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Groupable     = false,
+                Width         = "150px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                // The chain of PARENT pages this one sits under, e.g. "Ürünler → Çiçekler"
+                // — what an editor actually means by "category" here, since this CMS has
+                // no separate category entity: a page's section IS its parent page.
+                // No single ValueAccessor either (stacked per language, like Title/Slug
+                // above), so grouping is switched off the same way.
+                PropertyName  = "Categories",
+                Title         = L["Pages_ColCategories"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => "",
+                CellTemplate  = CategoriesTemplate,
+                Sortable      = false,
+                Filterable    = false,
+                Groupable     = false,
+                Width         = "190px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                // The full computed path (Categories joined with the page's own Slug,
+                // language-prefixed for non-default languages) — read-only, already
+                // known from PageInfo.FullSlug rather than reassembled here.
+                PropertyName  = "FullSlug",
+                Title         = L["Pages_ColFullSlug"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.FullSlug,
+                CellTemplate  = FullSlugStackTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Groupable     = false,
+                Width         = "190px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                // Per-language badges/status, not one value — same reasoning as
+                // Title/Slug/Categories above.
+                PropertyName  = "Languages",
+                Title         = L["Pages_ColLanguages"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => "",
+                CellTemplate  = LanguagesTemplate,
+                Sortable      = false,
+                Filterable    = false,
+                Groupable     = false,
+                Width         = "170px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Kind",
+                Title         = L["Pages_ColKind"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => L[$"PageKind_{p.Kind}"].ToString(),
+                CellTemplate  = KindTemplate,
+                Sortable      = true,
+                Filterable    = false,
+                Width         = "130px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                // A row's signals are a SET (zero or more), not a single bucket value —
+                // grouping by it previously dumped every row into one "" group.
+                PropertyName  = "Signals",
+                Title         = L["Pages_ColSignals"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => "",
+                CellTemplate  = SignalsTemplate,
+                Sortable      = false,
+                Filterable    = false,
+                Groupable     = false,
+                Width         = "120px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Updated",
+                Title         = L["Pages_ColUpdated"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = p => (object?)(p.UpdateDate ?? p.CreateDate),
+                CellTemplate  = UpdatedTemplate,
+                Sortable      = true,
+                Filterable    = false,
+                Width         = "170px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    // Same ordering (by active-language DisplayOrder) is used across Title/Slug/
+    // Categories/FullSlug so the Nth stacked row means the same language in every
+    // one of those columns — the reader never has to cross-reference which row is
+    // which language across columns.
+    private List<PageListItemResponse> OrderedMembers(PageListItemResponse item)
+    {
+        string key = GroupKey(item);
+        List<PageListItemResponse> members = _groupsByKey.TryGetValue(key, out List<PageListItemResponse>? m) ? m : [item];
+        return [.. members.OrderBy(mem =>
+        {
+            int idx = _languages.FindIndex(l => l.Id == mem.LanguageId);
+            return idx >= 0 ? idx : int.MaxValue;
+        })];
+    }
+
+    private RenderFragment<PageListItemResponse> TitleTemplate => item => __builder =>
+    {
+        <div class="pe-stack">
+            @foreach (PageListItemResponse member in OrderedMembers(item))
+            {
+                <div class="pe-stack-row pe-stack-title" @onclick="() => OpenEdit(member.Id)" title="@member.LanguageName">@member.Title</div>
+            }
+        </div>
+    };
+
+    private RenderFragment<PageListItemResponse> SlugStackTemplate => item => __builder =>
+    {
+        <div class="pe-stack">
+            @foreach (PageListItemResponse member in OrderedMembers(item))
+            {
+                <code class="pe-stack-row pe-stack-mono" title="@member.LanguageName">@member.Slug</code>
+            }
+        </div>
+    };
+
+    private RenderFragment<PageListItemResponse> FullSlugStackTemplate => item => __builder =>
+    {
+        <div class="pe-stack">
+            @foreach (PageListItemResponse member in OrderedMembers(item))
+            {
+                <code class="pe-stack-row pe-stack-mono pe-stack-accent" title="@member.LanguageName">/@member.FullSlug</code>
+            }
+        </div>
+    };
+
+    private RenderFragment<PageListItemResponse> CategoriesTemplate => item => __builder =>
+    {
+        <div class="pe-stack">
+            @foreach (PageListItemResponse member in OrderedMembers(item))
+            {
+                <div class="pe-stack-row pe-stack-muted" title="@member.LanguageName">@CategoryChain(member)</div>
+            }
+        </div>
+    };
+
+    /// <summary>
+    /// Walks a page's own PARENT chain (its ancestors in the SAME language — each
+    /// language keeps its own tree, per PageInfo.ParentPageId) and joins their
+    /// titles with "→", nearest-parent last. This CMS has no separate category
+    /// entity — a page's section is expressed entirely by nesting it under another
+    /// page — so this chain IS what "category" means here.
+    /// </summary>
+    private string CategoryChain(PageListItemResponse member)
+    {
+        List<string> chain = [];
+        int? parentId = member.ParentPageId;
+        // A cap, not a real limit: PageHierarchy.MaxDepth already bounds real nesting
+        // at save time — this only guards against ever looping on bad data.
+        int guard = 0;
+        while (parentId is int pid && guard++ < 12 && _allById.TryGetValue(pid, out PageListItemResponse? parent))
+        {
+            chain.Insert(0, parent.Title);
+            parentId = parent.ParentPageId;
+        }
+        return chain.Count > 0 ? string.Join(" → ", chain) : "—";
+    }
+
+    // One grid row now represents a whole PageGroup (all language versions of the
+    // same page) instead of a separate row per translation. Every active language
+    // gets its own stacked row: a code badge (green + linked if that language
+    // already has a page in the group, red + clickable-to-create if it doesn't)
+    // with that specific translation's publish status right next to it.
+    private RenderFragment<PageListItemResponse> LanguagesTemplate => item => __builder =>
+    {
+        string key = GroupKey(item);
+        List<PageListItemResponse> members = _groupsByKey.TryGetValue(key, out List<PageListItemResponse>? m) ? m : [item];
+        <div class="pe-lang-rows">
+            @foreach (LanguageResponse lang in _languages)
+            {
+                PageListItemResponse? existing = members.FirstOrDefault(x => x.LanguageId == lang.Id);
+                if (existing is not null)
+                {
+                    LanguageResponse currentLang = lang;
+                    <div class="pe-lang-row">
+                        <a href="/pages/edit/@existing.Id" class="pe-lang-badge pe-lang-badge-yes" title="@lang.NameInNative">@lang.TwoLetterCode.ToUpperInvariant()</a>
+                        @* Publishing a PAGE and publishing its LANGUAGE are two separate
+                           gates. Without this marker a page reads as "Published" while
+                           being unreachable, and the only clue is on another screen. *@
+                        @if (!lang.IsPublished)
+                        {
+                            <i class="bi bi-eye-slash pe-lang-unpublished"
+                               title="@L["Pages_LanguageNotPublished"]"
+                               aria-label="@L["Pages_LanguageNotPublished"]"></i>
+                        }
+                        <select @key="@($"{existing.Id}-{_reloadVersion}")" class="pe-lang-status-select" value="@existing.Status.ToString()"
+                                @onchange="e => OnStatusSelectChanged(existing, e.Value?.ToString())">
+                            <option value="Draft">@L["Pages_StatusDraft"]</option>
+                            <option value="Published">@L["Pages_StatusPublished"]</option>
+                            <option value="Archived">@L["Pages_StatusArchived"]</option>
+                        </select>
+                        <button type="button" class="pe-lang-delete-btn" title="@L["Common_Delete"]"
+                                @onclick="() => OpenDeleteForLanguage(existing, currentLang)">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    int sourceId = item.Id;
+                    int targetLanguageId = lang.Id;
+                    bool busy = _creatingTranslationFor == (sourceId, targetLanguageId);
+                    <div class="pe-lang-row">
+                        @* The "+" is what makes this readable as an ACTION rather than
+                           just a red "missing" badge — the explanation used to live only
+                           in the tooltip, so its purpose was invisible until hover. *@
+                        <button type="button" class="pe-lang-badge pe-lang-badge-no" disabled="@busy"
+                                title="@string.Format(L["Pages_ColLanguages_CreateTitle"], lang.NameInNative)"
+                                aria-label="@string.Format(L["Pages_ColLanguages_CreateTitle"], lang.NameInNative)"
+                                @onclick="() => StartTranslation(sourceId, targetLanguageId)">
+                            @if (busy)
+                            {
+                                <i class="bi bi-arrow-clockwise spin"></i>
+                            }
+                            else
+                            {
+                                <i class="bi bi-plus-lg pe-lang-badge-plus" aria-hidden="true"></i>
+                                @lang.TwoLetterCode.ToUpperInvariant()
+                            }
+                        </button>
+                        <span class="pe-lang-status-none">—</span>
+                    </div>
+                }
+            }
+        </div>
+    };
+
+    private static RenderFragment<PageListItemResponse> UpdatedTemplate => item => __builder =>
+    {
+        <div style="font-size:13px;color:var(--cms-text-muted);line-height:1.4">
+            <div>@((item.UpdateDate ?? item.CreateDate).ToLocalTime().ToString("dd.MM.yyyy HH:mm"))</div>
+            @if ((item.UpdatedBy ?? item.CreatedBy) is { } who)
+            {
+                <div style="font-size:11.5px;opacity:.85">@who</div>
+            }
+        </div>
+    };
+
+    // The type is CMS-only shorthand, so it renders as a quiet chip rather than a
+    // loud status badge — it describes the page, it does not warn about it.
+    private RenderFragment<PageListItemResponse> KindTemplate => item => __builder =>
+    {
+        @if (item.Kind != PageKind.Unspecified)
+        {
+            <span class="pe-kind-chip">@L[$"PageKind_{item.Kind}"]</span>
+        }
+    };
+
+    // Everything worth knowing at a glance that the status dropdown cannot say:
+    // above all "this is live, but a newer version has not been approved yet",
+    // which used to be invisible from the list entirely.
+    private RenderFragment<PageListItemResponse> SignalsTemplate => item => __builder =>
+    {
+        <div class="pe-signal-row">
+            @if (item.Signals.HasFlag(PageSignal.AwaitingApproval))
+            {
+                <span class="badge-cms badge-warning" title="@L["PageSignal_AwaitingApproval"]">
+                    <i class="bi bi-hourglass-split"></i>
+                </span>
+            }
+            @if (item.Signals.HasFlag(PageSignal.HasStagedUpdate))
+            {
+                <span class="badge-cms badge-info" title="@L["PageSignal_HasStagedUpdate"]">
+                    <i class="bi bi-arrow-up-circle"></i>
+                </span>
+            }
+            @if (item.Signals.HasFlag(PageSignal.NoIndex))
+            {
+                <span class="badge-cms badge-neutral" title="@L["PageSignal_NoIndex"]">
+                    <i class="bi bi-eye-slash"></i>
+                </span>
+            }
+            @{
+                int issues = SeoIssueCount(item.Signals);
+            }
+            @if (issues > 0)
+            {
+                <span class="badge-cms badge-neutral" title="@SeoIssueTooltip(item.Signals)">
+                    <i class="bi bi-exclamation-circle"></i> @issues
+                </span>
+            }
+        </div>
+    };
+
+    /// <summary>
+    /// The signals that mean "this page is incomplete", as opposed to the workflow
+    /// ones (which get their own badges) and NoIndex (a choice, not a gap).
+    /// </summary>
+    private static readonly PageSignal[] SeoIssueSignals =
+    [
+        PageSignal.MissingMetaDescription, PageSignal.MissingStructuredData,
+        PageSignal.MissingOgImage, PageSignal.MissingFocusKeyword,
+        PageSignal.NotCanonical, PageSignal.MissingTranslation,
+        PageSignal.LowSeoScore, PageSignal.Stale,
+    ];
+
+    private static int SeoIssueCount(PageSignal signals) =>
+        SeoIssueSignals.Count(s => signals.HasFlag(s));
+
+    private string SeoIssueTooltip(PageSignal signals) =>
+        string.Join(", ", SeoIssueSignals.Where(s => signals.HasFlag(s)).Select(s => L[$"PageSignal_{s}"].ToString()));
+
+    // Delete moved to a per-language button in LanguagesTemplate — a row here
+    // represents a whole PageGroup, so a single "delete" action here could never
+    // unambiguously say which language version it targets.
+    private RenderFragment<PageListItemResponse> ActionButtons => item => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Pages_StatsBtn"]" @onclick="() => OpenStats(item)">
+                <i class="bi bi-graph-up"></i>
+            </button>
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]" @onclick="() => OpenEdit(item.Id)">
+                <i class="bi bi-pencil"></i>
+            </button>
+        </div>
+    };
+
+    // ── Individual (Tekil) view: one row per language version, no stacking ─────
+
+    private void BuildIndividualColumns()
+    {
+        _individualColumns =
+        [
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Title",
+                Title         = L["Pages_ColTitle"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.Title,
+                CellTemplate  = IndividualTitleTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Language",
+                Title         = L["Pages_ColLanguage"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.LanguageName,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "110px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Slug",
+                Title         = L["Pages_ColSlug"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.Slug,
+                CellTemplate  = IndividualSlugTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Categories",
+                Title         = L["Pages_ColCategories"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => CategoryChain(p),
+                Sortable      = false,
+                Filterable    = false,
+                Width         = "190px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "FullSlug",
+                Title         = L["Pages_ColFullSlug"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => p.FullSlug,
+                CellTemplate  = IndividualFullSlugTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Status",
+                Title         = L["Pages_ColStatus"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => StatusLabel(p.Status),
+                CellTemplate  = IndividualStatusTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "130px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Kind",
+                Title         = L["Pages_ColKind"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => L[$"PageKind_{p.Kind}"].ToString(),
+                CellTemplate  = KindTemplate,
+                Sortable      = true,
+                Filterable    = false,
+                Width         = "130px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                // A row's signals are a SET (zero or more), not a single bucket value —
+                // grouping by it previously dumped every row into one "" group.
+                PropertyName  = "Signals",
+                Title         = L["Pages_ColSignals"],
+                PropertyType  = typeof(string),
+                ValueAccessor = p => "",
+                CellTemplate  = SignalsTemplate,
+                Sortable      = false,
+                Filterable    = false,
+                Groupable     = false,
+                Width         = "120px",
+            },
+            new GridColumnDef<PageListItemResponse>
+            {
+                PropertyName  = "Updated",
+                Title         = L["Pages_ColUpdated"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = p => (object?)(p.UpdateDate ?? p.CreateDate),
+                CellTemplate  = UpdatedTemplate,
+                Sortable      = true,
+                Filterable    = false,
+                Width         = "170px",
+            },
+        ];
+
+        _individualActionTemplate = IndividualActionButtons;
+    }
+
+    private RenderFragment<PageListItemResponse> IndividualTitleTemplate => item => __builder =>
+    {
+        <span style="font-weight:600;cursor:pointer" @onclick="() => OpenEdit(item.Id)">@item.Title</span>
+    };
+
+    private static RenderFragment<PageListItemResponse> IndividualSlugTemplate => item => __builder =>
+    {
+        <code class="pe-stack-mono">@item.Slug</code>
+    };
+
+    private static RenderFragment<PageListItemResponse> IndividualFullSlugTemplate => item => __builder =>
+    {
+        <code class="pe-stack-mono pe-stack-accent">/@item.FullSlug</code>
+    };
+
+    private RenderFragment<PageListItemResponse> IndividualStatusTemplate => item => __builder =>
+    {
+        <span class="badge-cms @(item.Status == PageStatus.Published ? "badge-success" : "badge-neutral")">@StatusLabel(item.Status)</span>
+    };
+
+    // A single language's row has no group to act on behalf of, so — unlike the
+    // grouped view's ActionButtons — delete belongs here too, targeting exactly
+    // this one PageInfo.
+    private RenderFragment<PageListItemResponse> IndividualActionButtons => item => __builder =>
+    {
+        LanguageResponse? lang = _languages.FirstOrDefault(l => l.Id == item.LanguageId);
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Pages_StatsBtn"]" @onclick="() => OpenStats(item)">
+                <i class="bi bi-graph-up"></i>
+            </button>
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]" @onclick="() => OpenEdit(item.Id)">
+                <i class="bi bi-pencil"></i>
+            </button>
+            @if (lang is not null)
+            {
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Delete"]" @onclick="() => OpenDeleteForLanguage(item, lang)">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            }
+        </div>
+    };
+
+    // Renders one page and its children (up to PageHierarchy.MaxDepth, already
+    // enforced at save time) as an indented tree — operates on the same
+    // default-language-representative set as the flat grid (_pages), since
+    // parent/child links are only ever created within the same language.
+    private RenderFragment TreeNode(PageListItemResponse node, int depth) => __builder =>
+    {
+        <div class="pe-tree-row" style="margin-left:@(depth * 24)px">
+            <i class="bi @(depth == 0 ? "bi-folder2" : "bi-file-earmark-text") " style="color:var(--cms-text-dim)"></i>
+            <span class="pe-tree-title" @onclick="() => OpenEdit(node.Id)">@node.Title</span>
+            <code class="pe-tree-slug">/@node.FullSlug</code>
+            <span class="badge-cms @(node.Status == PageStatus.Published ? "badge-success" : "badge-neutral")">@StatusLabel(node.Status)</span>
+            @if (node.PendingStatus.HasValue)
+            {
+                <span class="badge-cms badge-warning" title="@L["PageEditor_PendingStatusHint"]">
+                    <i class="bi bi-hourglass-split"></i> @L["PageEditor_PendingStatusBadge"]
+                </span>
+            }
+            <div class="pe-tree-actions">
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Pages_StatsBtn"]" @onclick="() => OpenStats(node)">
+                    <i class="bi bi-graph-up"></i>
+                </button>
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]" @onclick="() => OpenEdit(node.Id)">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            </div>
+        </div>
+        @if (_treeChildrenByParentId.TryGetValue(node.Id, out List<PageListItemResponse>? children))
+        {
+            @foreach (PageListItemResponse child in children.OrderBy(c => c.Title))
+            {
+                @TreeNode(child, depth + 1)
+            }
+        }
+    };
+
+    // Same as TreeNode, but every language is its own node (no PageGroup collapsing)
+    // — a language badge next to the title is what keeps "About (TR)" and
+    // "About (EN)" from reading as duplicates of each other.
+    private RenderFragment IndividualTreeNode(PageListItemResponse node, int depth) => __builder =>
+    {
+        <div class="pe-tree-row" style="margin-left:@(depth * 24)px">
+            <i class="bi @(depth == 0 ? "bi-folder2" : "bi-file-earmark-text") " style="color:var(--cms-text-dim)"></i>
+            <span class="badge-cms badge-neutral pe-tree-lang-badge">@node.LanguageName</span>
+            <span class="pe-tree-title" @onclick="() => OpenEdit(node.Id)">@node.Title</span>
+            <code class="pe-tree-slug">/@node.FullSlug</code>
+            <span class="badge-cms @(node.Status == PageStatus.Published ? "badge-success" : "badge-neutral")">@StatusLabel(node.Status)</span>
+            @if (node.PendingStatus.HasValue)
+            {
+                <span class="badge-cms badge-warning" title="@L["PageEditor_PendingStatusHint"]">
+                    <i class="bi bi-hourglass-split"></i> @L["PageEditor_PendingStatusBadge"]
+                </span>
+            }
+            <div class="pe-tree-actions">
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Pages_StatsBtn"]" @onclick="() => OpenStats(node)">
+                    <i class="bi bi-graph-up"></i>
+                </button>
+                <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]" @onclick="() => OpenEdit(node.Id)">
+                    <i class="bi bi-pencil"></i>
+                </button>
+            </div>
+        </div>
+        @if (_treeChildrenByParentIdIndividual.TryGetValue(node.Id, out List<PageListItemResponse>? children))
+        {
+            @foreach (PageListItemResponse child in children.OrderBy(c => c.Title).ThenBy(c => c.LanguageName))
+            {
+                @IndividualTreeNode(child, depth + 1)
+            }
+        }
+    };
+
+    private string StatusLabel(PageStatus status) => status switch
+    {
+        PageStatus.Draft => L["Pages_StatusDraft"],
+        PageStatus.Published => L["Pages_StatusPublished"],
+        PageStatus.Archived => L["Pages_StatusArchived"],
+        _ => status.ToString(),
+    };
+
+    private async Task OpenStats(PageListItemResponse page)
+    {
+        _showStats = true;
+        _statsLoading = true;
+        _statsData = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            (await Sender.Send(new GetPageStatsQuery(page.Id))).Match(
+                data => _statsData = data,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Pages_Stats_LoadError"]);
+        }
+        finally
+        {
+            _statsLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string FormatDuration(double seconds)
+    {
+        var span = TimeSpan.FromSeconds(seconds);
+        return $"{(int)span.TotalMinutes}:{span.Seconds:D2}";
+    }
+
+    private static string ScoreColor(int score) => score switch
+    {
+        >= 80 => "var(--cms-success)",
+        >= 50 => "var(--cms-warning)",
+        _ => "var(--cms-danger)",
+    };
+
+    private static string GroupKey(PageListItemResponse p) => p.PageGroupId?.ToString() ?? $"single-{p.Id}";
+
+    // ── Filters ───────────────────────────────────────────────────────────────
+    private bool _filterPanelOpen;
+    private string _filterStatus = "";
+    private string _filterLanguageId = "";
+    private readonly HashSet<PageKind> _filterKinds = [];
+    private PageSignal _filterSignals = PageSignal.None;
+
+    private static readonly PageKind[] AllPageKinds = Enum.GetValues<PageKind>();
+
+    /// <summary>
+    /// Every signal except <see cref="PageSignal.None"/>, which is the absence of a
+    /// filter rather than something to filter by.
+    /// </summary>
+    private static readonly PageSignal[] FilterableSignals =
+        [.. Enum.GetValues<PageSignal>().Where(s => s != PageSignal.None)];
+
+    private int ActiveFilterCount =>
+        (_filterStatus.Length > 0 ? 1 : 0)
+        + (_filterLanguageId.Length > 0 ? 1 : 0)
+        + _filterKinds.Count
+        + FilterableSignals.Count(s => _filterSignals.HasFlag(s));
+
+    private async Task ToggleKind(PageKind kind)
+    {
+        if (!_filterKinds.Remove(kind)) _filterKinds.Add(kind);
+        await LoadPages();
+    }
+
+    private async Task ToggleSignal(PageSignal signal)
+    {
+        _filterSignals ^= signal;
+        await LoadPages();
+    }
+
+    private async Task ClearFilters()
+    {
+        _filterStatus = "";
+        _filterLanguageId = "";
+        _filterKinds.Clear();
+        _filterSignals = PageSignal.None;
+        await LoadPages();
+    }
+
+    private async Task LoadPages()
+    {
+        _loading = true;
+        try
+        {
+            GetPagesQuery query = new(
+                LanguageId: int.TryParse(_filterLanguageId, out int lid) ? lid : null,
+                Status: Enum.TryParse(_filterStatus, out PageStatus st) ? st : null,
+                Kinds: _filterKinds.Count > 0 ? [.. _filterKinds] : null,
+                RequiredSignals: _filterSignals);
+
+            (await Sender.Send(query)).Match(
+                items => BuildGroups(items),
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Pages_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            _reloadVersion++;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadLanguages()
+    {
+        try
+        {
+            // Active only. An inactive language is closed for authoring, so offering
+            // a "create this translation" button for one contradicts the setting the
+            // moment someone switches it off.
+            (await Sender.Send(new GetLanguagesQuery(IsActive: true))).Match(
+                success => _languages = [.. success.Items],
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    // Collapses every translation of the same page (shared PageGroupId) into a
+    // single grid row — the default-language version if one exists in the group,
+    // otherwise the lowest-Id member — with the rest reachable via LanguagesTemplate.
+    private void BuildGroups(List<PageListItemResponse> items)
+    {
+        _allItems = items;
+        _allById = items.ToDictionary(i => i.Id);
+        _groupsByKey = items.GroupBy(GroupKey).ToDictionary(g => g.Key, g => g.ToList());
+
+        _pages = [.. _groupsByKey.Values
+            .Select(members => members.FirstOrDefault(m => _languages.FirstOrDefault(l => l.Id == m.LanguageId)?.IsDefault == true)
+                ?? members.OrderBy(m => m.Id).First())
+            .OrderByDescending(p => p.UpdateDate ?? p.CreateDate)];
+
+        BuildTree();
+        BuildIndividualTree();
+    }
+
+    // A page is a tree root if it has no parent, or if its parent isn't itself
+    // one of the representative rows in _pages (e.g. the parent's OWN default-
+    // language version was deleted/archived out of the group) — defensively
+    // treating it as a root rather than dropping it from the view entirely.
+    private void BuildTree()
+    {
+        HashSet<int> pageIds = [.. _pages.Select(p => p.Id)];
+
+        _treeChildrenByParentId = _pages
+            .Where(p => p.ParentPageId is int parentId && pageIds.Contains(parentId))
+            .GroupBy(p => p.ParentPageId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        _treeRoots = [.. _pages
+            .Where(p => p.ParentPageId is null || !pageIds.Contains(p.ParentPageId.Value))
+            .OrderBy(p => p.Title)];
+    }
+
+    // Same shape as BuildTree, but over every language's own row instead of the
+    // collapsed representatives — each language keeps its own ParentPageId, so this
+    // walks each language's tree independently rather than trying to merge them.
+    private void BuildIndividualTree()
+    {
+        HashSet<int> pageIds = [.. _allItems.Select(p => p.Id)];
+
+        _treeChildrenByParentIdIndividual = _allItems
+            .Where(p => p.ParentPageId is int parentId && pageIds.Contains(parentId))
+            .GroupBy(p => p.ParentPageId!.Value)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        _treeRootsIndividual = [.. _allItems
+            .Where(p => p.ParentPageId is null || !pageIds.Contains(p.ParentPageId.Value))
+            .OrderBy(p => p.Title)
+            .ThenBy(p => p.LanguageName)];
+    }
+
+    // ── Deleted-twin prompt ────────────────────────────────────────────────
+    // Delete-then-recreate is an ordinary editing loop, and treating the two as
+    // unrelated pages is what used to leave a pile of unrestorable tombstones
+    // behind. Asked once, before anything is written.
+    private DeletedTranslationResponse? _deletedTwin;
+    private (int SourceId, int LanguageId)? _pendingTranslation;
+
+    private async Task StartTranslation(int sourcePageId, int targetLanguageId)
+    {
+        _creatingTranslationFor = (sourcePageId, targetLanguageId);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            DeletedTranslationResponse? twin = null;
+            (await Sender.Send(new GetDeletedTranslationQuery(sourcePageId, targetLanguageId)))
+                .Match(found => twin = found, _ => { });
+
+            if (twin is not null)
+            {
+                _deletedTwin = twin;
+                _pendingTranslation = (sourcePageId, targetLanguageId);
+                return;
+            }
+        }
+        finally { _creatingTranslationFor = null; }
+
+        await CreateTranslationFromGrid(sourcePageId, targetLanguageId);
+    }
+
+    private async Task RestoreDeletedTwin()
+    {
+        if (_deletedTwin is not { } twin) return;
+
+        bool ok = false;
+        (await Sender.Send(new RestoreTrashItemCommand(TrashEntityType.PageInfo, twin.Id, null)))
+            .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+        _deletedTwin = null;
+        _pendingTranslation = null;
+
+        if (ok)
+        {
+            Toast.Success(L["Pages_TranslationRestored"]);
+            Nav.NavigateTo($"/pages/edit/{twin.Id}");
+        }
+        else
+        {
+            await LoadPages();
+        }
+    }
+
+    private async Task CreateFreshOverTwin()
+    {
+        if (_pendingTranslation is not { } pending) return;
+
+        _deletedTwin = null;
+        _pendingTranslation = null;
+        await CreateTranslationFromGrid(pending.SourceId, pending.LanguageId, replaceDeleted: true);
+    }
+
+    private async Task CreateTranslationFromGrid(int sourcePageId, int targetLanguageId, bool replaceDeleted = false)
+    {
+        _creatingTranslationFor = (sourcePageId, targetLanguageId);
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            int? newId = null;
+            bool alreadyExists = false;
+
+            (await Sender.Send(new CreatePageTranslationCommand(sourcePageId, targetLanguageId, replaceDeleted))).Match(
+                id => newId = id,
+                error =>
+                {
+                    // "It already exists" means this screen is showing a "+" for a
+                    // translation that is actually there — the list was rendered
+                    // before it was created (another tab, another user, or a stale
+                    // tab left open). Toasting alone leaves the user clicking a
+                    // button that will never work, so reload and go to the real page
+                    // instead of reporting a dead end.
+                    alreadyExists = error.Code == PageInfoErrors.TranslationAlreadyExists.Code;
+                    if (!alreadyExists)
+                        Toast.Error(L.Error(error));
+                });
+
+            if (alreadyExists)
+            {
+                await LoadPages();
+                int? existingId = _groupsByKey.Values
+                    .FirstOrDefault(members => members.Any(m => m.Id == sourcePageId))?
+                    .FirstOrDefault(m => m.LanguageId == targetLanguageId)?.Id;
+
+                if (existingId is int found)
+                {
+                    Toast.Info(L["Pages_TranslationAlreadyExists_Opening"]);
+                    Nav.NavigateTo($"/pages/edit/{found}");
+                    return;
+                }
+
+                // Refreshed and it is still not in the list: the row exists but this
+                // query cannot see it, which is a real inconsistency rather than a
+                // stale tab. Say so plainly instead of pretending the click failed.
+                Toast.Error(L["Pages_TranslationAlreadyExists_Hidden"]);
+                return;
+            }
+
+            if (newId is int id)
+                Nav.NavigateTo($"/pages/edit/{id}");
+        }
+        finally { _creatingTranslationFor = null; }
+    }
+
+    private void OpenCreate()
+    {
+        _createTitle = "";
+        _createSlug = "";
+        _createLanguageId = _languages.FirstOrDefault(l => l.IsDefault)?.Id ?? _languages.FirstOrDefault()?.Id ?? 0;
+        _showCreate = true;
+    }
+
+    private void CloseCreate() => _showCreate = false;
+
+    private async Task ConfirmCreate()
+    {
+        if (_createTitle.IsNullOrWhiteSpace()) { Toast.Error(L["Pages_Validation_Title"]); return; }
+        if (_createLanguageId <= 0) { Toast.Error(L["Pages_Validation_Language"]); return; }
+
+        _saving = true;
+        try
+        {
+            int? newId = null;
+            (await Sender.Send(new CreatePageCommand(_createTitle.Trim(), _createSlug, _createLanguageId)))
+                .Match(
+                    id => newId = id,
+                    error => Toast.Error(L.Error(error)));
+
+            if (newId is int id)
+            {
+                Toast.Success(L["Pages_Created"]);
+                _showCreate = false;
+                Nav.NavigateTo($"/pages/edit/{id}");
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private void OpenEdit(int id) => Nav.NavigateTo($"/pages/edit/{id}");
+
+    private void OpenDeleteForLanguage(PageListItemResponse page, LanguageResponse language)
+    {
+        _deleteTarget = page;
+        _deleteTargetLanguage = language;
+        _deleteRedirectUrl = "";
+        _showDelete = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            string? redirectUrl = _deleteRedirectUrl.IsNullOrWhiteSpace() ? null : _deleteRedirectUrl.Trim();
+            bool ok = false;
+            (await Sender.Send(new DeletePageCommand(_deleteTarget.Id, redirectUrl)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Pages_Deleted"]);
+                _showDelete = false;
+                _deleteTarget = null;
+                _deleteTargetLanguage = null;
+                await LoadPages();
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task OnStatusSelectChanged(PageListItemResponse page, string? newStatusRaw)
+    {
+        if (!Enum.TryParse(newStatusRaw, out PageStatus newStatus) || newStatus == page.Status)
+            return;
+
+        if (page.Status == PageStatus.Published && newStatus != PageStatus.Published)
+        {
+            _statusChangeTarget = page;
+            _statusChangeNewStatus = newStatus;
+            _statusRedirectUrl = "";
+            _showStatusRedirectPrompt = true;
+            return;
+        }
+
+        await ApplyStatusChange(page.Id, newStatus, null);
+    }
+
+    private void CancelStatusRedirectPrompt()
+    {
+        _showStatusRedirectPrompt = false;
+        _statusChangeTarget = null;
+    }
+
+    private async Task ConfirmStatusRedirectPrompt()
+    {
+        if (_statusChangeTarget is null) return;
+        string? redirectUrl = _statusRedirectUrl.IsNullOrWhiteSpace() ? null : _statusRedirectUrl.Trim();
+        await ApplyStatusChange(_statusChangeTarget.Id, _statusChangeNewStatus, redirectUrl);
+        _showStatusRedirectPrompt = false;
+        _statusChangeTarget = null;
+    }
+
+    private async Task ApplyStatusChange(int id, PageStatus status, string? redirectUrl)
+    {
+        _saving = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new UpdatePageStatusCommand(id, status, redirectUrl)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+                Toast.Success(L["Pages_Toast_StatusSaved"]);
+
+            // Reload even on failure: the <select> already shows whatever the user
+            // picked (the browser updates it before @onchange fires) — without this,
+            // a rejected change (e.g. CannotUnpublishHomePage) would leave the dropdown
+            // visually showing the new status even though the page never changed.
+            await LoadPages();
+        }
+        finally { _saving = false; }
+    }
+}

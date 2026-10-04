@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="AspNetCore.HealthChecks.NpgSql" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+		<PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore.Tools" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Core\Application\Application.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<!-- Background photos for the seeded system-page templates (home/404/500).
+		     Embedded rather than copied to the output directory: the seeder needs
+		     these bytes wherever the app actually runs — a fresh clone, a Docker
+		     build, any machine — not just wherever they happened to sit on disk
+		     relative to a working directory. -->
+		<EmbeddedResource Include="Seed\Assets\*.jpg" />
+		<EmbeddedResource Include="Seed\Assets\*.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Cms.Tests" />
+	</ItemGroup>
+
+</Project>

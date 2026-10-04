@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+	<ItemGroup>
+		<PackageReference Include="Serilog.AspNetCore" />
+		<PackageReference Include="Serilog.Sinks.Seq" />
+		<PackageReference Include="WebMarkupMin.AspNetCoreLatest" />
+		<PackageReference Include="LigerShark.WebOptimizer.Core" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\Core\Application\Application.csproj" />
+		<ProjectReference Include="..\..\Infrastructure\Persistence\Persistence.csproj" />
+		<ProjectReference Include="..\..\Infrastructure\Infrastructure\Infrastructure.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="ArchitectureTests" />
+	</ItemGroup>
+
+
+  <ItemGroup>
+    <!--
+      Never ship the developer's local settings. This file holds the connection
+      string, the signing keys and the first-run administrator password, and a
+      folder publish copied straight to an IIS server would otherwise carry all
+      three onto a web server — live, if ASPNETCORE_ENVIRONMENT is ever
+      Development there.
+    -->
+    <Content Update="appsettings.Development.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+</Project>

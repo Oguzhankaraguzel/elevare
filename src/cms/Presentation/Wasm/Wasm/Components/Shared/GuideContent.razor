@@ -1,0 +1,287 @@
+@* Single source of truth for the page-builder guide content — reused by both
+   PageEditor.razor's "Rehber" modal and the full-page /admin/guide view, so the
+   two never drift out of sync.
+
+   Each section is a <details> so the guide reads as a list of questions rather
+   than one long wall of text. Native <details> was chosen over a Blazor toggle on
+   purpose: it costs no component state, works identically inside the modal and the
+   page, and — crucially — the deep links below still work, because the anchor ids
+   sit on the <details> elements and a browser opens a collapsed <details> when it
+   scrolls to a target inside it. *@
+
+<div class="guide-sections">
+    @* First, because it answers the question every other section assumes:
+       where things are. Written after the editor was reorganised into two side
+       columns and one page-settings panel. *@
+    <details class="guide-section" id="layout-guide" open>
+        <summary>@L["Guide_LayoutTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 10px;color:var(--cms-text-muted)">@L["Guide_LayoutIntro"]</p>
+            <ul style="padding-left:20px;margin:0 0 10px">
+                <li><strong>@L["Guide_LayoutLeftTitle"]</strong> — @L["Guide_LayoutLeftBody"]</li>
+                <li><strong>@L["Guide_LayoutRightTitle"]</strong> — @L["Guide_LayoutRightBody"]</li>
+                <li><strong>@L["Guide_LayoutTextTitle"]</strong> — @L["Guide_LayoutTextBody"]</li>
+                <li><strong>@L["Guide_LayoutSettingsTitle"]</strong> — @L["Guide_LayoutSettingsBody"]</li>
+            </ul>
+            <p style="margin:0;color:var(--cms-text-muted)">@L["Guide_LayoutRule"]</p>
+        </div>
+    </details>
+    <details class="guide-section" id="popup-guide">
+        <summary>@L["PageEditor_HelpGuidePopupTitle"]</summary>
+        <div class="guide-section-body">
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["PageEditor_HelpGuidePopupStep1"]</li>
+                <li>@L["PageEditor_HelpGuidePopupStep2"]</li>
+                <li>@L["PageEditor_HelpGuidePopupStep3"]</li>
+                <li>@L["PageEditor_HelpGuidePopupStep4"]</li>
+            </ol>
+        </div>
+    </details>
+
+    <details class="guide-section" id="overlay-guide">
+        <summary>@L["PageEditor_HelpGuideOverlayTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["PageEditor_HelpGuideOverlayIntro"]</p>
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["PageEditor_HelpGuideOverlayStep1"]</li>
+                <li>@L["PageEditor_HelpGuideOverlayStep2"]</li>
+                <li>@L["PageEditor_HelpGuideOverlayStep3"]</li>
+            </ol>
+            <p style="margin:12px 0 0;color:var(--cms-text-muted)">@L["PageEditor_HelpGuideOverlayDetails"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="templates-guide">
+        <summary>@L["PageEditor_HelpGuideTemplatesTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["PageEditor_HelpGuideTemplatesIntro"]</p>
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["PageEditor_HelpGuideTemplatesStep1"]</li>
+                <li>@L["PageEditor_HelpGuideTemplatesStep2"]</li>
+                <li>@L["PageEditor_HelpGuideTemplatesStep3"]</li>
+            </ol>
+            <p style="margin:12px 0 0;color:var(--cms-text-muted)">@L["PageEditor_HelpGuideTemplatesNote"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="multistep-guide">
+        <summary>@L["PageEditor_HelpGuideMultiStepTitle"]</summary>
+        <div class="guide-section-body">
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["PageEditor_HelpGuideMultiStepStep1"]</li>
+                <li>@L["PageEditor_HelpGuideMultiStepStep2"]</li>
+            </ol>
+        </div>
+    </details>
+
+    <details class="guide-section" id="form-guide">
+        <summary>@L["PageEditor_HelpGuideFormTitle"]</summary>
+        <div class="guide-section-body">
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["PageEditor_HelpGuideFormStep1"]</li>
+                <li>@L["PageEditor_HelpGuideFormSelectHint"]</li>
+                <li>@L["PageEditor_HelpGuideFormStep2"]</li>
+                <li>@L["PageEditor_HelpGuideFormStep3"]</li>
+                <li>@L["PageEditor_HelpGuideFormStep4"]</li>
+                <li>@L["PageEditor_HelpGuideFormStep5"]</li>
+            </ol>
+            <p style="margin:12px 0 0;color:var(--cms-text-muted)">@L["PageEditor_HelpGuideFormAttachments"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="url-builder-guide">
+        <summary>@L["Guide_UrlBuilderTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderIntro"]</p>
+
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_UrlBuilderHowToUseTitle"]</p>
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderHowToUseIntro"]</p>
+            <ol style="padding-left:20px;margin:0 0 12px">
+                <li>@L["Guide_UrlBuilderUseStep1"]</li>
+                <li>@L["Guide_UrlBuilderUseStep2"]</li>
+                <li>@L["Guide_UrlBuilderUseStep3"]</li>
+            </ol>
+            <p style="margin:0 0 6px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderRawHtmlHint"]</p>
+            <pre class="guide-code"><code>&lt;a href="https://wa.me/905551234567?text=Merhaba"
+   target="_blank" rel="noopener noreferrer"&gt;
+   @L["Guide_UrlBuilderWhatsAppSampleText"]
+&lt;/a&gt;</code></pre>
+            <p style="margin:0 0 20px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderTargetBlankHint"]</p>
+
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_UrlBuilderWhatsAppTitle"]</p>
+            <p style="margin:0 0 16px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderWhatsAppBody"]</p>
+
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_UrlBuilderEmailTitle"]</p>
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderEmailBody"]</p>
+            <pre class="guide-code"><code>&lt;a href="mailto:info@@siteniz.com?subject=Teklif%20talebi"&gt;
+   @L["Guide_UrlBuilderEmailSampleText"]
+&lt;/a&gt;</code></pre>
+            <p style="margin:0 0 16px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderEmailWarning"]</p>
+
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_UrlBuilderPhoneTitle"]</p>
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderPhoneBody"]</p>
+            <pre class="guide-code"><code>&lt;a href="tel:+905551234567"&gt;0555 123 45 67&lt;/a&gt;</code></pre>
+            <p style="margin:0 0 16px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderPhoneHint"]</p>
+
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_UrlBuilderUtmTitle"]</p>
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["Guide_UrlBuilderUtmBody"]</p>
+            <ul style="padding-left:20px;margin:0 0 8px;color:var(--cms-text-muted)">
+                <li>@L["Guide_UrlBuilderUtmWhere1"]</li>
+                <li>@L["Guide_UrlBuilderUtmWhere2"]</li>
+                <li>@L["Guide_UrlBuilderUtmWhere3"]</li>
+            </ul>
+            <p style="margin:0;color:var(--cms-text-muted)">@L["Guide_UrlBuilderUtmWarning"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="page-listing-guide">
+        <summary>@L["PageEditor_HelpGuidePageListingTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["PageEditor_HelpGuidePageListingIntro"]</p>
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["PageEditor_HelpGuidePageListingSourceStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingCardStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingSearchStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingTagStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingEmptyStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingPaginationLookStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingPaginationStyleStep"]</li>
+                <li>@L["PageEditor_HelpGuidePageListingPaginationAutoHideStep"]</li>
+            </ol>
+        </div>
+    </details>
+
+    <details class="guide-section" id="dark-mode-guide">
+        <summary>@L["Guide_DarkModeTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_DarkModeIntro"]</p>
+            <ol style="padding-left:20px;margin:0 0 12px">
+                <li>@L["Guide_DarkModeStep1"]</li>
+                <li>@L["Guide_DarkModeStep2"]</li>
+            </ol>
+            <p style="margin:0;color:var(--cms-text-muted)">@L["Guide_DarkModeWarning"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="brand-colors-guide">
+        <summary>@L["Guide_BrandColorsTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_BrandColorsIntro"]</p>
+            <ol style="padding-left:20px;margin:0 0 20px">
+                <li>@L["Guide_BrandColorsStep1"]</li>
+                <li>@L["Guide_BrandColorsStep2"]</li>
+                <li>@L["Guide_BrandColorsStep3"]</li>
+            </ol>
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_BrandColorsA11yTitle"]</p>
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_BrandColorsA11yBody"]</p>
+            <p style="margin:0 0 16px;color:var(--cms-text-muted)">@L["Guide_BrandColorsWarning"]</p>
+
+            @* The whole palette, not a snippet: editing these by hand is the one way
+               a site can lose a variable entirely, and a half-palette fails in a way
+               that is hard to read back from the page — a block quietly falls to the
+               fallback baked into its own markup instead of showing an error. Having
+               the complete known-good set one click away turns that from a debugging
+               session into a paste. Values are the seeded defaults, so this doubles
+               as "put it back the way it came". *@
+            <p style="margin:0 0 6px;font-weight:600">@L["Guide_BrandColorsTemplateTitle"]</p>
+            <p style="margin:0 0 8px;color:var(--cms-text-muted)">@L["Guide_BrandColorsTemplateBody"]</p>
+            <textarea id="brand-colors-template" class="cms-input" rows="10" readonly style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;white-space:pre">:root {
+  --elevare-bg: #ffffff;         /* sayfa zemini */
+  --elevare-surface: #f5f5f5;    /* kart, panel, menü zemini */
+  --elevare-surface-2: #eeeeee;  /* ikincil buton, rozet zemini */
+  --elevare-text: #111111;       /* gövde metni */
+  --elevare-text-2: #333333;     /* ikincil metin */
+  --elevare-muted: #666666;      /* tarih, etiket, ayraç */
+  --elevare-border: #dddddd;     /* çerçeve ve ayraç çizgileri */
+  --elevare-primary: #000000;    /* vurgu rengi, birincil buton zemini */
+  --elevare-on-primary: #ffffff; /* birincil zeminin ÜSTÜNDEKİ yazı */
+  --elevare-secondary: #404040;  /* ikincil vurgu */
+  --elevare-heading: #111111;    /* başlıklar */
+  --elevare-link: #000000;       /* bağlantılar */
+  --elevare-code-bg: #1a1a1a;    /* kod bloğu zemini */
+}
+[data-theme="dark"] {
+  --elevare-bg: #0d0d0d;
+  --elevare-surface: #1a1a1a;
+  --elevare-surface-2: #242424;
+  --elevare-text: #f5f5f5;
+  --elevare-text-2: #cccccc;
+  --elevare-muted: #999999;
+  --elevare-border: #333333;
+  --elevare-primary: #ffffff;
+  --elevare-on-primary: #111111;
+  --elevare-secondary: #bfbfbf;
+  --elevare-heading: #f5f5f5;
+  --elevare-link: #ffffff;
+  --elevare-code-bg: #0a0a0a;
+}</textarea>
+            @* Copied by a delegated listener in cms.js inside the real click — a
+               Blazor round trip would land outside the user gesture and the browser
+               would reject the clipboard write. Same mechanism as the JSON builder. *@
+            <button type="button" class="btn-cms btn-primary-cms btn-sm-cms" style="margin-top:8px"
+                    data-copy-target="#brand-colors-template"
+                    data-copy-idle-label="@L["Guide_BrandColorsTemplateCopy"]"
+                    data-copied-label="@L["Guide_BrandColorsTemplateCopied"]"
+                    data-copyfail-label="@L["Guide_BrandColorsTemplateCopyFailed"]">
+                <i class="bi bi-clipboard"></i>
+                <span data-copy-label>@L["Guide_BrandColorsTemplateCopy"]</span>
+            </button>
+            <p style="margin:12px 0 0;color:var(--cms-text-muted)">@L["Guide_BrandColorsTemplateNote"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="template-language-guide">
+        <summary>@L["Guide_TemplateLanguageTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_TemplateLanguageIntro"]</p>
+            <ol style="padding-left:20px;margin:0 0 12px">
+                <li>@L["Guide_TemplateLanguageStep1"]</li>
+                <li>@L["Guide_TemplateLanguageStep2"]</li>
+            </ol>
+            <p style="margin:0;color:var(--cms-text-muted)">@L["Guide_TemplateLanguageWarning"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="site-codes-guide">
+        <summary>@L["Guide_SiteCodesTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_SiteCodesIntro"]</p>
+            <ol style="padding-left:20px;margin:0 0 12px">
+                <li>@L["Guide_SiteCodesStep1"]</li>
+                <li>@L["Guide_SiteCodesStep2"]</li>
+                <li>@L["Guide_SiteCodesStep3"]</li>
+                <li>@L["Guide_SiteCodesStep4"]</li>
+            </ol>
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_SiteCodesConsentHint"]</p>
+            <div class="cms-card" style="margin:0;border:1px solid var(--cms-danger);background:color-mix(in srgb, var(--cms-danger) 8%, transparent)">
+                <h4 style="margin-top:0;color:var(--cms-danger)"><i class="bi bi-exclamation-triangle-fill"></i> @L["Guide_SiteCodesAnalyticsConsentWarningTitle"]</h4>
+                <p style="margin:0;color:var(--cms-text)">@L["Guide_SiteCodesAnalyticsConsentWarningBody"]</p>
+            </div>
+        </div>
+    </details>
+
+    <details class="guide-section" id="favicon-logo-guide">
+        <summary>@L["Guide_FaviconLogoTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_FaviconLogoIntro"]</p>
+            <ol style="padding-left:20px;margin:0 0 12px">
+                <li>@L["Guide_FaviconLogoStep1"]</li>
+                <li>@L["Guide_FaviconLogoStep2"]</li>
+                <li>@L["Guide_FaviconLogoStep3"]</li>
+            </ol>
+            <p style="margin:0;color:var(--cms-text-muted)">@L["Guide_FaviconLogoNote"]</p>
+        </div>
+    </details>
+
+    <details class="guide-section" id="seo-settings-guide">
+        <summary>@L["Guide_SeoSettingsTitle"]</summary>
+        <div class="guide-section-body">
+            <p style="margin:0 0 12px;color:var(--cms-text-muted)">@L["Guide_SeoSettingsIntro"]</p>
+            <ol style="padding-left:20px;margin:0">
+                <li>@L["Guide_SeoSettingsStep1"]</li>
+                <li>@L["Guide_SeoSettingsStep2"]</li>
+                <li>@L["Guide_SeoSettingsStep3"]</li>
+            </ol>
+        </div>
+    </details>
+</div>

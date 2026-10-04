@@ -1,0 +1,66 @@
+@* Says which copied (unlinked) templates on this canvas are behind their source,
+   in words: when the copy was taken, when the template's own content changed, and
+   that nothing here changed because of it. Replaces a toast that came back on every
+   open and offered nothing to do. "Şablonu aç" opens the source in a new tab (this
+   screen may hold unsaved work); "Anladım" stops mentioning it for this version
+   of the template — see dismissStaleTemplate in grapes-editor.js. *@
+@inject IJSRuntime JS
+
+@if (_items.Count > 0)
+{
+    <div class="stale-tpl" role="status">
+        @foreach (StaleTemplateInfo item in _items)
+        {
+            <div class="stale-tpl-row">
+                <i class="bi bi-info-circle stale-tpl-icon"></i>
+                <div class="stale-tpl-text">
+                    @((MarkupString)string.Format(L[Scope == StaleTemplateScope.Page ? "StaleTemplate_OnPage" : "StaleTemplate_OnTemplate"],
+                        System.Net.WebUtility.HtmlEncode(item.Name), FormatDate(item.CopiedAt), FormatDate(item.ChangedAt)))
+                </div>
+                <div class="stale-tpl-actions">
+                    <a class="btn-cms btn-ghost btn-sm-cms" href="@($"/templates/edit/{item.Id}")" target="_blank" rel="noopener">
+                        <i class="bi bi-box-arrow-up-right"></i> @L["StaleTemplate_Open"]
+                    </a>
+                    <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="() => Dismiss(item)">
+                        <i class="bi bi-check2"></i> @L["StaleTemplate_Dismiss"]
+                    </button>
+                    <button type="button" class="btn-cms btn-ghost btn-sm-cms" title="@L["StaleTemplate_Close"]"
+                            aria-label="@L["StaleTemplate_Close"]" @onclick="() => _items.Remove(item)">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>Which editor this sits in; only the wording differs.</summary>
+    [Parameter] public StaleTemplateScope Scope { get; set; } = StaleTemplateScope.Page;
+
+    private readonly List<StaleTemplateInfo> _items = [];
+
+    /// <summary>Called by the editor with what grapes-editor.js reported on load.</summary>
+    public void Show(IEnumerable<StaleTemplateInfo> items)
+    {
+        _items.Clear();
+        _items.AddRange(items);
+        StateHasChanged();
+    }
+
+    private async Task Dismiss(StaleTemplateInfo item)
+    {
+        _items.Remove(item);
+        try { await JS.InvokeVoidAsync("grapesEditor.dismissStaleTemplate", item.Id, item.ChangedAt); }
+        catch (JSException) { /* the notice simply comes back next time */ }
+    }
+
+    private static string FormatDate(string value)
+    {
+        if (!DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsed))
+            return value;
+        DateTime local = parsed.Kind == DateTimeKind.Local ? parsed : parsed.ToLocalTime();
+        return local.ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture);
+    }
+}

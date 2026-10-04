@@ -1,0 +1,387 @@
+﻿@inject IJSRuntime JS
+@implements IDisposable
+
+<div class="reminder-panel-toolbar">
+    <button class="btn-cms btn-primary-cms btn-sm-cms" @onclick="OpenCreate">
+        <i class="bi bi-plus-lg"></i> @L["UserReminders_NewReminder"]
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div style="display:flex;align-items:center;justify-content:center;padding:60px">
+        <div class="cms-loading-spinner"></div>
+    </div>
+}
+else if (_reminders.Count == 0)
+{
+    <div style="text-align:center;padding:40px 20px;color:var(--cms-text-muted)">
+        <i class="bi bi-bell-slash" style="font-size:36px;display:block;margin-bottom:12px;opacity:.4"></i>
+        <p>@L["UserReminders_Empty"]</p>
+    </div>
+}
+else
+{
+    <div class="reminder-card-list">
+        @foreach (var r in _reminders)
+        {
+            bool isTriggered = r.RemindAt <= DateTime.UtcNow && !r.IsCompleted && !r.IsDismissed;
+            string borderColor = GetBorderColor(r.IsCompleted, r.IsDismissed, isTriggered);
+
+            <div class="reminder-card @(isTriggered ? "reminder-card-triggered" : "") @(r.IsCompleted ? "reminder-card-done" : "")"
+                 style="border-left:3px solid @borderColor">
+                <div class="reminder-card-top">
+                    <span class="reminder-card-title">
+                        @if (isTriggered) { <i class="bi bi-bell-fill" style="color:var(--cms-danger);font-size:12px;margin-right:4px"></i> }
+                        @r.Title
+                    </span>
+                    <div style="display:flex;gap:4px">
+                        @if (!r.IsCompleted && !r.IsDismissed)
+                        {
+                            <button class="reminder-card-action" @onclick="() => CompleteReminder(r)" title="@L["UserReminders_StatusCompleted"]">
+                                <i class="bi bi-check-circle"></i>
+                            </button>
+                            <button class="reminder-card-action" @onclick="() => DismissReminder(r)" title="@L["UserReminders_StatusDismissed"]">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        }
+                        <button class="reminder-card-action" @onclick="() => OpenEdit(r)" title="@L["UserReminders_ActionEdit"]">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="reminder-card-action reminder-card-delete" @onclick="() => OpenDelete(r)" title="@L["UserReminders_ActionDelete"]">
+                            <i class="bi bi-trash3"></i>
+                        </button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(r.Message))
+                {
+                    <div class="reminder-card-msg">@Truncate(r.Message, 100)</div>
+                }
+                <div class="reminder-card-meta">
+                    <span style="font-size:11px;color:@(isTriggered ? "var(--cms-danger)" : "var(--cms-text-muted)")">
+                        <i class="bi bi-clock"></i> @ToLocalTime(r.RemindAt).ToString("yyyy-MM-dd HH:mm")
+                    </span>
+                    @if (r.IsCompleted)
+                    {
+                        <span class="badge-cms badge-success" style="font-size:10px">@L["UserReminders_StatusCompleted"]</span>
+                    }
+                    else if (r.IsDismissed)
+                    {
+                        <span class="badge-cms badge-neutral" style="font-size:10px">@L["UserReminders_StatusDismissed"]</span>
+                    }
+                    else if (isTriggered)
+                    {
+                        <span class="badge-cms badge-danger" style="font-size:10px">@L["UserReminders_StatusPending"]</span>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* â”€â”€ Create / Edit modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+<CmsModal Title="@(_editId.HasValue ? L["UserReminders_EditTitle"] : L["UserReminders_CreateTitle"])"
+          IsVisible="_showForm"
+          OnClose="CloseForm"
+          Size="md">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label">@L["UserReminders_FormTitle"] <span style="color:var(--cms-danger)">*</span></label>
+            <input @bind="_form.Title" class="cms-input" placeholder="@L["UserReminders_FormTitlePlaceholder"]" />
+        </div>
+        <div class="form-group">
+            <label class="cms-label">@L["UserReminders_FormMessage"] <span style="color:var(--cms-danger)">*</span></label>
+            <textarea @bind="_form.Message" class="cms-input" rows="3" placeholder="@L["UserReminders_FormMessagePlaceholder"]"></textarea>
+        </div>
+        <div class="form-row cols-2">
+            <div class="form-group">
+                <label class="cms-label">@L["UserReminders_FormRemindAt"] <span style="color:var(--cms-danger)">*</span></label>
+                <input @bind="_form.RemindAt"
+                       @bind:format="yyyy-MM-ddTHH:mm"
+                       type="datetime-local"
+                       class="cms-input" />
+            </div>
+            <div class="form-group">
+                <label class="cms-label">@L["UserReminders_FormChannel"]</label>
+                <select @bind="_form.Channel" class="cms-input">
+                    @foreach (ReminderChannel ch in Enum.GetValues<ReminderChannel>())
+                    {
+                        <option value="@ch">@L[$"UserReminders_Channel{ch}"]</option>
+                    }
+                </select>
+            </div>
+        </div>
+        @if (_editId.HasValue)
+        {
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:12px">
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                    <label class="cms-toggle">
+                        <input type="checkbox" @bind="_form.IsCompleted" />
+                        <span class="cms-toggle-slider"></span>
+                    </label>
+                    <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["UserReminders_FormCompleted"]</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                    <label class="cms-toggle">
+                        <input type="checkbox" @bind="_form.IsDismissed" />
+                        <span class="cms-toggle-slider"></span>
+                    </label>
+                    <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["UserReminders_FormDismissed"]</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
+                    <label class="cms-toggle">
+                        <input type="checkbox" @bind="_form.IsActive" />
+                        <span class="cms-toggle-slider"></span>
+                    </label>
+                    <span style="font-size:13.5px;color:var(--cms-text-muted)">@L["UserReminders_FormActive"]</span>
+                </label>
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CloseForm">@L["UserReminders_FormCancel"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="SaveForm" disabled="@_saving">
+            @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+            else { <i class="bi bi-check2"></i> }
+            @L["UserReminders_FormSave"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* â”€â”€ Delete confirmation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ *@
+<CmsModal Title="@L["UserReminders_DeleteTitle"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <div style="text-align:center;padding:8px 0">
+            <i class="bi bi-exclamation-triangle-fill" style="font-size:36px;color:var(--cms-warning);display:block;margin-bottom:12px"></i>
+            <p style="color:var(--cms-text)">@string.Format(L["UserReminders_DeleteConfirm"], _deleteTarget?.Title)</p>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["UserReminders_FormCancel"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_saving">
+            @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+            else { <i class="bi bi-trash3"></i> }
+            @L["UserReminders_DeleteConfirmBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<ReminderResponse> _reminders = [];
+    private bool _loading = true;
+    private CancellationTokenSource? _loadCts;
+
+    private bool _showForm;
+    private bool _saving;
+    private int? _editId;
+    private ReminderFormModel _form = new();
+    private bool _showDelete;
+    private ReminderResponse? _deleteTarget;
+
+    private int _browserUtcOffsetMinutes;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _browserUtcOffsetMinutes = await JS.InvokeAsync<int>("cmsJs.getBrowserUtcOffsetMinutes");
+            await LoadReminders();
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadReminders(bool forceReload = false)
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        if (!forceReload && _reminders.Count > 0) { _loading = false; return; }
+
+        _loading = true;
+        try
+        {
+            Result<PagedResult<ReminderResponse>> result = await Sender.Send(new GetRemindersQuery(), ct);
+            result.Match(
+                success => { _reminders = [.. success.Items]; },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException) { /* expected when cancelled */ }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(L["UserReminders_ErrorLoad"]); }
+        finally { _loading = false; }
+    }
+
+    private async Task CompleteReminder(ReminderResponse r)
+    {
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new UpdateReminderCommand(
+                r.Id, r.Title, r.Message, r.RemindAt, r.Channel,
+                IsCompleted: true, r.IsDismissed, r.IsActive));
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+            if (succeeded)
+            {
+                Toast.Success(L["UserReminders_StatusCompleted"]);
+                await LoadReminders(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task DismissReminder(ReminderResponse r)
+    {
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new UpdateReminderCommand(
+                r.Id, r.Title, r.Message, r.RemindAt, r.Channel,
+                r.IsCompleted, IsDismissed: true, r.IsActive));
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+            if (succeeded)
+            {
+                Toast.Success(L["UserReminders_SuccessDismiss"]);
+                await LoadReminders(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        DateTime defaultLocal = ToLocalTime(DateTime.UtcNow.AddHours(1));
+        _form = new ReminderFormModel
+        {
+            RemindAt = defaultLocal
+        };
+        _showForm = true;
+    }
+
+    private void OpenEdit(ReminderResponse r)
+    {
+        _editId = r.Id;
+        _form = new ReminderFormModel
+        {
+            Title = r.Title,
+            Message = r.Message,
+            RemindAt = ToLocalTime(r.RemindAt),
+            Channel = r.Channel,
+            IsCompleted = r.IsCompleted,
+            IsDismissed = r.IsDismissed,
+            IsActive = r.IsActive,
+        };
+        _showForm = true;
+    }
+
+    private void CloseForm()
+    {
+        _showForm = false;
+        _editId = null;
+        _form = new ReminderFormModel();
+    }
+
+    private void OpenDelete(ReminderResponse r)
+    {
+        _deleteTarget = r;
+        _showDelete = true;
+    }
+
+    private async Task SaveForm()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Title)) { Toast.Error(L["UserReminders_ValidationTitleRequired"]); return; }
+        if (string.IsNullOrWhiteSpace(_form.Message)) { Toast.Error(L["UserReminders_ValidationMessageRequired"]); return; }
+
+        DateTime remindAtUtc = ToUtcTime(_form.RemindAt);
+
+        _saving = true;
+        try
+        {
+            Result result = _editId.HasValue
+                ? await Sender.Send(new UpdateReminderCommand(
+                    _editId.Value, _form.Title, _form.Message, remindAtUtc,
+                    _form.Channel, _form.IsCompleted, _form.IsDismissed, _form.IsActive))
+                : await Sender.Send(new CreateReminderCommand(
+                    _form.Title, _form.Message, remindAtUtc, _form.Channel));
+
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                Toast.Success(_editId.HasValue ? L["UserReminders_SuccessUpdate"] : L["UserReminders_SuccessCreate"]);
+                CloseForm();
+                await LoadReminders(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new DeleteReminderCommand(_deleteTarget.Id));
+            bool succeeded = false;
+            result.Match(
+                () => succeeded = true,
+                error => Toast.Error(L.Error(error))
+            );
+
+            if (succeeded)
+            {
+                Toast.Success(string.Format(L["UserReminders_SuccessDelete"], _deleteTarget.Title));
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadReminders(forceReload: true);
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private DateTime ToLocalTime(DateTime utc) => utc.AddMinutes(_browserUtcOffsetMinutes);
+
+    // The result is stamped Utc, not just shifted. RemindAt is a
+    // "timestamp with time zone" column and Npgsql runs in strict UTC mode, so it
+    // REFUSES a DateTime whose Kind is not Utc. The value coming out of the
+    // datetime-local <input> binds as Kind=Unspecified; without this the write threw
+    // and the save silently failed for any time the user actually picked — only the
+    // pre-filled default (built from DateTime.UtcNow, already Kind=Utc) ever saved,
+    // which is why a reminder "always" landed an hour out and none could be set for
+    // two minutes from now. SpecifyKind only relabels — the minutes are already the
+    // correct UTC instant after subtracting the browser offset.
+    private DateTime ToUtcTime(DateTime local) =>
+        DateTime.SpecifyKind(local.AddMinutes(-_browserUtcOffsetMinutes), DateTimeKind.Utc);
+
+    public void Dispose()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+    }
+
+    private static string Truncate(string text, int maxLength) =>
+        text.Length <= maxLength ? text : text[..maxLength] + "\u2026";
+
+    private static string GetBorderColor(bool isCompleted, bool isDismissed, bool isTriggered)
+    {
+        if (isCompleted) return "var(--cms-success)";
+        if (isDismissed) return "var(--cms-text-dim)";
+        if (isTriggered) return "var(--cms-danger)";
+        return "var(--cms-accent)";
+    }
+}

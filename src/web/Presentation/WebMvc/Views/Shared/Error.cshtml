@@ -1,0 +1,27 @@
+@{
+    ViewData["Title"] = "Hata";
+    Layout = "_Layout";
+    string? systemHtml = ViewData["SystemPageHtml"] as string;
+    string? systemCss = ViewData["SystemPageCss"] as string;
+}
+
+@section CriticalCss {
+    @if (!string.IsNullOrEmpty(systemCss))
+    {
+        <style>@Html.Raw(systemCss)</style>
+    }
+}
+
+@if (!string.IsNullOrEmpty(systemHtml))
+{
+    @* CMS-editable page: create & publish a builder page with the slug "500". *@
+    @Html.Raw(systemHtml)
+}
+else
+{
+    <section class="error-page">
+        <h1>500</h1>
+        <p>Beklenmeyen bir hata oluştu. Lütfen daha sonra tekrar deneyin.</p>
+        <a href="/">Ana Sayfaya Dön</a>
+    </section>
+}

@@ -1,0 +1,11 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<ItemGroup>
+		<PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.Extensions.Identity.Stores" />
+		<PackageReference Include="Microsoft.Extensions.Identity.Core" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
+	</ItemGroup>
+</Project>

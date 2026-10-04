@@ -1,0 +1,2239 @@
+﻿@page "/pages/edit/{Id:int}"
+@layout CMSLayout
+@implements IAsyncDisposable
+@using SharedKernel.Social
+@using Application.Features.Queries.Pages.GetListingPreview
+@inject IJSRuntime JS
+
+@* Editing a page holds a lot of unsaved state (canvas content, SEO fields, parent,
+   tags) that the server knows nothing about until Save. Without this, ANY way out of
+   the editor — a sidebar link, the browser Back button, a reload — discarded all of it
+   silently. ConfirmExternalNavigation covers the browser-level exits; the callback
+   covers in-app navigation, where we can say what is actually at stake. *@
+<NavigationLock ConfirmExternalNavigation="IsDirty" OnBeforeInternalNavigation="ConfirmLeavingUnsaved" />
+
+<PageTitle>@(_title.HasValue() ? _title : L["PageEditor_NewPageTitle"])</PageTitle>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else if (_notFound)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">@L["PageEditor_LoadError"]</div>
+}
+else
+{
+    <div class="pe-toolbar">
+        <div class="pe-toolbar-fields">
+            <a href="/pages" class="btn-cms btn-ghost btn-sm-cms" title="@L["PageEditor_BackToList"]">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <div class="pe-field">
+                <label>@L["PageEditor_FieldTitle"]</label>
+                @* @bind:after keeps the SEO analyser's title check live as it is typed;
+                   updateSeoMeta debounces on the JS side, so this is not one analysis
+                   pass per keystroke. *@
+                <input id="pe-page-title-input" @bind="_title" @bind:event="oninput" @bind:after="PushSeoMetaToJs" class="cms-input" />
+            </div>
+            <div class="pe-field">
+                <label>@L["PageEditor_FieldSlug"]</label>
+                <input @bind="_slug" class="cms-input" />
+            </div>
+            <div class="pe-field pe-field-sm">
+                <label>@L["PageEditor_FieldStatus"]</label>
+                <select @bind="_status" class="cms-input">
+                    <option value="@PageStatus.Draft">@L["Pages_StatusDraft"]</option>
+                    <option value="@PageStatus.Published">@L["Pages_StatusPublished"]</option>
+                    <option value="@PageStatus.Archived">@L["Pages_StatusArchived"]</option>
+                </select>
+                @if (_pendingStatus.HasValue)
+                {
+                    <span class="badge-cms badge-warning" style="margin-top:4px;display:inline-block"
+                          title="@L["PageEditor_PendingStatusHint"]">
+                        <i class="bi bi-hourglass-split"></i> @L["PageEditor_PendingStatusBadge"]
+                    </span>
+                }
+            </div>
+            <div class="pe-field pe-field-sm">
+                <label>@L["PageEditor_FieldLanguage"]</label>
+                <input value="@_languageName" class="cms-input" disabled />
+            </div>
+            <div class="pe-field pe-field-sm">
+                <label title="@L["PageKind_Hint"]">
+                    @L["PageEditor_FieldKind"] <i class="bi bi-info-circle" style="font-size:11px;opacity:.6"></i>
+                </label>
+                <select @bind="_kind" class="cms-input">
+                    @foreach (PageKind kind in AllPageKinds)
+                    {
+                        <option value="@kind">@PageKindLabel(kind)</option>
+                    }
+                </select>
+            </div>
+            <div class="pe-field elevare-parent-picker">
+                <label>@L["PageEditor_FieldParent"]</label>
+                <input class="cms-input" value="@_parentSearch" placeholder="@L["PageEditor_ParentNone"]"
+                       @oninput="OnParentSearchInput" @onfocus="() => _parentDropdownOpen = true" @onblur="OnParentInputBlur" />
+                @if (_parentDropdownOpen)
+                {
+                    @* Buttons, and BOTH mousedown and click are wired: mousedown (with
+                       preventDefault) is what lands before the input's blur closes the
+                       list, while click is the only event a keyboard Enter/Space
+                       produces. SelectParent is idempotent, so a mouse click firing
+                       both is harmless. *@
+                    <div class="elevare-parent-dropdown" role="listbox">
+                        <button type="button" role="option" aria-selected="@(_parentPageId is null)"
+                                class="elevare-parent-option @(_parentPageId is null ? "elevare-parent-option-active" : "")"
+                                @onmousedown:preventDefault="true" @onmousedown="() => SelectParent(null)"
+                                @onclick="() => SelectParent(null)">
+                            @L["PageEditor_ParentNone"]
+                        </button>
+                        @foreach (PageParentCandidateResponse c in FilteredParentCandidates)
+                        {
+                            <button type="button" role="option" aria-selected="@(_parentPageId == c.Id)"
+                                    class="elevare-parent-option @(_parentPageId == c.Id ? "elevare-parent-option-active" : "")"
+                                    @onmousedown:preventDefault="true" @onmousedown="() => SelectParent(c)"
+                                    @onclick="() => SelectParent(c)">
+                                <span class="elevare-parent-path">@PagePath(c)</span>
+                                <span class="elevare-parent-title">@c.Title</span>
+                            </button>
+                        }
+                        @if (FilteredParentCandidates.Count == 0)
+                        {
+                            <div class="elevare-parent-option elevare-parent-option-empty">@L["PageEditor_ParentNoMatch"]</div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+        <div class="pe-toolbar-actions">
+            @* One door to everything that describes the page rather than fills it:
+               SEO, social cards, structured data, tags, language versions, site
+               codes. They were six toolbar buttons — a row an author scanned every
+               time to find the one they meant — plus a Guide and an Import that
+               belong to a different kind of task. *@
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="() => _settingsOpen = true" title="@L["PageEditor_SettingsPanelTitle"]">
+                <i class="bi bi-sliders"></i> @L["PageEditor_SettingsPanelTitle"]
+                @if (_excludedSiteCodeIds.Count > 0)
+                {
+                    <span class="pe-toolbar-count" title="@L["PageEditor_SiteCodesPanelTitle"]">@_excludedSiteCodeIds.Count</span>
+                }
+            </button>
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms btn-icon" @onclick="() => _helpGuideOpen = true" title="@L["PageEditor_HelpGuideBtn"]" aria-label="@L["PageEditor_HelpGuideBtn"]">
+                <i class="bi bi-question-circle"></i>
+            </button>
+            @if (UserContext.CanAuthorCustomCode)
+            {
+                <button type="button" class="btn-cms btn-ghost btn-sm-cms btn-icon" @onclick="() => _importCodeOpen = true" title="@L["PageEditor_ImportCodeBtn"]" aria-label="@L["PageEditor_ImportCodeBtn"]">
+                    <i class="bi bi-code-slash"></i>
+                </button>
+            }
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="Preview" title="@L["PageEditor_PreviewBtn"]">
+                <i class="bi bi-eye"></i> @L["PageEditor_PreviewBtn"]
+            </button>
+            @if (IsDirty)
+            {
+                <span class="pe-unsaved-badge" title="@L["PageEditor_UnsavedWarning"]">
+                    <i class="bi bi-dot"></i> @L["PageEditor_UnsavedBadge"]
+                </span>
+            }
+            <button class="btn-cms btn-primary-cms pe-save" @onclick="SaveAll" disabled="@_saving">
+                @if (_saving)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                else
+                {
+                    <i class="bi bi-floppy"></i>
+                }
+                @L["PageEditor_Save"]
+            </button>
+        </div>
+    </div>
+
+    <StaleTemplateNotice @ref="_staleNotice" Scope="StaleTemplateScope.Page" />
+
+    <div class="pe-editor-wrap">
+        @if (!_editorReady)
+        {
+            <div class="pe-editor-loading">
+                <i class="bi bi-arrow-clockwise spin"></i> @L["PageEditor_EditorLoading"]
+            </div>
+        }
+        @* The editor's side column — see SIDE in grapes-editor.js, which fills
+           it: the selected element's content and style, layers, blocks. *@
+        <div id="gjs"></div>
+        <aside id="pe-side-right" class="pe-side" aria-label="@L["PageEditor_SideRightLabel"]"></aside>
+
+        @* Drag-and-drop image upload. grapes-editor.js catches the drop inside the
+           canvas iframe and hands the File to THIS input; Blazor's InputFile then
+           streams it, which is what makes arbitrarily large images work — passing
+           bytes through JS interop would hit the message-size ceiling instead.
+           Hidden rather than absent: it must exist in the DOM for JS to find it. *@
+        <InputFile id="elevare-drop-input" OnChange="HandleDroppedImage" accept="image/*"
+                   style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" aria-hidden="true" />
+
+        @if (_uploadingDroppedImage)
+        {
+            <div class="pe-drop-uploading">
+                <i class="bi bi-arrow-clockwise spin"></i> @L["PageEditor_DropUploading"]
+            </div>
+        }
+
+        @* A movable, resizable window rather than a slide-in panel: the structured-
+           data builder needs the width, and because a window does not black out the
+           page behind it, the Media Library window can be opened next to it — a
+           picture URL no longer means closing this first. *@
+        <CmsModal Title="@L["PageEditor_SettingsPanelTitle"]" IsVisible="_settingsOpen"
+                  OnClose="() => _settingsOpen = false" Size="xl">
+            <Body>
+                <div class="elevare-settings-tabs" role="tablist">
+                    @foreach (PageSettingsTab tab in Enum.GetValues<PageSettingsTab>())
+                    {
+                        <button type="button" role="tab" class="elevare-settings-tab @(_settingsTab == tab ? "is-active" : "")"
+                                aria-selected="@(_settingsTab == tab)" @onclick="() => _settingsTab = tab">
+                            <i class="bi @SettingsTabIcon(tab)"></i> @SettingsTabLabel(tab)
+                            @if (tab == PageSettingsTab.SiteCodes && _excludedSiteCodeIds.Count > 0)
+                            {
+                                <span class="pe-toolbar-count">@_excludedSiteCodeIds.Count</span>
+                            }
+                        </button>
+                    }
+                </div>
+
+                <div class="elevare-seo-panel-body">
+                    @switch (_settingsTab)
+                    {
+                        case PageSettingsTab.Seo:
+                            <div class="elevare-settings-body">
+                            <div class="elevare-seo-score-box">
+                                <div class="elevare-seo-score-box-top">
+                                    <span class="elevare-seo-score-box-label">@L["PageEditor_SeoScoreLabel"]</span>
+                                    @if (_seoScore.HasValue)
+                                    {
+                                        <span class="elevare-seo-score-box-value" style="color:@ScoreColor(_seoScore.Value)">@_seoScore</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="elevare-seo-score-box-value elevare-seo-score-empty">@L["PageEditor_SeoScoreNotYet"]</span>
+                                    }
+                                </div>
+                                <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="ReanalyzeSeo">
+                                    <i class="bi bi-arrow-clockwise"></i> @L["PageEditor_SeoReanalyze"]
+                                </button>
+                                <p class="elevare-seo-score-hint">@L["PageEditor_SeoScoreHint"]</p>
+                            </div>
+
+                            <h4>@L["PageEditor_SeoSectionGeneral"]</h4>
+                            <div class="pe-field">
+                                <label>@L["PageEditor_SeoFocusKeyword"]</label>
+                                <input @bind="_focusKeyword" @bind:event="oninput" @bind:after="PushSeoMetaToJs" class="cms-input" placeholder="@L["PageEditor_SeoFocusKeywordPlaceholder"]" />
+                            </div>
+                            <div class="pe-field">
+                                <label>@L["PageEditor_SeoMetaDescription"]</label>
+                                <textarea @bind="_metaDescription" @bind:event="oninput" @bind:after="PushSeoMetaToJs" class="cms-input" rows="3" placeholder="@L["PageEditor_SeoMetaDescriptionPlaceholder"]"></textarea>
+                                <span class="elevare-seo-charcount">@(_metaDescription?.Length ?? 0) @L["PageEditor_SeoCharacters"]</span>
+                            </div>
+                            <div class="pe-field">
+                                <label>@L["PageEditor_SeoMetaAuthor"]</label>
+                                <input @bind="_metaAuthor" class="cms-input" />
+                            </div>
+
+                            <h4>@L["PageEditor_SeoRobotsTitle"]</h4>
+                            <p class="pe-field-hint">@L["PageEditor_SeoRobotsIntro"]</p>
+                            <div class="pe-field">
+                                <label class="pe-check">
+                                    <input type="checkbox" @bind="_noIndex" />
+                                    <span>@L["PageEditor_SeoNoIndex"]</span>
+                                </label>
+                                <span class="pe-field-hint">@L["PageEditor_SeoNoIndexHint"]</span>
+                            </div>
+                            <div class="pe-field">
+                                <label class="pe-check">
+                                    <input type="checkbox" @bind="_noFollow" />
+                                    <span>@L["PageEditor_SeoNoFollow"]</span>
+                                </label>
+                                <span class="pe-field-hint">@L["PageEditor_SeoNoFollowHint"]</span>
+                            </div>
+                            @if (_noIndex)
+                            {
+                                <div class="pe-robots-warning">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> @L["PageEditor_SeoNoIndexWarning"]
+                                </div>
+                            }
+
+                            @* Open Graph and X used to live here; they have their own panel now
+                               (Sosyal Paylaşım), with the type-specific properties and the
+                               card types this one never had room for. *@
+                            <div class="pe-field">
+                                <button type="button" class="btn-cms btn-ghost w-100"
+                                        @onclick="() => _settingsTab = PageSettingsTab.Social">
+                                    <i class="bi bi-share"></i> @L["Social_OpenFromSeo"]
+                                </button>
+                            </div>
+
+                            <h4>@L["PageEditor_SeoSectionAdvanced"]</h4>
+                            <div class="pe-field pe-field-checkbox">
+                                <label>
+                                    <input type="checkbox" @bind="_isCanonical" />
+                                    @L["PageEditor_SeoIsCanonical"]
+                                </label>
+                            </div>
+                            @if (!_isCanonical)
+                            {
+                                <div class="pe-field">
+                                    <label>@L["PageEditor_SeoCanonicalUrl"]</label>
+                                    <input @bind="_canonicalUrl" class="cms-input" placeholder="https://..." />
+                                </div>
+                            }
+                            @* The raw textarea is gone: structured data is built in its own
+                               panel now, which keeps the JSON valid by construction. This
+                               just reports the state and opens that panel. *@
+                            <div class="pe-field">
+                                <label>@L["PageEditor_SeoStructuredData"]</label>
+                                <button type="button" class="btn-cms btn-ghost w-100"
+                                        @onclick="() => _settingsTab = PageSettingsTab.StructuredData">
+                                    <i class="bi bi-diagram-3"></i>
+                                    @(string.IsNullOrWhiteSpace(_structuredData)
+                                        ? L["PageEditor_StructuredDataOpenEmpty"]
+                                        : L["PageEditor_StructuredDataOpenFilled"])
+                                </button>
+                            </div>
+
+                            @* Who touched this page. The columns have always been there;
+                               showing them turns "who published this?" from a database
+                               question into something anyone can answer. *@
+                            @if (_audit is { } audit)
+                            {
+                                <h4>@L["PageEditor_AuditTitle"]</h4>
+                                <dl class="pe-audit">
+                                    <dt>@L["PageEditor_AuditCreated"]</dt>
+                                    <dd>@FormatAudit(audit.CreatedBy, audit.CreatedAt)</dd>
+                                    <dt>@L["PageEditor_AuditUpdated"]</dt>
+                                    <dd>@FormatAudit(audit.UpdatedBy, audit.UpdatedAt)</dd>
+                                    @* What listings, structured data and share tags date the page by. *@
+                                    <dt>@L["PageEditor_AuditPublished"]</dt>
+                                    <dd title="@L["PageEditor_AuditPublishedHint"]">@(audit.PublishedAt is { } published ? published.ToString("dd.MM.yyyy", System.Globalization.CultureInfo.InvariantCulture) : "—")</dd>
+                                </dl>
+                            }
+
+                            </div>
+                            break;
+                        case PageSettingsTab.Social:
+                            <div class="elevare-settings-body">
+                            <SocialSharePanel Model="_social" FallbackTitle="@_title" FallbackDescription="@_metaDescription"
+                                              SiteName="@(_siteName ?? "")" Suggestions="SocialSuggestions" OnChanged="PushSeoMetaToJs" Embedded="true" />
+                            </div>
+                            break;
+                        case PageSettingsTab.StructuredData:
+                            <div class="elevare-settings-body">
+                            @* The @ on Value matters: without it Razor passes the literal text
+                               "_structuredData" to a string parameter instead of the field's value. *@
+                            <StructuredDataPanel PageId="Id" Value="@_structuredData" ValueChanged="@OnStructuredDataChanged" />
+                            </div>
+                            break;
+                        case PageSettingsTab.Tags:
+                            <div class="elevare-settings-body">
+                            <p class="elevare-lang-hint">@L["PageEditor_TagsPanelHint"]</p>
+
+                            @if (SelectedTags.Count > 0)
+                            {
+                                <div class="elevare-tag-chips">
+                                    @foreach (TagResponse t in SelectedTags)
+                                    {
+                                        <span class="elevare-tag-chip">
+                                            @t.Name
+                                            <button type="button" @onclick="() => RemoveTag(t.Id)"><i class="bi bi-x"></i></button>
+                                        </span>
+                                    }
+                                </div>
+                            }
+
+                            <div class="elevare-parent-picker">
+                                <input class="cms-input" value="@_tagSearch" placeholder="@L["PageEditor_TagsSearchPlaceholder"]"
+                                       @oninput="OnTagSearchInput" @onfocus="() => _tagDropdownOpen = true" @onblur="OnTagInputBlur" />
+                                @if (_tagDropdownOpen)
+                                {
+                                    @* Same mousedown + click pairing as the parent picker — see the
+                                       comment there. Both handlers are safe to run twice. *@
+                                    <div class="elevare-parent-dropdown" role="listbox">
+                                        @foreach (TagResponse c in FilteredTagCandidates)
+                                        {
+                                            <button type="button" role="option" aria-selected="false" class="elevare-parent-option"
+                                                    @onmousedown:preventDefault="true" @onmousedown="() => SelectTag(c)"
+                                                    @onclick="() => SelectTag(c)">
+                                                @c.Name
+                                            </button>
+                                        }
+                                        @if (FilteredTagCandidates.Count == 0 && _tagSearch.HasValue())
+                                        {
+                                            <button type="button" class="elevare-parent-option"
+                                                    @onmousedown:preventDefault="true" @onmousedown="CreateAndSelectTag"
+                                                    @onclick="CreateAndSelectTag">
+                                                @if (_creatingTag)
+                                                {
+                                                    <i class="bi bi-arrow-clockwise spin"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-plus-lg"></i>
+                                                }
+                                                @string.Format(L["PageEditor_TagsCreateBtn"], _tagSearch)
+                                            </button>
+                                        }
+                                        @if (FilteredTagCandidates.Count == 0 && !_tagSearch.HasValue())
+                                        {
+                                            <div class="elevare-parent-option elevare-parent-option-empty">@L["PageEditor_TagsNoMore"]</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
+                            </div>
+                            break;
+                        case PageSettingsTab.Languages:
+                            <div class="elevare-settings-body">
+                            <p class="elevare-lang-hint">@L["PageEditor_LangPanelHint"]</p>
+
+                            @if (_translations.Count > 0)
+                            {
+                                <h4>@L["PageEditor_LangExistingTitle"]</h4>
+                                <div class="elevare-lang-list">
+                                    @foreach (PageTranslationItem t in _translations)
+                                    {
+                                        <a href="@($"/pages/edit/{t.PageId}")" class="elevare-lang-row">
+                                            <span class="elevare-lang-code">@t.TwoLetterCode.ToUpperInvariant()</span>
+                                            <span class="elevare-lang-name">@t.LanguageName</span>
+                                            <span class="elevare-lang-status elevare-lang-status-@t.Status.ToString().ToLowerInvariant()">@StatusLabel(t.Status)</span>
+                                        </a>
+                                    }
+                                </div>
+                            }
+
+                            @{
+                                List<LanguageResponse> missing = [.. _languages
+                                    .Where(l => l.Id != _currentLanguageId && _translations.All(t => t.LanguageId != l.Id))];
+                            }
+                            @if (missing.Count > 0)
+                            {
+                                <h4>@L["PageEditor_LangCreateTitle"]</h4>
+                                <div class="elevare-lang-list">
+                                    @foreach (LanguageResponse lang in missing)
+                                    {
+                                        <button type="button" class="elevare-lang-create-btn" disabled="@(_creatingLanguageId is not null)" @onclick="() => CreateTranslation(lang.Id)">
+                                            @if (_creatingLanguageId == lang.Id)
+                                            {
+                                                <i class="bi bi-arrow-clockwise spin"></i>
+                                            }
+                                            else
+                                            {
+                                                <i class="bi bi-plus-lg"></i>
+                                            }
+                                            @string.Format(L["PageEditor_LangCreateBtn"], lang.NameInNative)
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            </div>
+                            break;
+                        case PageSettingsTab.SiteCodes:
+                            <div class="elevare-settings-body">
+                                <div class="pe-sitecodes-warning">
+                                    <i class="bi bi-exclamation-triangle-fill"></i>
+                                    <span>@L["PageEditor_SiteCodesWarning"]</span>
+                                </div>
+                                @if (_siteCodeSummaries.Count == 0)
+                                {
+                                    <p style="color:var(--cms-text-muted);margin:12px 0 0">@L["PageEditor_SiteCodesNone"]</p>
+                                }
+                                else
+                                {
+                                    @foreach (SiteCodePlacement placement in Enum.GetValues<SiteCodePlacement>())
+                                    {
+                                        List<SiteCodeSnippetSummaryResponse> inPlacement = [.. _siteCodeSummaries.Where(s => s.Placement == placement)];
+                                        <div class="pe-sitecodes-group">
+                                            <h4>@L[$"SiteCode_Placement_{placement}"]</h4>
+                                            @if (inPlacement.Count == 0)
+                                            {
+                                                <p class="pe-sitecodes-empty">@L["PageEditor_SiteCodesPlacementEmpty"]</p>
+                                            }
+                                            else
+                                            {
+                                                @foreach (SiteCodeSnippetSummaryResponse s in inPlacement)
+                                                {
+                                                    bool excluded = _excludedSiteCodeIds.Contains(s.Id);
+                                                    <label class="pe-sitecodes-row @(s.IsEnabled ? "" : "is-disabled") @(excluded ? "is-excluded" : "")">
+                                                        <input type="checkbox" checked="@excluded" @onchange="e => ToggleSiteCodeExclusion(s.Id, e.Value is true)" />
+                                                        <span class="pe-sitecodes-name">@s.Name</span>
+                                                        <span class="pe-sitecodes-meta">
+                                                            @L[$"SiteCode_Kind_{s.Kind}"]@(s.Preset != SiteCodePreset.Custom ? " · " + L[$"SiteCode_Preset_{s.Preset}"] : "")
+                                                            @if (!s.IsEnabled)
+                                                            {
+                                                                <span class="pe-sitecodes-off">@L["PageEditor_SiteCodesDisabledBadge"]</span>
+                                                            }
+                                                        </span>
+                                                        <span class="pe-sitecodes-action">@L["PageEditor_SiteCodesExcludeLabel"]</span>
+                                                    </label>
+                                                }
+                                            }
+                                        </div>
+                                    }
+                                }
+
+                            <a href="/admin/site-code" target="_blank" rel="noopener" class="btn-cms btn-ghost" style="margin-top:14px">
+                                <i class="bi bi-box-arrow-up-right"></i> @L["PageEditor_SiteCodesGoTo"]
+                            </a>
+                            </div>
+                            break;
+                    }
+                </div>
+            </Body>
+        </CmsModal>
+    </div>
+}
+
+@* ── Pop-up & Form actions help guide ────────────────────────────────────── *@
+<CmsModal Title="@L["PageEditor_HelpGuideTitle"]" IsVisible="_helpGuideOpen" OnClose="() => _helpGuideOpen = false" Size="md">
+    <Body>
+        <a href="/admin/guide" target="_blank" class="elevare-guide-fullpage-link">
+            <i class="bi bi-box-arrow-up-right"></i> @L["PageEditor_HelpGuideOpenFullPage"]
+        </a>
+        <GuideContent />
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-primary-cms" @onclick="() => _helpGuideOpen = false">@L["Common_Close"]</button>
+    </Footer>
+</CmsModal>
+
+
+
+@* ── Raw HTML/CSS import (Developer/Admin/SuperAdmin only, same gate as custom code) ── *@
+<CmsModal Title="@L["PageEditor_ImportCodeTitle"]" IsVisible="_importCodeOpen" OnClose="() => _importCodeOpen = false" Size="lg">
+    <Body>
+        <p style="color:var(--cms-text-muted);font-size:13px">@L["PageEditor_ImportCodeHint"]</p>
+        <div class="pe-field">
+            <label>@L["PageEditor_ImportCodeHtmlLabel"]</label>
+            <textarea @bind="_importHtml" @bind:event="oninput" class="cms-input" rows="8" style="font-family:monospace;font-size:12.5px" placeholder="&lt;div&gt;...&lt;/div&gt;"></textarea>
+        </div>
+        <div class="pe-field" style="margin-top:10px">
+            <label>@L["PageEditor_ImportCodeCssLabel"]</label>
+            <textarea @bind="_importCss" @bind:event="oninput" class="cms-input" rows="6" style="font-family:monospace;font-size:12.5px" placeholder=".my-class { color: red; }"></textarea>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _importCodeOpen = false">@L["Pages_CancelBtn"]</button>
+        @* Deliberately NOT the same label as the menu item that opens this modal:
+           two different controls reading "Kod İçe Aktar" is ambiguous by voice and
+           indistinguishable to a screen reader announcing them in isolation. *@
+        <button class="btn-cms btn-primary-cms" @onclick="ImportCode" disabled="@string.IsNullOrWhiteSpace(_importHtml)">
+            <i class="bi bi-box-arrow-in-down"></i> @L["PageEditor_ImportCodeSubmit"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Edit conflict: the page changed since this editor opened it ─────────── *@
+<CmsModal Title="@L["PageEditor_ConflictTitle"]" IsVisible="_showEditConflict" OnClose="() => _showEditConflict = false" Size="md">
+    <Body>
+        <p style="color:var(--cms-text)">@L["PageEditor_ConflictBody"]</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="ReloadAfterConflict" disabled="@_saving">@L["PageEditor_ConflictReload"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="OverwriteAfterConflict" disabled="@_saving">@L["PageEditor_ConflictOverwrite"]</button>
+    </Footer>
+</CmsModal>
+
+@* ── Slug-change confirmation (only for an already-Published page) ──────── *@
+<CmsModal Title="@L["PageEditor_SlugChangeConfirmTitle"]" IsVisible="_showSlugChangeConfirm" OnClose="CancelSlugChangeConfirm" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@L["PageEditor_SlugChangeConfirmBody"]</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CancelSlugChangeConfirm">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="ConfirmSlugChangeAndSave" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check2"></i>
+            }
+            @L["Common_Confirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
+<style>
+    .elevare-seo-panel-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.25);
+        z-index: 1040;
+    }
+
+    .elevare-seo-panel {
+        position: fixed;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        width: 380px;
+        max-width: 92vw;
+        background: var(--cms-card);
+        color: var(--cms-text);
+        box-shadow: -8px 0 24px rgba(0,0,0,0.35);
+        z-index: 1050;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* The page-settings tabs. They now live inside a CmsModal window (Sayfa
+       Ayarları); the tab strip is pulled out to the window's edges so it reads as
+       a real tab bar under the title, and the body below drops its own padding
+       since the window already supplies it. */
+    .elevare-settings-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 6px 10px 0; border-bottom: 1px solid var(--cms-border); }
+    .cms-window-body .elevare-settings-tabs { margin: -24px -24px 16px; padding: 12px 16px 0; }
+    .cms-window-body > .elevare-seo-panel-body { padding: 0; overflow: visible; }
+    .elevare-settings-tab { display: inline-flex; align-items: center; gap: 6px; padding: 8px 10px; border: 0; border-bottom: 2px solid transparent;
+        margin-bottom: -1px; background: none; color: var(--cms-text-muted); font: inherit; font-size: 12.5px; cursor: pointer; }
+    .elevare-settings-tab:hover { color: var(--cms-text); }
+    .elevare-settings-tab.is-active { color: var(--cms-accent); border-bottom-color: var(--cms-accent); font-weight: 600; }
+
+    .elevare-seo-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--cms-border);
+    }
+
+        .elevare-seo-panel-header h3 {
+            margin: 0;
+            font-size: 1rem;
+        }
+
+    .elevare-seo-panel-body {
+        padding: 16px;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+        .elevare-seo-panel-body h4 {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            opacity: 0.6;
+            margin: 18px 0 8px;
+        }
+
+            .elevare-seo-panel-body h4:first-child {
+                margin-top: 0;
+            }
+
+    .elevare-seo-charcount {
+        font-size: 0.72rem;
+        opacity: 0.6;
+    }
+
+    .elevare-seo-mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        font-size: 0.78rem;
+    }
+
+    .pe-field-checkbox label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+    }
+
+    .pe-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .pe-field-hint {
+        display: block;
+        font-size: 11.5px;
+        line-height: 1.5;
+        color: var(--cms-text-muted);
+        margin: 4px 0 0;
+    }
+
+    .pe-robots-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+        color: var(--cms-warning);
+        background: color-mix(in srgb, var(--cms-warning) 10%, transparent);
+        border: 1px solid color-mix(in srgb, var(--cms-warning) 35%, transparent);
+        border-radius: var(--radius-sm);
+        padding: 8px 10px;
+        margin-bottom: 12px;
+    }
+
+    .pe-audit {
+        display: grid;
+        grid-template-columns: auto 1fr;
+        gap: 4px 12px;
+        margin: 0;
+        font-size: 12.5px;
+    }
+
+    .pe-audit dt {
+        color: var(--cms-text-muted);
+        white-space: nowrap;
+    }
+
+    .pe-audit dd {
+        margin: 0;
+        color: var(--cms-text);
+    }
+
+    .elevare-seo-score-box {
+        background: var(--cms-bg);
+        border: 1px solid var(--cms-border);
+        border-radius: var(--radius-sm);
+        padding: 12px;
+        margin-bottom: 18px;
+    }
+
+    .elevare-seo-score-box-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 8px;
+    }
+
+    .elevare-seo-score-box-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--cms-text-muted);
+    }
+
+    .elevare-seo-score-box-value {
+        font-size: 1.1rem;
+        font-weight: 700;
+    }
+
+    .elevare-seo-score-empty {
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: var(--cms-text-dim);
+    }
+
+    .elevare-seo-score-hint {
+        font-size: 0.72rem;
+        color: var(--cms-text-dim);
+        margin: 8px 0 0;
+    }
+
+    .elevare-lang-hint {
+        font-size: 0.78rem;
+        color: var(--cms-text-muted);
+        margin: 0 0 16px;
+    }
+
+    .elevare-lang-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+
+    .elevare-lang-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid var(--cms-border);
+        border-radius: var(--radius-sm);
+        background: var(--cms-bg);
+        color: var(--cms-text);
+        text-decoration: none;
+        transition: border-color var(--transition);
+    }
+
+    .elevare-lang-row:hover {
+        border-color: var(--cms-accent);
+    }
+
+    .elevare-lang-code {
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: var(--cms-card-hover);
+        color: var(--cms-text-muted);
+    }
+
+    .elevare-lang-name {
+        flex: 1;
+        font-size: 0.85rem;
+        font-weight: 500;
+    }
+
+    .elevare-lang-status {
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 20px;
+    }
+
+    .elevare-lang-status-draft { background: color-mix(in srgb, var(--cms-warning) 18%, transparent); color: var(--cms-warning); }
+    .elevare-lang-status-published { background: color-mix(in srgb, var(--cms-success) 18%, transparent); color: var(--cms-success); }
+    .elevare-lang-status-archived { background: color-mix(in srgb, var(--cms-text-dim) 25%, transparent); color: var(--cms-text-muted); }
+
+    .elevare-lang-create-btn {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border: 1px dashed var(--cms-border);
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--cms-text);
+        font-size: 0.85rem;
+        font-family: inherit;
+        cursor: pointer;
+        transition: border-color var(--transition), background var(--transition);
+    }
+
+    .elevare-lang-create-btn:hover:not(:disabled) {
+        border-color: var(--cms-accent);
+        background: var(--cms-accent-light);
+    }
+
+    .elevare-lang-create-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
+    }
+
+    .elevare-parent-picker {
+        position: relative;
+    }
+
+    .elevare-parent-dropdown {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        z-index: 30;
+        max-height: 240px;
+        overflow-y: auto;
+        background: var(--cms-card);
+        border: 1px solid var(--cms-border);
+        border-radius: var(--radius-sm);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+
+    /* Rendered as button elements so they are keyboard-reachable; the resets below
+       undo the browser's button chrome (centred text, border, its own font) so they
+       still read as plain list rows. */
+    .elevare-parent-option {
+        display: block;
+        width: 100%;
+        text-align: left;
+        background: none;
+        border: 0;
+        font: inherit;
+        padding: 8px 12px;
+        font-size: 13px;
+        color: var(--cms-text);
+        cursor: pointer;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .elevare-parent-option:hover {
+        background: var(--cms-card-hover);
+    }
+
+    /* Without this a keyboard user tabbing through the list has no idea where
+       they are — the mouse-only :hover state is invisible to them. */
+    .elevare-parent-option:focus-visible {
+        background: var(--cms-card-hover);
+        outline: 2px solid var(--cms-accent);
+        outline-offset: -2px;
+    }
+
+    .elevare-parent-option-active {
+        color: var(--cms-accent);
+        font-weight: 600;
+    }
+
+    .elevare-parent-option-empty {
+        color: var(--cms-text-dim);
+        cursor: default;
+    }
+
+    .elevare-parent-option-empty:hover {
+        background: transparent;
+    }
+
+    .pe-drop-uploading {
+        position: absolute;
+        bottom: 16px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--cms-text);
+        background: var(--cms-card);
+        border: 1px solid var(--cms-border);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.35);
+    }
+
+    .pe-unsaved-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        font-weight: 600;
+        white-space: nowrap;
+        color: var(--cms-warning);
+        background: color-mix(in srgb, var(--cms-warning) 14%, transparent);
+        border: 1px solid color-mix(in srgb, var(--cms-warning) 35%, transparent);
+    }
+
+    .elevare-tag-chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+
+    .elevare-tag-chip {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 6px 4px 10px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        border-radius: 20px;
+        background: var(--cms-accent-light);
+        color: var(--cms-accent);
+    }
+
+        .elevare-tag-chip button {
+            display: flex;
+            align-items: center;
+            border: none;
+            background: transparent;
+            color: inherit;
+            cursor: pointer;
+            padding: 2px;
+            opacity: 0.7;
+        }
+
+        .elevare-tag-chip button:hover {
+            opacity: 1;
+        }
+
+    .elevare-guide-fullpage-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.78rem;
+        color: var(--cms-accent);
+        text-decoration: none;
+        margin-bottom: 16px;
+    }
+
+    .elevare-guide-fullpage-link:hover {
+        text-decoration: underline;
+    }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _notFound;
+    private bool _editorReady;
+    private bool _editorInitStarted;
+    // One side panel for everything about the page (see the toolbar); which of
+    // its tabs is showing is remembered while the editor is open.
+    private bool _settingsOpen;
+    private PageSettingsTab _settingsTab = PageSettingsTab.Seo;
+
+    private enum PageSettingsTab { Seo, Social, StructuredData, Tags, Languages, SiteCodes }
+
+    private string SettingsTabLabel(PageSettingsTab tab) => tab switch
+    {
+        PageSettingsTab.Seo => L["PageEditor_SeoPanelTitle"],
+        PageSettingsTab.Social => L["Social_PanelTitle"],
+        PageSettingsTab.StructuredData => L["PageEditor_StructuredDataPanelTitle"],
+        PageSettingsTab.Tags => L["PageEditor_TagsPanelTitle"],
+        PageSettingsTab.Languages => L["PageEditor_LangPanelTitle"],
+        PageSettingsTab.SiteCodes => L["PageEditor_SiteCodesPanelTitle"],
+        _ => tab.ToString()
+    };
+
+    private static string SettingsTabIcon(PageSettingsTab tab) => tab switch
+    {
+        PageSettingsTab.Seo => "bi-search",
+        PageSettingsTab.Social => "bi-share",
+        PageSettingsTab.StructuredData => "bi-diagram-3",
+        PageSettingsTab.Tags => "bi-tags",
+        PageSettingsTab.Languages => "bi-translate",
+        PageSettingsTab.SiteCodes => "bi-code-square",
+        _ => "bi-circle"
+    };
+    // Site codes switched off on this page (ids), and the catalogue the dialog
+    // lists — names/placements only, see GetSiteCodeSnippetSummariesQuery.
+    private HashSet<int> _excludedSiteCodeIds = [];
+    private List<SiteCodeSnippetSummaryResponse> _siteCodeSummaries = [];
+
+    private async Task ToggleSiteCodeExclusion(int id, bool excluded)
+    {
+        if (excluded) _excludedSiteCodeIds.Add(id); else _excludedSiteCodeIds.Remove(id);
+        // The canvas drops (or gets back) the stylesheet right away; the page itself
+        // only changes on Save.
+        try { await JS.InvokeVoidAsync("grapesEditor.setExcludedSiteCodes", _excludedSiteCodeIds.ToArray()); }
+        catch (JSException) { /* editor not up yet — init() reads the set itself */ }
+    }
+    private bool _helpGuideOpen;
+    private bool _importCodeOpen;
+    private string _importHtml = "";
+    private string _importCss = "";
+    private bool _showSlugChangeConfirm;
+    // The page as this editor loaded it — sent with every save, see PageFingerprint.
+    private string? _fingerprint;
+    private bool _showEditConflict;
+    private bool _overwriteNext;
+    private bool _slugChangeConfirmed;
+    private string _originalSlug = "";
+    private PageStatus _originalStatus = PageStatus.Draft;
+
+    private string _title = "";
+    private string _slug = "";
+    private string _languageName = "";
+    private int _currentLanguageId;
+    private PageStatus _status = PageStatus.Draft;
+    private PageStatus? _pendingStatus;
+    private List<PageTranslationItem> _translations = [];
+    private int? _creatingLanguageId;
+    private int? _parentPageId;
+    private List<PageParentCandidateResponse> _parentCandidates = [];
+    // Same shape as _parentCandidates but WITHOUT the self/descendant exclusion —
+    // the Sayfa Listesi block's "Kaynak Sayfa" dropdown may legitimately point at
+    // this page's own sub-categories.
+    private List<PageDirectoryEntryResponse> _pageDirectory = [];
+    private string _parentSearch = "";
+    private bool _parentDropdownOpen;
+
+    // The box shows the chosen page as "/path · Title"; while it still says exactly
+    // that, the list is not a search yet and shows everything.
+    private List<PageParentCandidateResponse> FilteredParentCandidates =>
+        string.IsNullOrWhiteSpace(_parentSearch) || _parentSearch == ParentLabel(_parentCandidates.FirstOrDefault(c => c.Id == _parentPageId))
+            ? _parentCandidates
+            : [.. _parentCandidates.Where(c =>
+                PagePath(c).Contains(_parentSearch, StringComparison.OrdinalIgnoreCase) ||
+                c.Title.Contains(_parentSearch, StringComparison.OrdinalIgnoreCase))];
+
+    // A page's public path: the home page's FullSlug is empty ("") or just the
+    // language code, so it reads "/" or "/en" rather than a blank line.
+    private static string PagePath(PageParentCandidateResponse c) => "/" + c.FullSlug;
+
+    private static string ParentLabel(PageParentCandidateResponse? c)
+    {
+        if (c is null) return "";
+        return string.IsNullOrWhiteSpace(c.Title) ? PagePath(c) : $"{PagePath(c)} · {c.Title}";
+    }
+
+    private void OnParentSearchInput(ChangeEventArgs e)
+    {
+        _parentSearch = e.Value?.ToString() ?? "";
+        _parentDropdownOpen = true;
+    }
+
+    private void SelectParent(PageParentCandidateResponse? candidate)
+    {
+        _parentPageId = candidate?.Id;
+        _parentSearch = ParentLabel(candidate);
+        _parentDropdownOpen = false;
+    }
+
+    private async Task OnParentInputBlur()
+    {
+        // The dropdown's own option clicks use @onmousedown:preventDefault so they
+        // land before this blur fires; the delay just covers the remaining paint frame.
+        await Task.Delay(120);
+        _parentSearch = ParentLabel(_parentCandidates.FirstOrDefault(c => c.Id == _parentPageId));
+        _parentDropdownOpen = false;
+        StateHasChanged();
+    }
+
+    private List<TagResponse> _tagCandidates = [];
+    private List<int> _selectedTagIds = [];
+    private string _tagSearch = "";
+    private bool _tagDropdownOpen;
+    private bool _creatingTag;
+
+    private List<TagResponse> SelectedTags => [.. _tagCandidates.Where(t => _selectedTagIds.Contains(t.Id))];
+
+    private List<TagResponse> FilteredTagCandidates => [.. _tagCandidates
+        .Where(t => !_selectedTagIds.Contains(t.Id))
+        .Where(t => string.IsNullOrWhiteSpace(_tagSearch) || t.Name.Contains(_tagSearch, StringComparison.OrdinalIgnoreCase))];
+
+    private void OnTagSearchInput(ChangeEventArgs e)
+    {
+        _tagSearch = e.Value?.ToString() ?? "";
+        _tagDropdownOpen = true;
+    }
+
+    private void SelectTag(TagResponse tag)
+    {
+        if (!_selectedTagIds.Contains(tag.Id))
+            _selectedTagIds.Add(tag.Id);
+        _tagSearch = "";
+    }
+
+    private void RemoveTag(int tagId) => _selectedTagIds.Remove(tagId);
+
+    private async Task OnTagInputBlur()
+    {
+        await Task.Delay(120);
+        _tagDropdownOpen = false;
+        StateHasChanged();
+    }
+
+    private async Task CreateAndSelectTag()
+    {
+        if (_tagSearch.IsNullOrWhiteSpace() || _creatingTag) return;
+
+        // A mouse click on this button fires BOTH mousedown and click (the pair is
+        // needed so mouse and keyboard each work — see the markup). Clearing the
+        // search text up front makes the second call a no-op, so one click can never
+        // create the same tag twice.
+        string name = _tagSearch;
+        _tagSearch = "";
+        _creatingTag = true;
+        try
+        {
+            (await Sender.Send(new CreateTagCommand(name))).Match(
+                tag =>
+                {
+                    if (_tagCandidates.All(t => t.Id != tag.Id))
+                        _tagCandidates.Add(tag);
+                    SelectTag(tag);
+                },
+                error =>
+                {
+                    // Put the text back so the editor can retry or correct it rather
+                    // than having to retype the name they just lost.
+                    _tagSearch = name;
+                    Toast.Error(L.Error(error));
+                });
+        }
+        finally { _creatingTag = false; }
+    }
+
+    private string? _gjsHtml;
+    private string? _gjsCss;
+    private string? _gjsData;
+
+    // ── Unsaved-changes tracking ──────────────────────────────────────────────
+    // A signature of everything SaveAll writes, captured on load and after each
+    // successful save. Comparing against it beats tagging all ~20 bindings with a
+    // dirty flag: nothing can be added to the form later and silently forgotten,
+    // which is exactly how unsaved work went missing before.
+    private string _savedSignature = "";
+
+    // The canvas lives in an iframe, so Blazor never sees edits there. GrapesJS
+    // pushes this flag in once per change-since-save (see OnEditorContentChanged).
+    private bool _editorContentDirty;
+
+    private bool IsDirty => _editorContentDirty || CurrentSignature() != _savedSignature;
+
+    // ASCII Unit Separator: cannot occur in any of the joined values, so two
+    // different field sets can never produce the same signature.
+    private const char SignatureSeparator = '';
+
+    private string CurrentSignature() => string.Join(SignatureSeparator,
+        _title, _slug, _status, _parentPageId?.ToString() ?? "",
+        string.Join(',', _selectedTagIds.Order()),
+        string.Join(',', _excludedSiteCodeIds.Order()),
+        _isCanonical, _canonicalUrl, _metaDescription, _metaAuthor, _noIndex, _noFollow, _kind, _focusKeyword,
+        _structuredData, _social.Signature());
+
+    /// <summary>Declares the current form state as "what's on the server".</summary>
+    private void MarkSaved()
+    {
+        _savedSignature = CurrentSignature();
+        _editorContentDirty = false;
+    }
+
+    /// <summary>
+    /// GrapesJS reports the first canvas change after each save. Only the first is
+    /// reported, so this is not a per-keystroke round trip.
+    /// </summary>
+    [JSInvokable]
+    public Task OnEditorContentChanged()
+    {
+        _editorContentDirty = true;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Fills GrapesJS's "Select Image" dialog with the media library's images, so
+    /// picking a picture for the page is one double-click instead of a trip to the
+    /// media library to copy a URL out of it. Called by grapes-editor.js every time
+    /// that dialog opens — an image uploaded elsewhere in the CMS is then already
+    /// listed, without reloading the editor.
+    /// </summary>
+    [JSInvokable]
+    public async Task<IReadOnlyList<MediaPickerAsset>> LoadMediaAssets()
+    {
+        try
+        {
+            // Images only: the dialog sets an <img src>, and offering a PDF there
+            // would produce a broken image with no hint as to why.
+            Result<PagedResult<MediaFileResponse>> result = await Sender.Send(
+                new GetMediaFilesQuery(MediaType: MediaType.Image, Page: 1, PageSize: _mediaAssetLimit));
+
+            if (result.IsFailure) return [];
+
+            return MediaPickerProjection.ToPickerAssets(result.Value.Items);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            return [];
+        }
+    }
+
+    /// <summary>
+    /// How many library images the picker lists. The dialog is a scrolling grid with
+    /// no paging of its own, so this is a deliberate ceiling rather than "all of them":
+    /// a library of thousands would otherwise be serialised through interop on every open.
+    /// </summary>
+    private const int _mediaAssetLimit = 200;
+
+    // ── Drag-and-drop image upload ────────────────────────────────────────────
+    // Ceiling for a single dropped image, matching the media library's own manual
+    // upload limit (MediaManager._maxUploadBytes) so the two paths can't disagree
+    // about what is too big.
+    private readonly long _maxDroppedImageBytes = 10_000_000;
+
+    private bool _uploadingDroppedImage;
+
+    /// <summary>
+    /// Receives an image dropped onto the GrapesJS canvas (grapes-editor.js routes
+    /// the file here), stores it through the SAME media-library pipeline as a manual
+    /// upload, then asks the editor to insert the resulting URL at the drop point.
+    /// </summary>
+    private async Task HandleDroppedImage(InputFileChangeEventArgs e)
+    {
+        IBrowserFile? file = e.FileCount > 0 ? e.File : null;
+        if (file is null) { await CancelDroppedImageAsync(); return; }
+
+        if (file.Size > _maxDroppedImageBytes)
+        {
+            Toast.Error(string.Format(L["PageEditor_DropTooLarge"], _maxDroppedImageBytes / 1_000_000));
+            await CancelDroppedImageAsync();
+            return;
+        }
+
+        _uploadingDroppedImage = true;
+        StateHasChanged();
+        try
+        {
+            await using Stream content = file.OpenReadStream(_maxDroppedImageBytes);
+
+            var request = new FileUploadRequest
+            {
+                FileName = file.Name,
+                ContentType = file.ContentType,
+                Content = content,
+                FileSize = file.Size,
+                // The file name is a far better starting alt text than an empty
+                // string, and the editor can refine it from the Alt Text trait.
+                AltText = Path.GetFileNameWithoutExtension(file.Name),
+                Title = Path.GetFileNameWithoutExtension(file.Name)
+            };
+
+            FileResult? uploaded = null;
+            (await Sender.Send(new CreateMediaFileCommand(request)))
+                .Match(r => uploaded = r, error => Toast.Error(L.Error(error)));
+
+            if (uploaded is null) { await CancelDroppedImageAsync(); return; }
+
+            // Site-relative on purpose (see MediaPickerAsset): both apps serve
+            // /uploads from the same shared volume, so this one path is correct in
+            // the builder's canvas and on the public site alike — and, being
+            // same-origin there, costs no extra DNS/TLS handshake to fetch.
+            await JS.InvokeVoidAsync("grapesEditor.insertDroppedImage", uploaded.Url, uploaded.AltText);
+            Toast.Success(L["PageEditor_DropUploaded"]);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["PageEditor_DropUploadError"]);
+            await CancelDroppedImageAsync();
+        }
+        finally
+        {
+            _uploadingDroppedImage = false;
+            StateHasChanged();
+        }
+    }
+
+    /// <summary>
+    /// Clears the editor-side in-flight guard so a failed drop doesn't make every
+    /// subsequent drop silently do nothing.
+    /// </summary>
+    private async Task CancelDroppedImageAsync()
+    {
+        try { await JS.InvokeVoidAsync("grapesEditor.cancelDroppedImage"); }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    /// <summary>
+    /// In-app navigation away from the editor. NavigationLock's own
+    /// ConfirmExternalNavigation handles tab-close/reload but cannot carry a message;
+    /// here we can name what is about to be lost.
+    /// </summary>
+    private async Task ConfirmLeavingUnsaved(LocationChangingContext context)
+    {
+        if (!IsDirty) return;
+
+        bool leave;
+        try
+        {
+            leave = await JS.InvokeAsync<bool>("cmsJs.confirmMessage", L["PageEditor_UnsavedWarning"]);
+        }
+        catch (Exception ex)
+        {
+            // If the prompt itself can't run, block the navigation: silently losing
+            // the editor's work is the worse of the two failures.
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            leave = false;
+        }
+
+        if (!leave) context.PreventNavigation();
+    }
+
+    // SEO Settings panel
+    private bool _isCanonical = true;
+    private string? _canonicalUrl;
+    private string _metaDescription = "";
+    private string _metaAuthor = "";
+    private bool _noIndex;
+    private bool _noFollow;
+    private PageKind _kind = PageKind.Unspecified;
+    private AuditInfoResponse? _audit;
+
+    private static readonly PageKind[] AllPageKinds = Enum.GetValues<PageKind>();
+
+    private string PageKindLabel(PageKind kind) => L[$"PageKind_{kind}"];
+
+    /// <summary>"Ada Soyad · 09.08.2026 14:32", or an em dash when never touched.</summary>
+    private static string FormatAudit(string? who, DateTime? when) =>
+        when is null ? "—" : $"{who ?? "—"} · {when.Value.ToLocalTime():dd.MM.yyyy HH:mm}";
+    private string? _focusKeyword;
+    private string? _structuredData;
+    // Open Graph + X, edited in place by SocialSharePanel — see SocialShareModel.
+    private SocialShareModel _social = new();
+    private int? _seoScore;
+
+    private DotNetObjectReference<PageEditor>? _dotNetRef;
+
+    private List<LanguageResponse> _languages = [];
+    private Dictionary<int, LinkedPageTemplateContent> _linkedTemplates = [];
+    private Dictionary<int, PageTemplateVersionInfo> _templateVersions = [];
+    private string? _logoUrl;
+    private string? _logoAlt;
+    private string? _siteName;
+    private string? _metaTitleSuffix;
+
+    // Mirrors the public layout's "{title} - {suffix}" rule (_Layout.cshtml): the
+    // SEO settings' title suffix when set, otherwise the site name, otherwise the
+    // built-in fallback. The SEO analyser uses this to judge the real title.
+    private string EffectiveTitleSuffix
+    {
+        get
+        {
+            string suffix = (_metaTitleSuffix ?? "").Trim();
+            if (suffix.Length > 0) return suffix;
+            string name = (_siteName ?? "").Trim();
+            return name.Length > 0 ? name : "Elevare";
+        }
+    }
+    // What "Otomatik doldur" offers in the Social Sharing panel — see SocialShareSuggestions.
+    private string? _defaultMetaDescription;
+    private string? _defaultShareImage;
+    private string? _xProfileUrl;
+    private string? _publicSiteBaseUrl;
+    private string _fullSlug = "";
+
+    private SocialShareSuggestions SocialSuggestions
+    {
+        get
+        {
+            string? baseUrl = _publicSiteBaseUrl?.Trim().TrimEnd('/');
+            // og:url is the custom canonical when there is one, else the page's own address.
+            string? pageUrl = null;
+            if (!string.IsNullOrWhiteSpace(_canonicalUrl))
+                pageUrl = _canonicalUrl.Trim();
+            else if (!string.IsNullOrWhiteSpace(baseUrl))
+                pageUrl = $"{baseUrl}/{_fullSlug}".TrimEnd('/');
+            return new SocialShareSuggestions(
+                _defaultMetaDescription,
+                _defaultShareImage,
+                SocialProfiles.XHandle(_xProfileUrl),
+                SocialShareSuggestions.OgLocale(_languages.FirstOrDefault(l => l.Id == _currentLanguageId)?.TwoLetterCode),
+                pageUrl,
+                _audit?.PublishedAt,
+                [.. SelectedTags.Select(t => t.Name).Order(StringComparer.CurrentCulture)]);
+        }
+    }
+
+    private string? _mapEmbedUrl;
+    private string? _workingHours;
+    private SiteContactInfo _contact = SiteContactInfo.Empty;
+
+    private sealed record GjsResult(string? Html, string? Css, string? Data);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetLanguagesQuery())).Match(
+                success => _languages = [.. success.Items],
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        await LoadTemplatesAsync();
+
+        try
+        {
+            (await Sender.Send(new GetTagsQuery())).Match(
+                tags => _tagCandidates = tags,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        try
+        {
+            (await Sender.Send(new GetSiteCodeSnippetSummariesQuery())).Match(
+                codes => _siteCodeSummaries = codes,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.Identity))).Match(
+                settings =>
+                {
+                    // Feeds the Navbar block's brand slot (see setSiteInfo in
+                    // grapes-editor.js) — a logo uploaded in Site Settings has nowhere
+                    // else to land on the public site, since the layout deliberately
+                    // carries no site-wide header of its own.
+                    _logoUrl = settings.FirstOrDefault(s => s.Key == "Appearance.LogoUrl")?.Value;
+                    _siteName = settings.FirstOrDefault(s => s.Key == "General.SiteName")?.Value;
+                },
+                _ => { });
+
+            // The published <title> is not just the page title: the public layout
+            // renders "{page title} - {suffix}", where the suffix is the SEO settings'
+            // title suffix or, when that is blank, the site name. The SEO analyser
+            // needs the same suffix to judge the real title length and to explain
+            // where the extra text comes from (see the title check in elevare-seo.js).
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.Seo))).Match(
+                seo =>
+                {
+                    _metaTitleSuffix = seo.FirstOrDefault(s => s.Key == "Seo.DefaultMetaTitleSuffix")?.Value;
+                    _defaultMetaDescription = seo.FirstOrDefault(s => s.Key == "Seo.DefaultMetaDescription")?.Value;
+                    _defaultShareImage = seo.FirstOrDefault(s => s.Key == "Seo.DefaultOgImageUrl")?.Value;
+                },
+                _ => { });
+
+            // Identity, not Advanced: the key still says "Advanced." but the setting
+            // lives on the Site Identity screen, and asking the Advanced group always
+            // came back without it — the editor never knew the page's address, so
+            // "Otomatik doldur" could not fill og:url and the address checks never ran.
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.Identity))).Match(
+                identity => _publicSiteBaseUrl = identity.FirstOrDefault(s => s.Key == "Advanced.PublicSiteBaseUrl")?.Value,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        // The logo is almost always uploaded through the Media Library, which already
+        // asks for alt text at upload time — reusing it beats guessing a description
+        // from the site name, and only falls through to the site name when the logo
+        // was set some other way (a raw URL, no Media Library record behind it).
+        if (!string.IsNullOrWhiteSpace(_logoUrl))
+        {
+            try
+            {
+                (await Sender.Send(new GetMediaFileAltTextQuery(_logoUrl))).Match(
+                    alt => _logoAlt = alt,
+                    _ => { });
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        }
+
+        // Blocks that render a business's real-world details (map, opening hours)
+        // start from what Site Settings already knows instead of the placeholder
+        // address the block template would otherwise ship with — see setSiteInfo
+        // in grapes-editor.js.
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery(SiteSettingGroup.ContactSocial))).Match(
+                settings =>
+                {
+                    _mapEmbedUrl = settings.FirstOrDefault(s => s.Key == "Contact.MapEmbedUrl")?.Value;
+                    _workingHours = settings.FirstOrDefault(s => s.Key == "Contact.WorkingHours")?.Value;
+                    _contact = SiteContactInfo.From(settings);
+                    _xProfileUrl = settings.FirstOrDefault(s => s.Key == "Social.XUrl")?.Value;
+                },
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _notFound = false;
+        _editorReady = false;
+        _editorInitStarted = false;
+        try
+        {
+            (await Sender.Send(new GetPageByIdQuery(Id))).Match(
+                page => Apply(page),
+                _ => _notFound = true);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _notFound = true;
+        }
+
+        if (!_notFound)
+        {
+            try
+            {
+                (await Sender.Send(new GetPageTranslationsQuery(Id))).Match(
+                    resp => _translations = resp.Translations,
+                    _ => _translations = []);
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+            try
+            {
+                (await Sender.Send(new GetPageParentCandidatesQuery(_currentLanguageId, Id))).Match(
+                    candidates => _parentCandidates = candidates,
+                    _ => _parentCandidates = []);
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+            try
+            {
+                (await Sender.Send(new GetPageDirectoryQuery(_currentLanguageId))).Match(
+                    pages => _pageDirectory = pages,
+                    _ => _pageDirectory = []);
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+            _parentSearch = ParentLabel(_parentCandidates.FirstOrDefault(c => c.Id == _parentPageId));
+        }
+
+        // Baseline for the unsaved-changes guard: everything loaded above IS what
+        // the server holds, so the editor must not open already looking dirty.
+        MarkSaved();
+
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Apply(PageEditorResponse page)
+    {
+        _title = page.Title;
+        _slug = page.Slug;
+        _fullSlug = page.FullSlug;
+        // When a save is awaiting approval, the dropdown must show what was asked
+        // for (Published), not what is still actually live (Draft) — otherwise a
+        // second editor who saves without touching this field silently resubmits
+        // the live status and erases PendingStatus, and the page never goes live
+        // even after the chain is approved.
+        _status = page.PendingStatus ?? page.Status;
+        _pendingStatus = page.PendingStatus;
+        _originalSlug = page.Slug;
+        // Unlike _status, this tracks the page's actual live status — it gates the
+        // slug-change/redirect confirmation below, which only matters once a page
+        // is truly Published, not merely pending it.
+        _originalStatus = page.Status;
+        _gjsHtml = page.GjsHtml;
+        _gjsCss = page.GjsCss;
+        _gjsData = page.GjsData;
+        _fingerprint = page.Fingerprint;
+        _currentLanguageId = page.LanguageId;
+        _languageName = _languages.FirstOrDefault(l => l.Id == page.LanguageId)?.NameInNative ?? "";
+        _parentPageId = page.ParentPageId;
+        _selectedTagIds = [.. page.TagIds];
+        _excludedSiteCodeIds = [.. page.ExcludedSiteCodeSnippetIds];
+
+        _isCanonical = page.Seo.IsCanonical;
+        _canonicalUrl = page.Seo.CanonicalUrl;
+        _metaDescription = page.Seo.MetaDescription;
+        _metaAuthor = page.Seo.MetaAuthor;
+        _noIndex = page.Seo.NoIndex;
+        _noFollow = page.Seo.NoFollow;
+        _kind = page.Kind;
+        _audit = page.Audit;
+        _focusKeyword = page.Seo.FocusKeyword;
+        _structuredData = page.Seo.StructuredData;
+        _social = new SocialShareModel
+        {
+            OgTitle = page.Seo.OgTitle,
+            OgDescription = page.Seo.OgDescription,
+            OgType = page.Seo.OgType.HasValue() ? page.Seo.OgType : "website",
+            OgImage = page.Seo.OgImage,
+            OgUrl = page.Seo.OgUrl,
+            TwitterCard = page.Seo.TwitterCard,
+            TwitterSite = page.Seo.TwitterSite,
+            Meta = page.Seo.Social
+        };
+        // Seed with the last persisted score so the badge isn't empty on open —
+        // elevare-seo.js's initial analysis will overwrite it moments later with a
+        // fresh score against the (possibly just-loaded) current content.
+        _seoScore = page.SeoScore;
+    }
+
+    // Resolves every SEO analysis string (including the nested "checks" bundle
+    // expected by elevare-seo.js) from resx for the current CMS language, into a
+    // flat object to pass to JS. Property names are PascalCase; Blazor's JSInterop
+    // automatically converts them to camelCase on the JS side (e.g. FocusKeyword ->
+    // focusKeyword), so they must match the JS-side field names exactly.
+    private object BuildSeoResources() => new
+    {
+        Title = L["SeoAnalyzer_Title"],
+        Subtitle = L["SeoAnalyzer_Subtitle"],
+        Loading = L["SeoAnalyzer_Loading"],
+        ReanalyzeBtn = L["SeoAnalyzer_ReanalyzeBtn"],
+        LocateBtn = L["SeoAnalyzer_LocateBtn"],
+        LinkedTemplateNote = L["SeoAnalyzer_LinkedTemplateNote"],
+        SeverityNote = L["SeoAnalyzer_SeverityNote"],
+        CatContent = L["SeoAnalyzer_CatContent"],
+        CatTechnical = L["SeoAnalyzer_CatTechnical"],
+        CatAccessibility = L["SeoAnalyzer_CatAccessibility"],
+        CatResponsive = L["SeoAnalyzer_CatResponsive"],
+        Checks = new
+        {
+            H1MissingTitle = L["SeoAnalyzer_Check_H1MissingTitle"],
+            H1MissingDetail = L["SeoAnalyzer_Check_H1MissingDetail"],
+            H1MultipleTitle = L["SeoAnalyzer_Check_H1MultipleTitle"],
+            H1MultipleDetail = L["SeoAnalyzer_Check_H1MultipleDetail"],
+            H1OkTitle = L["SeoAnalyzer_Check_H1OkTitle"],
+            HeadingSkipTitle = L["SeoAnalyzer_Check_HeadingSkipTitle"],
+            HeadingSkipDetail = L["SeoAnalyzer_Check_HeadingSkipDetail"],
+            ThinContentTitle = L["SeoAnalyzer_Check_ThinContentTitle"],
+            ThinContentDetail = L["SeoAnalyzer_Check_ThinContentDetail"],
+            ContentOkTitle = L["SeoAnalyzer_Check_ContentOkTitle"],
+            KeywordNotSetTitle = L["SeoAnalyzer_Check_KeywordNotSetTitle"],
+            KeywordNotSetDetail = L["SeoAnalyzer_Check_KeywordNotSetDetail"],
+            KeywordMissingTitle = L["SeoAnalyzer_Check_KeywordMissingTitle"],
+            KeywordMissingDetail = L["SeoAnalyzer_Check_KeywordMissingDetail"],
+            KeywordOkTitle = L["SeoAnalyzer_Check_KeywordOkTitle"],
+            KeywordStuffingTitle = L["SeoAnalyzer_Check_KeywordStuffingTitle"],
+            KeywordStuffingDetail = L["SeoAnalyzer_Check_KeywordStuffingDetail"],
+            EmptyPageTitle = L["SeoAnalyzer_Check_EmptyPageTitle"],
+            EmptyPageDetail = L["SeoAnalyzer_Check_EmptyPageDetail"],
+            TitleMissingTitle = L["SeoAnalyzer_Check_TitleMissingTitle"],
+            TitleMissingDetail = L["SeoAnalyzer_Check_TitleMissingDetail"],
+            TitleShortTitle = L["SeoAnalyzer_Check_TitleShortTitle"],
+            TitleShortDetail = L["SeoAnalyzer_Check_TitleShortDetail"],
+            TitleLongTitle = L["SeoAnalyzer_Check_TitleLongTitle"],
+            TitleLongDetail = L["SeoAnalyzer_Check_TitleLongDetail"],
+            TitleOkTitle = L["SeoAnalyzer_Check_TitleOkTitle"],
+            TitleOkDetail = L["SeoAnalyzer_Check_TitleOkDetail"],
+            TitleNoKeywordTitle = L["SeoAnalyzer_Check_TitleNoKeywordTitle"],
+            TitleNoKeywordDetail = L["SeoAnalyzer_Check_TitleNoKeywordDetail"],
+            MetaDescMissingTitle = L["SeoAnalyzer_Check_MetaDescMissingTitle"],
+            MetaDescMissingDetail = L["SeoAnalyzer_Check_MetaDescMissingDetail"],
+            MetaDescShortTitle = L["SeoAnalyzer_Check_MetaDescShortTitle"],
+            MetaDescShortDetail = L["SeoAnalyzer_Check_MetaDescShortDetail"],
+            MetaDescLongTitle = L["SeoAnalyzer_Check_MetaDescLongTitle"],
+            MetaDescLongDetail = L["SeoAnalyzer_Check_MetaDescLongDetail"],
+            MetaOkTitle = L["SeoAnalyzer_Check_MetaOkTitle"],
+            SdMissingTitle = L["SeoAnalyzer_Check_SdMissingTitle"],
+            SdMissingDetail = L["SeoAnalyzer_Check_SdMissingDetail"],
+            SdBrokenTitle = L["SeoAnalyzer_Check_SdBrokenTitle"],
+            SdBrokenDetail = L["SeoAnalyzer_Check_SdBrokenDetail"],
+            SdEmptyTitle = L["SeoAnalyzer_Check_SdEmptyTitle"],
+            SdEmptyDetail = L["SeoAnalyzer_Check_SdEmptyDetail"],
+            SdOkTitle = L["SeoAnalyzer_Check_SdOkTitle"],
+            SocialMissingTitle = L["SeoAnalyzer_Check_SocialMissingTitle"],
+            SocialMissingDetail = L["SeoAnalyzer_Check_SocialMissingDetail"],
+            SocialNoSizeTitle = L["SeoAnalyzer_Check_SocialNoSizeTitle"],
+            SocialNoSizeDetail = L["SeoAnalyzer_Check_SocialNoSizeDetail"],
+            SocialSmallTitle = L["SeoAnalyzer_Check_SocialSmallTitle"],
+            SocialSmallDetail = L["SeoAnalyzer_Check_SocialSmallDetail"],
+            SocialNoAltTitle = L["SeoAnalyzer_Check_SocialNoAltTitle"],
+            SocialNoAltDetail = L["SeoAnalyzer_Check_SocialNoAltDetail"],
+            SocialOkTitle = L["SeoAnalyzer_Check_SocialOkTitle"],
+            SocialUrlMissingTitle = L["SeoAnalyzer_Check_SocialUrlMissingTitle"],
+            SocialUrlMissingDetail = L["SeoAnalyzer_Check_SocialUrlMissingDetail"],
+            SocialUrlWrongTitle = L["SeoAnalyzer_Check_SocialUrlWrongTitle"],
+            SocialUrlWrongDetail = L["SeoAnalyzer_Check_SocialUrlWrongDetail"],
+            SdUrlWrongTitle = L["SeoAnalyzer_Check_SdUrlWrongTitle"],
+            SdUrlWrongDetail = L["SeoAnalyzer_Check_SdUrlWrongDetail"],
+            PageUrlsOkTitle = L["SeoAnalyzer_Check_PageUrlsOkTitle"],
+            ImgAltTitle = L["SeoAnalyzer_Check_ImgAltTitle"],
+            ImgAltDetail = L["SeoAnalyzer_Check_ImgAltDetail"],
+            ImgAltOkTitle = L["SeoAnalyzer_Check_ImgAltOkTitle"],
+            ImgNoDimsTitle = L["SeoAnalyzer_Check_ImgNoDimsTitle"],
+            ImgNoDimsDetail = L["SeoAnalyzer_Check_ImgNoDimsDetail"],
+            ImgAspectTitle = L["SeoAnalyzer_Check_ImgAspectTitle"],
+            ImgAspectDetail = L["SeoAnalyzer_Check_ImgAspectDetail"],
+            IframeNoLazyTitle = L["SeoAnalyzer_Check_IframeNoLazyTitle"],
+            IframeNoLazyDetail = L["SeoAnalyzer_Check_IframeNoLazyDetail"],
+            LinkNoTextTitle = L["SeoAnalyzer_Check_LinkNoTextTitle"],
+            LinkNoTextDetail = L["SeoAnalyzer_Check_LinkNoTextDetail"],
+            GenericLinkTitle = L["SeoAnalyzer_Check_GenericLinkTitle"],
+            GenericLinkDetail = L["SeoAnalyzer_Check_GenericLinkDetail"],
+            LinkEmptyHrefTitle = L["SeoAnalyzer_Check_LinkEmptyHrefTitle"],
+            LinkEmptyHrefDetail = L["SeoAnalyzer_Check_LinkEmptyHrefDetail"],
+            BlankRelTitle = L["SeoAnalyzer_Check_BlankRelTitle"],
+            BlankRelDetail = L["SeoAnalyzer_Check_BlankRelDetail"],
+            TableNoThTitle = L["SeoAnalyzer_Check_TableNoThTitle"],
+            TableNoThDetail = L["SeoAnalyzer_Check_TableNoThDetail"],
+            SemanticMissingTitle = L["SeoAnalyzer_Check_SemanticMissingTitle"],
+            SemanticMissingDetail = L["SeoAnalyzer_Check_SemanticMissingDetail"],
+            IframeTitleTitle = L["SeoAnalyzer_Check_IframeTitleTitle"],
+            IframeTitleDetail = L["SeoAnalyzer_Check_IframeTitleDetail"],
+            NavNoAriaTitle = L["SeoAnalyzer_Check_NavNoAriaTitle"],
+            NavNoAriaDetail = L["SeoAnalyzer_Check_NavNoAriaDetail"],
+            InputNoLabelTitle = L["SeoAnalyzer_Check_InputNoLabelTitle"],
+            InputNoLabelDetail = L["SeoAnalyzer_Check_InputNoLabelDetail"],
+            ContrastFailTitle = L["SeoAnalyzer_Check_ContrastFailTitle"],
+            ContrastFailDetail = L["SeoAnalyzer_Check_ContrastFailDetail"],
+            ContrastOkTitle = L["SeoAnalyzer_Check_ContrastOkTitle"],
+            SmallFontTitle = L["SeoAnalyzer_Check_SmallFontTitle"],
+            SmallFontDetail = L["SeoAnalyzer_Check_SmallFontDetail"],
+            TapTargetTitle = L["SeoAnalyzer_Check_TapTargetTitle"],
+            TapTargetDetail = L["SeoAnalyzer_Check_TapTargetDetail"],
+            FixedWidthTitle = L["SeoAnalyzer_Check_FixedWidthTitle"],
+            FixedWidthDetail = L["SeoAnalyzer_Check_FixedWidthDetail"],
+            NoMediaQueryTitle = L["SeoAnalyzer_Check_NoMediaQueryTitle"],
+            NoMediaQueryDetail = L["SeoAnalyzer_Check_NoMediaQueryDetail"],
+            MobileOverflowTitle = L["SeoAnalyzer_Check_MobileOverflowTitle"],
+            MobileOverflowDetail = L["SeoAnalyzer_Check_MobileOverflowDetail"],
+            MobileOkTitle = L["SeoAnalyzer_Check_MobileOkTitle"],
+            MultipleEagerTitle = L["SeoAnalyzer_Check_MultipleEagerTitle"],
+            MultipleEagerDetail = L["SeoAnalyzer_Check_MultipleEagerDetail"],
+            AboveFoldLazyTitle = L["SeoAnalyzer_Check_AboveFoldLazyTitle"],
+            AboveFoldLazyDetail = L["SeoAnalyzer_Check_AboveFoldLazyDetail"],
+            AboveFoldLazyOkTitle = L["SeoAnalyzer_Check_AboveFoldLazyOkTitle"],
+            BelowFoldEagerTitle = L["SeoAnalyzer_Check_BelowFoldEagerTitle"],
+            BelowFoldEagerDetail = L["SeoAnalyzer_Check_BelowFoldEagerDetail"],
+        }
+    };
+
+    private string StatusLabel(PageStatus status) => status switch
+    {
+        PageStatus.Published => L["Pages_StatusPublished"],
+        PageStatus.Archived => L["Pages_StatusArchived"],
+        _ => L["Pages_StatusDraft"],
+    };
+
+    private async Task CreateTranslation(int targetLanguageId)
+    {
+        _creatingLanguageId = targetLanguageId;
+        try
+        {
+            int? newPageId = null;
+            (await Sender.Send(new CreatePageTranslationCommand(Id, targetLanguageId))).Match(
+                id => newPageId = id,
+                error => Toast.Error(L.Error(error)));
+
+            if (newPageId is not null)
+                Nav.NavigateTo($"/pages/edit/{newPageId}");
+        }
+        finally { _creatingLanguageId = null; }
+    }
+
+    private static string ScoreColor(int score)
+    {
+        if (score >= 80) return "var(--cms-success)";
+        if (score >= 50) return "var(--cms-warning)";
+        return "var(--cms-danger)";
+    }
+
+    // elevare-seo.js reports the score here on every (re-)analysis; the score badge
+    // in the Blazor SEO panel previously only showed up on the GrapeJS toolbar and
+    // never reached here.
+    [JSInvokable]
+    public Task OnSeoScoreUpdated(int score)
+    {
+        _seoScore = score;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Fired once per canvas load when this page holds one or more unlinked-template
+    /// snapshots whose source has since changed. Informational only — the block on
+    /// the page is intentionally left untouched (that's the point of not linking it).
+    /// </summary>
+    [JSInvokable]
+    public void OnStaleTemplatesDetected(StaleTemplateInfo[] templates)
+    {
+        if (templates.Length == 0) return;
+        _staleNotice?.Show(templates);
+    }
+
+    private StaleTemplateNotice? _staleNotice;
+
+    /// <summary>"https://www.example.com/" → "www.example.com"; empty when the site's address is not set.</summary>
+    private static string PublicSiteHost(string? baseUrl) =>
+        Uri.TryCreate(baseUrl?.Trim(), UriKind.Absolute, out Uri? uri) ? uri.Host : "";
+
+    /// <summary>
+    /// What a "Sayfa Listesi" block on this page will list — asked by the block in
+    /// the canvas (getListingPreview in grapes-editor.js) to show the real cards and
+    /// to say which pages it leaves out and why.
+    /// </summary>
+    [JSInvokable]
+    public async Task<ListingPreviewResponse?> GetListingPreview(ListingPreviewRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        Result<ListingPreviewResponse> result = await Sender.Send(new GetListingPreviewQuery(
+            Id, request.Source ?? "self", request.SourcePageId, request.Sort ?? "newest", request.TagSlug, request.Take, request.RelatedTags));
+        return result.IsSuccess ? result.Value : null;
+    }
+
+    /// <summary>The site's tags, for the listing block's default-tag picker.</summary>
+    [JSInvokable]
+    public Task<ListingTagOption[]> GetListingTags() =>
+        Task.FromResult(_tagCandidates.Select(t => new ListingTagOption(t.Name, t.Slug)).OrderBy(t => t.Name, StringComparer.CurrentCulture).ToArray());
+
+    /// <summary>
+    /// The trail a "Sayfa Yolu" block will show on this page, for the canvas —
+    /// the same one the public site builds. Null when it cannot be worked out.
+    /// </summary>
+    [JSInvokable]
+    public async Task<BreadcrumbPreviewResponse?> GetBreadcrumbPreview()
+    {
+        Result<BreadcrumbPreviewResponse> result = await Sender.Send(new GetBreadcrumbPreviewQuery(Id));
+        return result.IsSuccess ? result.Value : null;
+    }
+
+    /// <summary>The pages an "Önceki / Sonraki Yazı" block will link, for the canvas.</summary>
+    [JSInvokable]
+    public async Task<AdjacentPreviewResponse?> GetAdjacentPreview()
+    {
+        Result<AdjacentPreviewResponse> result = await Sender.Send(new GetAdjacentPreviewQuery(Id));
+        return result.IsSuccess ? result.Value : null;
+    }
+
+    /// <summary>
+    /// The code block's colours for the canvas — the same highlighter the public
+    /// site runs, so what the editor shows is what ships. An instance method because
+    /// the canvas reaches it through this editor's object reference.
+    /// </summary>
+    [JSInvokable]
+    public string HighlightCode(string? code, string? language) =>
+        SharedKernel.Content.CodeHighlighter.Highlight(code ?? "", language);
+
+    /// <summary>
+    /// Keeps the SEO analyser in step with the structured data panel, so the score
+    /// reacts to a draft being built or a node being removed without waiting for a save.
+    /// </summary>
+    private async Task OnStructuredDataChanged(string? value)
+    {
+        _structuredData = value;
+        await PushSeoMetaToJs();
+    }
+
+    // The share tags exactly as the page will write them — nothing is filled in on
+    // the public site any more, so the analysis judges what the fields say.
+    private object SocialSeoMeta => new
+    {
+        title = _social.OgTitle ?? "",
+        description = _social.OgDescription ?? "",
+        image = _social.OgImage ?? "",
+        imageWidth = _social.Meta.ImageWidth ?? 0,
+        imageHeight = _social.Meta.ImageHeight ?? 0,
+        imageAlt = _social.Meta.ImageAlt ?? "",
+        url = _social.OgUrl ?? "",
+    };
+
+    // The address the page is served at — what og:url and the structured data's
+    // own addresses should say. Empty when the site's address is not set.
+    private string PageAddress => SocialSuggestions.PageLink ?? "";
+
+    private async Task PushSeoMetaToJs()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("grapesEditor.updateSeoMeta",
+                new
+                {
+                    focusKeyword = _focusKeyword,
+                    metaDescription = _metaDescription,
+                    structuredData = _structuredData ?? "",
+                    // The analyser has always had a pageTitle slot; nothing ever
+                    // filled it, so its title checks could never run.
+                    pageTitle = _title ?? "",
+                    titleSuffix = EffectiveTitleSuffix,
+                    social = SocialSeoMeta,
+                    pageUrl = PageAddress,
+                });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    private async Task ReanalyzeSeo()
+    {
+        try { await JS.InvokeVoidAsync("grapesEditor.reanalyzeSeo"); }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    // Pastes raw HTML/CSS into the canvas (into the selected component, or the
+    // page root if nothing is selected) via GrapesJS's own setComponents/addRules
+    // APIs — the same insertHtml bridge the Template panel's "Add to editor"
+    // button already uses. CustomCodeGuard still re-validates on Save, this modal
+    // is just gated up front so only Developer/Admin/SuperAdmin ever see it.
+    private async Task ImportCode()
+    {
+        if (string.IsNullOrWhiteSpace(_importHtml)) return;
+        try
+        {
+            await JS.InvokeVoidAsync("grapesEditor.insertHtml", _importHtml, _importCss);
+            _importCodeOpen = false;
+            _importHtml = "";
+            _importCss = "";
+            Toast.Success(L["PageEditor_ImportCodeImported"]);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["PageEditor_ImportCodeError"]);
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_loading && !_notFound && !_editorInitStarted)
+        {
+            _editorInitStarted = true;
+            try
+            {
+                _dotNetRef?.Dispose();
+                _dotNetRef = DotNetObjectReference.Create(this);
+                // Must precede init(): the blocks read this synchronously while they
+                // are being registered, which happens inside init().
+                await JS.InvokeVoidAsync("grapesEditor.setSiteInfo",
+                    new
+                    {
+                        mapEmbedUrl = _mapEmbedUrl ?? "",
+                        workingHours = _workingHours ?? "",
+                        logoUrl = _logoUrl ?? "",
+                        logoAlt = _logoAlt ?? "",
+                        siteName = _siteName ?? "",
+                        publicSiteHost = PublicSiteHost(_publicSiteBaseUrl),
+                        // What text a block writes INTO the page is in — the page's
+                        // language, not the CMS's.
+                        pageLanguage = _languages.FirstOrDefault(l => l.Id == _currentLanguageId)?.TwoLetterCode ?? "",
+                        contact = _contact
+                    });
+                // Also before init(): the canvas's Site Codes stylesheet URL is built
+                // from this when the canvas is created.
+                await JS.InvokeVoidAsync("grapesEditor.setExcludedSiteCodes", _excludedSiteCodeIds.ToArray());
+                bool ok = await JS.InvokeAsync<bool>("grapesEditor.init", "gjs", _gjsHtml, _gjsCss, _gjsData, _linkedTemplates,
+                    new { metaDescription = _metaDescription, focusKeyword = _focusKeyword, structuredData = _structuredData ?? "", pageTitle = _title ?? "", titleSuffix = EffectiveTitleSuffix, social = SocialSeoMeta, pageUrl = PageAddress },
+                    BuildSeoResources(), _dotNetRef,
+                    // flagUrl/flagAlt feed the Language Switcher block's flag mode —
+                    // the icon picked per language on the Diller screen, which until
+                    // now never left the CMS.
+                    //
+                    // IsPublished as well as IsActive, matching what the public site
+                    // will actually resolve: LanguageSwitcherResolutionService only
+                    // rewrites slots for PubliclyVisible languages (active AND
+                    // published). Sending an active-but-unpublished language put an
+                    // <a href="#"> in the switcher that nothing ever resolved — a
+                    // permanent dead link on the live page.
+                    _languages.Where(l => l.IsActive && l.IsPublished).Select(l => new
+                    {
+                        code = l.TwoLetterCode,
+                        isDefault = l.IsDefault,
+                        flagUrl = l.FlagIconPath ?? "",
+                        flagAlt = l.FlagIconAltText ?? l.NameInNative
+                    }),
+                    // Feeds the builder's page pickers — "Site sayfası" on a link, the
+                    // Sayfa Listesi block's "Kaynak Sayfa" — every page of this language.
+                    _pageDirectory.Select(c => new { id = c.Id, label = c.FullSlug, title = c.Title }),
+                    _templateVersions.ToDictionary(
+                        kv => kv.Key.ToString(),
+                        kv => new { name = kv.Value.Name, version = kv.Value.Version }));
+                _editorReady = ok;
+            }
+            catch (Exception ex)
+            {
+                LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task<bool> SaveAll()
+    {
+        if (_title.IsNullOrWhiteSpace()) { Toast.Error(L["Pages_Validation_Title"]); return false; }
+        if (_slug.IsNullOrWhiteSpace()) { _slug = _title.ToSlug(); }
+
+        // A Published page's old URL only auto-redirects (see RedirectResolution on
+        // the server) if the editor actually goes through with the rename — ask first,
+        // since it's a one-way, visitor-facing change the user might not expect.
+        if (_originalStatus == PageStatus.Published && _slug.ToSlug() != _originalSlug && !_slugChangeConfirmed)
+        {
+            _showSlugChangeConfirm = true;
+            return false;
+        }
+
+        _saving = true;
+        try
+        {
+            GjsResult? gjs = null;
+            try
+            {
+                gjs = await JS.InvokeAsync<GjsResult?>("grapesEditor.getData");
+            }
+            catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+            // null means the canvas could not be read — the interop call failed
+            // (a dropped circuit, a timeout) or the editor never finished loading.
+            // Continuing would hand UpdatePageCommand null Html/Css/Data, and it
+            // writes exactly that: the page's content is wiped while the user is
+            // told the save succeeded. There is nothing to save here, so refuse.
+            if (gjs is null)
+            {
+                Toast.Error(L["PageEditor_ContentUnavailable"]);
+                return false;
+            }
+
+            var seo = new UpdatePageSeoMeta(
+                _isCanonical,
+                _canonicalUrl,
+                _metaDescription,
+                _metaAuthor,
+                _noIndex,
+                _noFollow,
+                _focusKeyword,
+                _structuredData,
+                _social.OgTitle,
+                _social.OgDescription,
+                _social.OgType,
+                _social.OgImage,
+                _social.OgUrl,
+                _social.TwitterCard,
+                _social.TwitterSite,
+                _seoScore,
+                _social.Meta);
+
+            bool ok = false;
+            bool overwrite = _overwriteNext;
+            _overwriteNext = false;
+            (await Sender.Send(new UpdatePageCommand(
+                    Id, _title.Trim(), _slug, _status, gjs.Html, gjs.Css, gjs.Data, seo, _parentPageId, _selectedTagIds, _kind,
+                    [.. _excludedSiteCodeIds], _fingerprint, overwrite)))
+                .Match(() => ok = true, error =>
+                {
+                    if (error.Code == PageInfoErrors.EditedElsewhere.Code)
+                        _showEditConflict = true;
+                    else
+                        Toast.Error(L.Error(error));
+                });
+
+            if (ok)
+            {
+                // The command itself only reports success/failure, not whether an
+                // active workflow held the status back — re-fetch to learn that,
+                // the same way the editor learns it on first load.
+                _pendingStatus = null;
+                string previousFullSlug = _fullSlug;
+                PageEditorResponse? saved = null;
+                try
+                {
+                    // The address too: a new slug or parent moves the page, and
+                    // "Otomatik doldur" and the SEO check must use where it is now.
+                    (await Sender.Send(new GetPageByIdQuery(Id))).Match(
+                        fresh =>
+                        {
+                            saved = fresh;
+                            _pendingStatus = fresh.PendingStatus;
+                            _fullSlug = fresh.FullSlug;
+                            _fingerprint = fresh.Fingerprint;
+                        },
+                        _ => { });
+                }
+                catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+                Toast.Success(_pendingStatus.HasValue
+                    ? L["PageEditor_SavedPendingApproval"]
+                    : L["PageEditor_Saved"]);
+
+                // A move rewrote this page's og:url, structured data and any links in
+                // it on the server: load that back, or the next save would put the
+                // old addresses right back.
+                if (_fullSlug != previousFullSlug && saved is not null)
+                {
+                    Toast.Info(L["PageEditor_AddressChangedLinksMoved"]);
+                    await ReloadEditorAsync(saved);
+                }
+                _slug = _slug.ToSlug();
+                _originalSlug = _slug;
+                _originalStatus = _status;
+                _slugChangeConfirmed = false;
+
+                // The server now holds exactly this state — clear the guard, and tell
+                // GrapesJS to start reporting canvas changes again from here.
+                MarkSaved();
+                try { await JS.InvokeVoidAsync("grapesEditor.markClean"); }
+                catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+            }
+
+            return ok;
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task ReloadAfterConflict()
+    {
+        _showEditConflict = false;
+        PageEditorResponse? current = null;
+        try
+        {
+            (await Sender.Send(new GetPageByIdQuery(Id))).Match(page => current = page, error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        if (current is not null)
+            await ReloadEditorAsync(current);
+    }
+
+    private async Task OverwriteAfterConflict()
+    {
+        _showEditConflict = false;
+        _overwriteNext = true;
+        await SaveAll();
+    }
+
+    /// <summary>The linked templates' current content, which the canvas shows inside every template block.</summary>
+    private async Task LoadTemplatesAsync()
+    {
+        try
+        {
+            (await Sender.Send(new GetLinkedPageTemplatesContentQuery())).Match(
+                map => _linkedTemplates = map,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        try
+        {
+            (await Sender.Send(new GetPageTemplateVersionsQuery())).Match(
+                map => _templateVersions = map,
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+    }
+
+    /// <summary>Replaces what the editor holds with the page as saved, canvas included.</summary>
+    private async Task ReloadEditorAsync(PageEditorResponse page)
+    {
+        Apply(page);
+        // A move rewrites links inside the templates too.
+        await LoadTemplatesAsync();
+        _originalSlug = _slug;
+        _slugChangeConfirmed = false;
+        try { await JS.InvokeVoidAsync("grapesEditor.destroy"); }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        _editorReady = false;
+        // OnAfterRenderAsync builds the canvas again from the content Apply just set.
+        _editorInitStarted = false;
+        MarkSaved();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CancelSlugChangeConfirm()
+    {
+        _slug = _originalSlug;
+        _showSlugChangeConfirm = false;
+    }
+
+    private async Task ConfirmSlugChangeAndSave()
+    {
+        _slugChangeConfirmed = true;
+        _showSlugChangeConfirm = false;
+        await SaveAll();
+    }
+
+    private async Task Preview()
+    {
+        string handle = await JS.InvokeAsync<string>("cmsJs.openPendingWindow");
+
+        GjsResult? gjs = null;
+        try
+        {
+            gjs = await JS.InvokeAsync<GjsResult?>("grapesEditor.getData");
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        // Same reasoning as SaveAll: an unreadable canvas would stage null content,
+        // and the preview tab would open on a blank page as if that were the work.
+        if (gjs is null)
+        {
+            Toast.Error(L["PageEditor_ContentUnavailable"]);
+            await JS.InvokeVoidAsync("cmsJs.navigatePendingWindow", handle, "about:blank");
+            return;
+        }
+
+        // Stages the editor's current (possibly unsaved) content into the preview
+        // snapshot columns only — this never touches the live Gjs/Title/Slug/Status
+        // fields, so an already-Published page's real visitors see no change.
+        bool staged = false;
+        (await Sender.Send(new SavePreviewContentCommand(Id, gjs.Html, gjs.Css)))
+            .Match(() => staged = true, error => Toast.Error(L.Error(error)));
+
+        if (!staged)
+        {
+            await JS.InvokeVoidAsync("cmsJs.navigatePendingWindow", handle, "about:blank");
+            return;
+        }
+
+        string? url = null;
+        (await Sender.Send(new GetPreviewLinkQuery(Id))).Match(
+            u => url = u,
+            error => Toast.Error(L.Error(error)));
+
+        await JS.InvokeVoidAsync("cmsJs.navigatePendingWindow", handle, url ?? "about:blank");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("grapesEditor.destroy"); }
+        catch { /* circuit may already be gone */ }
+        _dotNetRef?.Dispose();
+    }
+}

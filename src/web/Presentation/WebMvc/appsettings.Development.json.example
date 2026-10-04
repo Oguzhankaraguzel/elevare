@@ -1,0 +1,28 @@
+{
+  "//": "Copy to appsettings.Development.json and fill in. That file is git-ignored; this one is not, so never put a real value here.",
+
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Debug",
+      "Override": {
+        "Microsoft.AspNetCore": "Information",
+        "Microsoft.EntityFrameworkCore": "Information"
+      }
+    }
+  },
+  "ConnectionStrings": {
+    "DefaultConnection": "Host=localhost;Port=5432;Database=ElevareDB;Username=postgres;Password=postgres;"
+  },
+  "Preview": {
+    "//SigningKey": "Must match the CMS's Preview:SigningKey byte for byte, or preview links will not validate. At least 32 characters.",
+    "SigningKey": ""
+  },
+  "Cache": {
+    "//ClearSecret": "Must match the CMS's Cache:ClearSecret, and must not be empty.",
+    "ClearSecret": ""
+  },
+  "Captcha": {
+    "//SecretKey": "Pairs with Integrations.CaptchaProvider/CaptchaSiteKey, chosen in Site Settings (safe to expose). Captcha stays off until BOTH a provider is picked there AND a secret key is set — here, or from the CMS's 'Sırlar' screen, which overrides this at startup when set (see IntegrationSecretsBootstrap).",
+    "SecretKey": ""
+  }
+}

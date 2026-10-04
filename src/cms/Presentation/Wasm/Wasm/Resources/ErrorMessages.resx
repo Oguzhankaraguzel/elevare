@@ -1,0 +1,368 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <!-- Article -->
+  <!-- Category -->
+  <!-- Auth -->
+  <data name="Auth.InvalidCredentials" xml:space="preserve">
+    <value>Invalid email address or password.</value>
+  </data>
+  <data name="Auth.AccountLocked" xml:space="preserve">
+    <value>Your account is locked. Please contact the administrator.</value>
+  </data>
+  <!-- User -->
+  <!-- Comment -->
+  <!-- ContactMessage -->
+  <!-- Language -->
+  <data name="Language.NotFound" xml:space="preserve">
+    <value>The language was not found.</value>
+  </data>
+  <data name="Language.CodeAlreadyExists" xml:space="preserve">
+    <value>A language with this code already exists.</value>
+  </data>
+  <data name="Language.CannotDeleteDefaultLanguage" xml:space="preserve">
+    <value>The default language cannot be deleted.</value>
+  </data>
+  <data name="Language.HasPages" xml:space="preserve">
+    <value>This language still has pages. To take it off the site, untick "On the site"; to delete it, delete its pages first.</value>
+  </data>
+  <!-- MediaFile -->
+  <data name="MediaFile.NotFound" xml:space="preserve">
+    <value>The media file was not found.</value>
+  </data>
+  <!-- Menu -->
+  <!-- NewsletterSubscriber -->
+  <!-- PageInfo -->
+  <data name="PageInfo.NotFound" xml:space="preserve">
+    <value>The page was not found.</value>
+  </data>
+  <data name="PageInfo.EditedElsewhere" xml:space="preserve">
+    <value>This page was changed since you opened it.</value>
+  </data>
+  <data name="PageInfo.SlugAlreadyExists" xml:space="preserve">
+    <value>A page with this slug already exists for the selected language.</value>
+  </data>
+  <data name="PageInfo.CircularParentReference" xml:space="preserve">
+    <value>A page cannot be set as its own parent or descendant.</value>
+  </data>
+  <data name="PageInfo.CannotDeleteWithChildren" xml:space="preserve">
+    <value>The page cannot be deleted because it has child pages.</value>
+  </data>
+  <data name="PageInfo.CannotUnpublishHomePage" xml:space="preserve">
+    <value>The home page cannot be unpublished.</value>
+  </data>
+  <!-- Redirect -->
+  <data name="Redirect.NotFound" xml:space="preserve">
+    <value>The redirect rule was not found.</value>
+  </data>
+  <data name="Redirect.OldPathAlreadyExists" xml:space="preserve">
+    <value>A redirect rule for this path already exists.</value>
+  </data>
+  <data name="Redirect.CircularRedirect" xml:space="preserve">
+    <value>This would create a circular redirect loop.</value>
+  </data>
+  <data name="Redirect.OldPathCannotMatchNewPath" xml:space="preserve">
+    <value>The old path and new path cannot be identical.</value>
+  </data>
+  <!-- ScheduledJob -->
+  <!-- SiteSetting -->
+  <data name="SiteSetting.NotFound" xml:space="preserve">
+    <value>The site setting was not found.</value>
+  </data>
+  <data name="IntegrationSecret.NotFound" xml:space="preserve">
+    <value>The integration secret was not found.</value>
+  </data>
+  <data name="SiteSetting.KeyAlreadyExists" xml:space="preserve">
+    <value>A setting with this key already exists in the group.</value>
+  </data>
+  <!-- Tag -->
+  <data name="Tag.NotFound" xml:space="preserve">
+    <value>The tag was not found.</value>
+  </data>
+  <data name="Tag.NameAlreadyExists" xml:space="preserve">
+    <value>A tag with this name already exists.</value>
+  </data>
+  <!-- Advertisement -->
+  <!-- Form -->
+  <!-- Popup -->
+  <!-- File -->
+  <data name="File.Empty" xml:space="preserve">
+    <value>Uploaded file must not be empty.</value>
+  </data>
+  <data name="File.TooLarge" xml:space="preserve">
+    <value>The file exceeds the size limit.</value>
+  </data>
+  <data name="File.MimeTypeNotAllowed" xml:space="preserve">
+    <value>This file type is not allowed.</value>
+  </data>
+  <data name="File.NotFound" xml:space="preserve">
+    <value>The file was not found.</value>
+  </data>
+  <data name="File.PhysicalNotFound" xml:space="preserve">
+    <value>The physical file is missing from storage.</value>
+  </data>
+  <data name="File.UploadFailed" xml:space="preserve">
+    <value>The file upload failed.</value>
+  </data>
+  <!-- Email -->
+  <data name="Email.NoRecipients" xml:space="preserve">
+    <value>At least one recipient address is required.</value>
+  </data>
+  <data name="Email.TemplateNameEmpty" xml:space="preserve">
+    <value>Template name must not be empty.</value>
+  </data>
+  <data name="Email.TemplateNotFound" xml:space="preserve">
+    <value>The email template was not found.</value>
+  </data>
+  <data name="Email.SendFailed" xml:space="preserve">
+    <value>Failed to send the email.</value>
+  </data>
+  <data name="Trash.NotFound" xml:space="preserve">
+    <value>The item was not found in the Trash.</value>
+  </data>
+  <data name="Trash.UnknownType" xml:space="preserve">
+    <value>Unknown trash entity type.</value>
+  </data>
+  <data name="AppUser.InvalidPassword" xml:space="preserve">
+    <value>Your current password is not correct.</value>
+  </data>
+  <data name="AppUser.EmailAlreadyInUse" xml:space="preserve">
+    <value>A user with this e-mail address already exists.</value>
+  </data>
+  <data name="AppUser.NotFound" xml:space="preserve">
+    <value>The user was not found.</value>
+  </data>
+  <data name="PasswordSetup.InvalidOrExpiredToken" xml:space="preserve">
+    <value>This link is invalid or has expired. Ask an administrator to send a new one.</value>
+  </data>
+  <data name="PasswordSetup.AlreadyHasPassword" xml:space="preserve">
+    <value>This user already has a password set.</value>
+  </data>
+  <data name="AppRole.CannotDeleteBuiltInRole" xml:space="preserve">
+    <value>Built-in roles cannot be deleted.</value>
+  </data>
+  <data name="AppRole.CannotDeleteRoleInUse" xml:space="preserve">
+    <value>This role still has users assigned to it. Move them to another role first.</value>
+  </data>
+  <data name="AppRole.CannotDeleteRoleInWorkflow" xml:space="preserve">
+    <value>This role is required by an approval workflow step. Remove it from that step first.</value>
+  </data>
+  <data name="AppRole.NameAlreadyExists" xml:space="preserve">
+    <value>A role with this name already exists.</value>
+  </data>
+  <data name="AppRole.NotFound" xml:space="preserve">
+    <value>The role was not found.</value>
+  </data>
+  <data name="AppUser.CannotDeleteLastSuperAdmin" xml:space="preserve">
+    <value>You cannot delete the last SuperAdmin account.</value>
+  </data>
+  <data name="AppUser.CannotDeleteSelf" xml:space="preserve">
+    <value>You cannot delete your own account.</value>
+  </data>
+  <data name="Backup.ConnectionStringMissing" xml:space="preserve">
+    <value>No database connection string is configured, so no backup can be taken.</value>
+  </data>
+  <data name="CdnProbe.NotConfigured" xml:space="preserve">
+    <value>Enter a CDN base URL before testing it.</value>
+  </data>
+  <data name="CdnProbe.InvalidBaseUrl" xml:space="preserve">
+    <value>That is not a valid http(s) address.</value>
+  </data>
+  <data name="CdnProbe.NoMediaToTest" xml:space="preserve">
+    <value>There is no uploaded file to test with. Upload any image to the Media Library first — the check works by pulling a real file through the CDN and comparing it with the original.</value>
+  </data>
+  <data name="TestEmail.InvalidRecipient" xml:space="preserve">
+    <value>Enter a valid e-mail address to send the test to.</value>
+  </data>
+  <data name="Email.SenderNotConfigured" xml:space="preserve">
+    <value>No sender address is configured. Fill in "Sender e-mail address" above and save, or set Email:FromAddress in appsettings.json.</value>
+  </data>
+  <data name="ContentBulkEdit.AlreadyReverted" xml:space="preserve">
+    <value>This bulk edit has already been reverted.</value>
+  </data>
+  <data name="ContentBulkEdit.NoPagesSelected" xml:space="preserve">
+    <value>Select at least one page to update.</value>
+  </data>
+  <data name="ContentBulkEdit.NotFound" xml:space="preserve">
+    <value>The bulk edit history entry was not found.</value>
+  </data>
+  <data name="ContentBulkEdit.SearchTextRequired" xml:space="preserve">
+    <value>Enter the text to search for.</value>
+  </data>
+  <data name="FormReplyTemplate.NotFound" xml:space="preserve">
+    <value>The reply template was not found.</value>
+  </data>
+  <data name="FormSubmission.NotFound" xml:space="preserve">
+    <value>The form submission was not found.</value>
+  </data>
+  <data name="Page.CustomCodeNotAllowed" xml:space="preserve">
+    <value>You are not allowed to save raw script or custom code. Only Developer, Admin and SuperAdmin can.</value>
+  </data>
+  <data name="Page.InvalidSlug" xml:space="preserve">
+    <value>No valid slug could be derived from the title. Fill the slug field in yourself.</value>
+  </data>
+  <data name="PageInfo.MaxDepthExceeded" xml:space="preserve">
+    <value>Pages can only be nested up to 3 levels deep.</value>
+  </data>
+  <data name="PageInfo.ParentLanguageMismatch" xml:space="preserve">
+    <value>The parent page must be in the same language.</value>
+  </data>
+  <data name="PageInfo.ParentNotFound" xml:space="preserve">
+    <value>The selected parent page was not found.</value>
+  </data>
+  <data name="PageInfo.PreviewBaseUrlNotConfigured" xml:space="preserve">
+    <value>The public site address is not set yet. Fill it in under Site Settings, Public Site URL.</value>
+  </data>
+  <data name="PageInfo.SameLanguage" xml:space="preserve">
+    <value>The target language must differ from the source page's language.</value>
+  </data>
+  <data name="PageInfo.TranslationAlreadyExists" xml:space="preserve">
+    <value>This page already has a version in the selected language.</value>
+  </data>
+  <data name="PageTemplate.CustomCodeNotAllowed" xml:space="preserve">
+    <value>You are not allowed to save raw script or custom code. Only Developer, Admin and SuperAdmin can.</value>
+  </data>
+  <data name="PageTemplate.EditedElsewhere" xml:space="preserve">
+    <value>This template was changed since you opened it.</value>
+  </data>
+  <data name="PageTemplate.NotFound" xml:space="preserve">
+    <value>The template was not found.</value>
+  </data>
+  <data name="Preview.SigningKeyMissing" xml:space="preserve">
+    <value>Preview links cannot be generated: Preview:SigningKey is not configured. It must match the public site's value exactly.</value>
+  </data>
+  <data name="Preview.SigningKeyTooShort" xml:space="preserve">
+    <value>Preview links cannot be generated: Preview:SigningKey must be at least 32 characters. Generate one with `openssl rand -base64 48` (or similar) and use the same value on both apps.</value>
+  </data>
+  <data name="PublicSite.BaseUrlNotConfigured" xml:space="preserve">
+    <value>The public site address is not set.</value>
+  </data>
+  <data name="Redirect.OldPathRequired" xml:space="preserve">
+    <value>The path to redirect from is required.</value>
+  </data>
+  <data name="Redirect.ShadowsLivePage" xml:space="preserve">
+    <value>A published page already lives at this path, so redirecting it would hide that page.</value>
+  </data>
+  <data name="Seo.LlmsTooLarge" xml:space="preserve">
+    <value>llms.txt is too long. It is meant to be a short map of the site, not a copy of it.</value>
+  </data>
+  <data name="Seo.RobotsMissingUserAgent" xml:space="preserve">
+    <value>robots.txt needs at least one User-agent line. Without it every rule below is ignored.</value>
+  </data>
+  <data name="Seo.RobotsTooLarge" xml:space="preserve">
+    <value>robots.txt is too long. Crawlers stop reading long files, so the rules at the end never apply.</value>
+  </data>
+  <data name="SiteCode.ContentRequired" xml:space="preserve">
+    <value>There is no code to save. Paste the snippet your provider gave you.</value>
+  </data>
+  <data name="SiteCode.Malformed" xml:space="preserve">
+    <value>This code has an unclosed tag. Copy the whole snippet from your provider — a missing closing tag can blank out the entire site.</value>
+  </data>
+  <data name="SiteCode.NameRequired" xml:space="preserve">
+    <value>Give the snippet a name so you can recognise it in the list later.</value>
+  </data>
+  <data name="SiteCode.NotFound" xml:space="preserve">
+    <value>The code snippet was not found.</value>
+  </data>
+  <data name="SiteCode.PresetValueUnrecognised" xml:space="preserve">
+    <value>No id could be read from what was pasted. Paste either the id on its own or the complete snippet from the provider's setup page.</value>
+  </data>
+  <data name="SiteCode.TooLarge" xml:space="preserve">
+    <value>The snippet is too large. Host big libraries as a file and reference them with a script src instead.</value>
+  </data>
+  <data name="SiteCode.WholeDocumentPasted" xml:space="preserve">
+    <value>This looks like a complete web page, not a snippet. Paste only the part your provider marked for the head or body.</value>
+  </data>
+  <data name="SiteSetting.CustomCodeNotAllowed" xml:space="preserve">
+    <value>You are not allowed to save raw script or custom code. Only Developer, Admin and SuperAdmin can.</value>
+  </data>
+  <data name="Tag.InvalidName" xml:space="preserve">
+    <value>Enter a valid tag name.</value>
+  </data>
+  <data name="UserNote.Unauthorized" xml:space="preserve">
+    <value>You are not authorized to access this note.</value>
+  </data>
+  <data name="UserReminder.NotFound" xml:space="preserve">
+    <value>The reminder was not found.</value>
+  </data>
+  <data name="UserReminder.Unauthorized" xml:space="preserve">
+    <value>You are not authorized to access this reminder.</value>
+  </data>
+  <data name="UserTask.NotFound" xml:space="preserve">
+    <value>The task was not found.</value>
+  </data>
+  <data name="UserTask.Unauthorized" xml:space="preserve">
+    <value>You are not authorized to access this task.</value>
+  </data>
+  <data name="Workflow.CannotDeleteActiveDefinition" xml:space="preserve">
+    <value>Deactivate this workflow before deleting it.</value>
+  </data>
+  <data name="Workflow.CannotDeleteWithPendingRequests" xml:space="preserve">
+    <value>This workflow still has content waiting for approval. Decide or reject those requests first — deleting now would leave those edits stuck and invisible.</value>
+  </data>
+  <data name="Workflow.DefinitionNotFound" xml:space="preserve">
+    <value>The workflow definition was not found.</value>
+  </data>
+  <data name="Workflow.NeedsAtLeastOneStep" xml:space="preserve">
+    <value>A workflow needs at least one step.</value>
+  </data>
+  <data name="Workflow.NotAuthorizedForStep" xml:space="preserve">
+    <value>You are not in the role required to decide this step.</value>
+  </data>
+  <data name="Workflow.RequestNotFound" xml:space="preserve">
+    <value>The approval request was not found.</value>
+  </data>
+  <data name="Workflow.RequestNotPending" xml:space="preserve">
+    <value>This request has already been decided.</value>
+  </data>
+  <data name="Permission.NotGranted" xml:space="preserve">
+    <value>You do not have the permission this action requires.</value>
+  </data>
+  <data name="SiteCode.KindMismatch" xml:space="preserve">
+    <value>The selected type does not match the pasted code. Change the type, or paste the matching snippet.</value>
+  </data>
+  <data name="Cache.BaseUrlNotConfigured" xml:space="preserve">
+    <value>The cache cannot be managed until the public site address is set. Fill it in under Site Settings, Public Site URL.</value>
+  </data>
+  <data name="Cache.SecretMismatch" xml:space="preserve">
+    <value>The website rejected the request (401). Cache:ClearSecret must be identical, and non-empty, on both the CMS and the website.</value>
+  </data>
+  <data name="Cache.StatusUnreadable" xml:space="preserve">
+    <value>The website returned an unexpected response.</value>
+  </data>
+  <data name="Cache.RequestFailed" xml:space="preserve">
+    <value>The request to the website failed.</value>
+  </data>
+  <data name="Cache.Unreachable" xml:space="preserve">
+    <value>The website could not be reached.</value>
+  </data>
+  <data name="StructuredData.PublicSiteBaseUrlMissing" xml:space="preserve">
+    <value>The structured-data draft could not be built: Public Site URL is empty. Every address in the schema is derived from it, so it has to be filled in.</value>
+  </data>
+  <data name="StructuredData.PageNotFound" xml:space="preserve">
+    <value>The page was not found. It may have been deleted in another tab — refresh the page list.</value>
+  </data>
+  <data name="Trash.CannotPurgeHasFormSubmissions" xml:space="preserve">
+    <value>This page still holds form submissions. Deleting it permanently would delete those enquiries with it.</value>
+  </data>
+  <data name="Trash.CannotPurgeHasChildren" xml:space="preserve">
+    <value>This page still has sub-pages. Delete those permanently first.</value>
+  </data>
+  <data name="Database.SaveError" xml:space="preserve">
+    <value>Saving the changes failed.</value>
+  </data>
+  <data name="Page.StructuredDataInvalidJson" xml:space="preserve">
+    <value>The structured data is not valid JSON. Published as it stands, no search engine can read any of it.</value>
+  </data>
+</root>

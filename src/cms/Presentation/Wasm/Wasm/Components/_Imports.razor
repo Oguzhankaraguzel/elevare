@@ -1,0 +1,189 @@
+﻿@using System.Net.Http
+@using System.Net.Http.Json
+@using System.Security.Claims
+
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Components.Routing
+@using Microsoft.AspNetCore.Components.Web
+@using static Microsoft.AspNetCore.Components.Web.RenderMode
+@using Microsoft.AspNetCore.Components.Web.Virtualization
+@using Microsoft.Extensions.Localization
+@using Microsoft.Extensions.Logging
+@using Microsoft.JSInterop
+
+@using Hangfire
+@using MediatR
+
+@using Infrastructure.Authentication
+
+@using Application.Abstraction.Services.Files
+@using Application.Features.Commands.Languages
+@using Application.Features.Commands.Languages.CreateLanguage
+@using Application.Features.Commands.Languages.DeleteLanguage
+@using Application.Features.Commands.Languages.UpdateLanguage
+@using Application.Features.Commands.Media.DeleteMediaFile
+@using Application.Features.Commands.Media.UpdateMediaFile
+@using Application.Features.Commands.Media.CreateMediaFile
+@using Application.Features.Commands.IntegrationSecrets.UpdateIntegrationSecret
+@using Application.Features.Commands.IntegrationSecrets.ClearIntegrationSecret
+@using Application.Features.Queries.IntegrationSecrets.GetIntegrationSecrets
+@using Domain.Entities.IntegrationSecrets
+@using Domain.Entities.SiteCodeSnippets
+@using Application.Features.Queries.SiteCodeSnippets.GetSiteCodeSnippetSummaries
+@using Application.Features.Commands.SiteSettings.UpdateSiteSetting
+@using Application.Features.Commands.SiteSettings.SendTestEmail
+@using Application.Features.Commands.SiteSettings.TestCdn
+@using Application.Features.Commands.StructuredData.RefreshNodes
+@using Application.Features.Commands.Users.CreateUser
+@using Application.Features.Commands.Users.DeleteUser
+@using Application.Features.Commands.Users.ResendPasswordSetup
+@using Application.Features.Commands.Users.SetPassword
+@using Application.Features.Commands.Users.SetUserPasswordManually
+@using Application.Features.Commands.Users.UpdateUser
+@using Application.Features.Commands.Users.UpdateMyProfile
+@using Application.Features.Commands.Users.ChangeMyPassword
+
+@using Application.Features.Commands.UserNotes.CreateUserNote
+@using Application.Features.Commands.UserNotes.UpdateUserNote
+@using Application.Features.Commands.UserNotes.DeleteUserNote
+@using Application.Features.Commands.UserReminders.CreateReminder
+@using Application.Features.Commands.UserReminders.UpdateReminder
+@using Application.Features.Commands.UserReminders.DeleteReminder
+@using Application.Features.Commands.UserTasks.CreateUserTask
+@using Application.Features.Commands.UserTasks.UpdateUserTask
+@using Application.Features.Commands.UserTasks.UpdateUserTaskStatus
+@using Application.Features.Commands.UserTasks.DeleteUserTask
+@using Application.Features.Commands.UserTasks.CreateUserTaskComment
+@using Application.Features.Commands.UserTasks.DeleteUserTaskComment
+@using Application.Features.Commands.UserTasks.MarkUserTaskAsRead
+@using Application.Features.Queries.UserTasks.GetUserTaskById
+
+@using Application.Features.Commands.Pages.CreatePage
+@using Application.Features.Commands.Pages.CreatePageTranslation
+@using Application.Features.Commands.Pages.UpdatePage
+@using Application.Features.Commands.Pages.UpdatePageStatus
+@using Application.Features.Commands.Pages.DeletePage
+@using Application.Features.Commands.Pages.SavePreviewContent
+@using Application.Features.Queries.Pages.GetPages
+@using Application.Features.Queries.Pages.GetPageById
+@using Application.Features.Queries.Pages.GetPageTranslations
+@using Application.Features.Queries.Pages.GetPageParentCandidates
+@using Application.Features.Queries.Pages.GetPageDirectory
+@using Application.Features.Queries.Pages.GetBreadcrumbPreview
+@using Application.Features.Queries.Pages.GetAdjacentPreview
+@using Application.Features.Queries.Pages.GetPreviewLink
+@using Application.Features.Queries.Pages.GetPageStats
+@using Application.Features.Trash
+@using Application.Features.Commands.Tags.DeleteTag
+@using Application.Features.Commands.Tags.UpdateTag
+@using Application.Features.Queries.Tags.GetTagUsage
+@using Application.Features.Queries.Trash.GetTrashedItems
+@using Application.Features.Commands.Trash.RestoreTrashItem
+@using Application.Features.Commands.Trash.PurgeTrashItem
+@using Application.Features.Commands.Trash.EmptyTrash
+@using Application.Features.Queries.Pages.GetDeletedTranslation
+@using Domain.Entities.PageInfos
+
+@using Application.Features.Queries.Tags.GetTags
+@using Application.Features.Commands.Tags.CreateTag
+@using Domain.Entities.Tags
+
+@using Application.Features.Queries.RoleManagement.GetRoles
+@using Application.Features.Commands.RoleManagement.CreateRole
+@using Application.Features.Commands.RoleManagement.DeleteRole
+@using Application.Features.Commands.RoleManagement.UpdateRolePermissions
+@using Domain.Entities.Permissions
+
+@using Application.Features.Commands.Workflows.CreateWorkflowDefinition
+@using Application.Features.Commands.Workflows.SetWorkflowDefinitionActive
+@using Application.Features.Commands.Workflows.DeleteWorkflowDefinition
+@using Application.Features.Commands.Workflows.DecideApproval
+@using Application.Features.Queries.Workflows.GetWorkflowDefinitions
+@using Application.Features.Queries.Workflows.GetPendingApprovals
+@using Application.Features.Queries.Workflows.GetApprovalDiff
+@using Domain.Entities.Workflows
+
+@using Application.Features.Queries.ContentBulkEdits.SearchPagesByContent
+@using Application.Features.Queries.ContentBulkEdits.GetContentBulkEditHistory
+@using Application.Features.Commands.ContentBulkEdits.ApplyContentBulkEdit
+@using Application.Features.Commands.ContentBulkEdits.RevertContentBulkEdit
+@using Domain.Entities.ContentBulkEdits
+
+@using Application.Features.Queries.FormSubmissions.GetFormSubmissions
+@using Application.Features.Queries.FormReplyTemplates.GetFormReplyTemplates
+@using Application.Features.Commands.FormReplyTemplates.SaveFormReplyTemplate
+@using Application.Features.Commands.FormReplyTemplates.DeleteFormReplyTemplate
+@using Application.Features.Commands.FormReplies.ReplyToFormSubmission
+@using Application.Features.FormReplies
+
+@using Application.Features.Queries.Logs.GetAppLogs
+@using Application.Features.Queries.Logs.GetAuthEvents
+@using Domain.Entities.Logs
+
+@using Application.Abstraction.Services.Backup
+@using Application.Features.Commands.Backups.CreateDatabaseBackup
+@using Application.Features.Queries.Backups.GetDatabaseBackups
+@using Application.Features.Commands.Cache.ClearSiteCache
+@using Application.Features.Queries.Cache.GetSiteCacheStatus
+@using Application.Abstraction.Services
+
+@using Application.Features.Commands.PageTemplates.CreatePageTemplate
+@using Application.Features.Commands.PageTemplates.UpdatePageTemplate
+@using Application.Features.Commands.PageTemplates.DeletePageTemplate
+@using Application.Features.Queries.PageTemplates.GetPageTemplates
+@using Application.Features.Queries.PageTemplates.GetPageTemplateById
+@using Application.Features.Queries.PageTemplates.GetLinkedPageTemplatesContent
+@using Application.Features.Queries.PageTemplates.GetPageTemplateVersions
+@using Domain.Entities.PageTemplates
+
+@using Application.Features.Queries.Languages
+@using Application.Features.Queries.Languages.GetLanguages
+@using Application.Features.Queries.Media.GetMediaFiles
+@using Application.Features.Queries.Media.GetMediaFileAltText
+@using Application.Features.Queries.SiteSettings.GetSiteSettings
+@using Application.Features.Queries.Users.GetUsers
+@using Application.Features.Queries.Users.GetAssignableUsers
+@using Application.Features.Queries.Users.GetMyProfile
+
+@using Application.Features.Queries.UserNotes.GetUserNotes
+@using Application.Features.Queries.UserReminders.GetReminders
+@using Application.Features.Queries.UserTasks.GetUserTasks
+
+@using Domain.Entities.Languages
+@using Domain.Entities.Media
+@using Domain.Entities.SiteSettings
+@using Domain.Entities.Users
+@using Domain.Entities.UserNotes
+@using Domain.Entities.UserReminders
+@using Domain.Entities.UserTasks
+
+@using SharedKernel.Concrete
+
+@using SpectraUtils
+@using SharedKernel.Extensions.Strings
+@using Wasm
+@using Wasm.Components
+@using Wasm.Components.Layout
+@using Wasm.Components.Pages
+@using Wasm.Components.Services
+@using Wasm.Components.Shared
+@using Wasm.Components.Shared.Grid
+@using Wasm.Components.Shared.Panels
+@using Wasm.Components.Shared.StructuredData
+@using Wasm.Components.Shared.Utilities
+@using Wasm.Resources
+@using Wasm.Models
+@using Wasm.Models.Languages
+@using Wasm.Models.Media
+
+@inject ISender Sender
+@inject ToastService Toast
+@inject CmsLocalizer L
+@inject ILoggerFactory LoggerFactory
+@inject NavigationManager Nav
+@inject Application.Abstraction.Services.Authentication.IUserContext UserContext
+@inject SignInManager<AppUser> SignInManager
+@inject ISpectraUtil SpectraUtil

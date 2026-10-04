@@ -1,0 +1,211 @@
+﻿@inject IJSRuntime JS
+@implements IDisposable
+
+@* ── Alarm Popup ──────────────────────────────────────────────────────────── *@
+@if (_showAlarm && _alarmReminder is not null)
+{
+    <div class="reminder-alarm-overlay">
+        <div class="reminder-alarm-box">
+            <div class="reminder-alarm-icon">
+                <i class="bi bi-bell-fill"></i>
+            </div>
+            <h3 class="reminder-alarm-title">@_alarmReminder.Title</h3>
+            @if (!string.IsNullOrWhiteSpace(_alarmReminder.Message))
+            {
+                <p class="reminder-alarm-msg">@_alarmReminder.Message</p>
+            }
+            <p class="reminder-alarm-time">
+                <i class="bi bi-clock"></i> @ToLocalTime(_alarmReminder.RemindAt).ToString("yyyy-MM-dd HH:mm")
+            </p>
+            <div class="reminder-alarm-actions">
+                <button class="btn-cms btn-primary-cms" @onclick="AlarmOk" disabled="@_saving">
+                    @if (_saving) { <i class="bi bi-arrow-clockwise spin"></i> }
+                    else { <i class="bi bi-check2-circle"></i> }
+                    @L["UserReminders_AlarmOk"]
+                </button>
+                <button class="btn-cms btn-ghost" @onclick="AlarmDismiss" disabled="@_saving">
+                    <i class="bi bi-x-circle"></i> @L["UserReminders_AlarmDismiss"]
+                </button>
+            </div>
+            <div class="reminder-alarm-snooze">
+                <span style="font-size:12px;color:var(--cms-text-muted);margin-right:8px">@L["UserReminders_AlarmSnooze"]:</span>
+                @foreach (int min in new[] { 5, 15, 30, 60 })
+                {
+                    <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => AlarmSnooze(min)" disabled="@_saving">
+                        @min @L["UserReminders_AlarmSnoozeMin"]
+                    </button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<ReminderResponse> _reminders = [];
+    private bool _showAlarm;
+    private bool _saving;
+    private ReminderResponse? _alarmReminder;
+    private readonly HashSet<int> _alertedIds = [];
+
+    private System.Timers.Timer? _checkTimer;
+    private CancellationTokenSource? _loadCts;
+
+    private int _browserUtcOffsetMinutes;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var prefs = await JS.InvokeAsync<LayoutPrefs>("cmsJs.getLayoutPrefs");
+                _browserUtcOffsetMinutes = prefs.UtcOffsetMinutes;
+            }
+            catch { _browserUtcOffsetMinutes = 0; }
+            StartTimer();
+            await CheckReminders();
+        }
+    }
+
+    private sealed record LayoutPrefs(
+        string Theme, bool TopbarPinned, bool SidebarCollapsed, bool SidebarPinned,
+        bool RightbarPinned, bool RightbarExpanded, int UtcOffsetMinutes);
+
+    private void StartTimer()
+    {
+        _checkTimer = new System.Timers.Timer(30_000); // every 30s
+        _checkTimer.Elapsed += async (_, _) =>
+        {
+            await CheckReminders();
+            await InvokeAsync(StateHasChanged);
+        };
+        _checkTimer.AutoReset = true;
+        _checkTimer.Start();
+    }
+
+    private async Task CheckReminders()
+    {
+        try
+        {
+            _loadCts?.CancelAfter(TimeSpan.Zero);
+            _loadCts?.Dispose();
+            _loadCts = new CancellationTokenSource();
+
+            Result<PagedResult<ReminderResponse>> result = await Sender.Send(new GetRemindersQuery(), _loadCts.Token);
+            result.Match(
+                success => { _reminders = [.. success.Items]; },
+                _ => { }
+            );
+
+            ReminderResponse? triggered = _reminders
+                .Where(r => r.RemindAt <= DateTime.UtcNow && !r.IsCompleted && !r.IsDismissed && !_alertedIds.Contains(r.Id))
+                .OrderBy(r => r.RemindAt)
+                .FirstOrDefault();
+
+            if (triggered is null) return;
+
+            _alertedIds.Add(triggered.Id);
+            _alarmReminder = triggered;
+            _showAlarm = true;
+            await PlaySoundAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (OperationCanceledException) { /* cancelled */ }
+        catch { /* swallow — background monitor should never crash */ }
+    }
+
+    private async Task AlarmOk()
+    {
+        if (_alarmReminder is null) return;
+        await StopSoundAsync();
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new UpdateReminderCommand(
+                _alarmReminder.Id, _alarmReminder.Title, _alarmReminder.Message,
+                _alarmReminder.RemindAt, _alarmReminder.Channel,
+                IsCompleted: true, _alarmReminder.IsDismissed, _alarmReminder.IsActive));
+            result.Match(
+                () => Toast.Success(L["UserReminders_StatusCompleted"]),
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        finally
+        {
+            _saving = false;
+            _showAlarm = false;
+            _alarmReminder = null;
+        }
+    }
+
+    private async Task AlarmDismiss()
+    {
+        if (_alarmReminder is null) return;
+        await StopSoundAsync();
+        _saving = true;
+        try
+        {
+            Result result = await Sender.Send(new UpdateReminderCommand(
+                _alarmReminder.Id, _alarmReminder.Title, _alarmReminder.Message,
+                _alarmReminder.RemindAt, _alarmReminder.Channel,
+                _alarmReminder.IsCompleted, IsDismissed: true, _alarmReminder.IsActive));
+            result.Match(
+                () => Toast.Success(L["UserReminders_SuccessDismiss"]),
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        finally
+        {
+            _saving = false;
+            _showAlarm = false;
+            _alarmReminder = null;
+        }
+    }
+
+    private async Task AlarmSnooze(int minutes)
+    {
+        if (_alarmReminder is null) return;
+        await StopSoundAsync();
+        ReminderResponse r = _alarmReminder;
+        _showAlarm = false;
+        _alarmReminder = null;
+        _alertedIds.Remove(r.Id); // allow re-alert after snooze fires
+
+        _saving = true;
+        try
+        {
+            DateTime snoozeUtc = DateTime.UtcNow.AddMinutes(minutes);
+            Result result = await Sender.Send(new UpdateReminderCommand(
+                r.Id, r.Title, r.Message, snoozeUtc, r.Channel,
+                r.IsCompleted, r.IsDismissed, r.IsActive));
+            result.Match(
+                () => Toast.Info(string.Format(L["UserReminders_AlarmSnoozed"], minutes)),
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task PlaySoundAsync()
+    {
+        try { await JS.InvokeVoidAsync("cmsJs.playReminderSound"); }
+        catch { /* ignore */ }
+    }
+
+    private async Task StopSoundAsync()
+    {
+        try { await JS.InvokeVoidAsync("cmsJs.stopReminderSound"); }
+        catch { /* ignore */ }
+    }
+
+    private DateTime ToLocalTime(DateTime utc) => utc.AddMinutes(_browserUtcOffsetMinutes);
+
+    public void Dispose()
+    {
+        _checkTimer?.Stop();
+        _checkTimer?.Dispose();
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        try { JS.InvokeVoidAsync("cmsJs.stopReminderSound"); } catch { /* ignore */ }
+    }
+}

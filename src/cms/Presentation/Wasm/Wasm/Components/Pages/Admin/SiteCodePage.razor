@@ -1,0 +1,427 @@
+﻿@page "/admin/site-code"
+@layout CMSLayout
+@using Application.Features.Commands.SiteCodeSnippets.DeleteSiteCodeSnippet
+@using Application.Features.Commands.SiteCodeSnippets.MoveSiteCodeSnippet
+@using Application.Features.Commands.SiteCodeSnippets.SaveSiteCodeSnippet
+@using Application.Features.Commands.SiteCodeSnippets.SetSiteCodeSnippetEnabled
+@using Application.Features.Queries.SiteCodeSnippets.GetSiteCodeSnippets
+@using Domain.Entities.SiteCodeSnippets
+
+<PageTitle>@L["SiteCode_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+            <h1>@L["SiteCode_Title"]</h1>
+            <p>@L["SiteCode_Subtitle"]</p>
+        </div>
+        <button class="btn-cms btn-primary-cms" @onclick="OpenCreate">
+            <i class="bi bi-plus-lg"></i> @L["SiteCode_AddBtn"]
+        </button>
+    </div>
+</div>
+
+@* Soft, not a gate: nothing here can force a read before an edit, and a modal
+   checkbox tied to one row by name would break the moment that row is renamed.
+   This just puts the warning somewhere it cannot be missed on the way in —
+   right below the page's own title, before any snippet card. *@
+<div class="cms-card" style="padding:14px 16px;margin-bottom:16px;border:1px solid var(--cms-info);background:color-mix(in srgb, var(--cms-info) 8%, transparent)">
+    <div style="display:flex;align-items:flex-start;gap:10px">
+        <i class="bi bi-info-circle-fill" style="color:var(--cms-info);font-size:16px;margin-top:1px;flex-shrink:0"></i>
+        <p style="margin:0;font-size:13px;color:var(--cms-text)">
+            @L["SiteCode_BrandColorNoticeBody"]
+            <a href="/admin/guide#brand-colors-guide">@L["SiteCode_BrandColorNoticeLink"]</a>
+        </p>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else
+{
+    @* Placement groups as tabs rather than four stacked cards: the page was
+       growing linearly with every snippet added to every placement, and a
+       visitor only ever cares about editing one placement at a time. Emit
+       order (top-to-bottom = HeadStart→HeadEnd→BodyStart→BodyEnd) is kept as
+       tab order, so it still reads the way the rendered page does. *@
+    <div class="cms-tabs" style="display:flex;gap:4px;border-bottom:1px solid var(--cms-border);margin-bottom:20px;flex-wrap:wrap">
+        @foreach (SiteCodePlacement placement in Placements)
+        {
+            int count = _snippets.Count(s => s.Placement == placement);
+
+            <button class="cms-tab @(_activePlacement == placement ? "active" : "")"
+                    style="padding:10px 18px;background:none;border:none;border-bottom:2px solid @(_activePlacement == placement ? "var(--cms-accent)" : "transparent");color:@(_activePlacement == placement ? "var(--cms-text)" : "var(--cms-text-muted)");font-weight:@(_activePlacement == placement ? "600" : "400");cursor:pointer;display:flex;align-items:center;gap:6px"
+                    @onclick="() => _activePlacement = placement">
+                @PlacementLabel(placement)
+                @if (count > 0)
+                {
+                    <span class="badge-cms badge-neutral">@count</span>
+                }
+            </button>
+        }
+    </div>
+
+    List<SiteCodeSnippetResponse> group = [.. _snippets.Where(s => s.Placement == _activePlacement)];
+
+    <div class="cms-card" style="padding:18px;margin-bottom:16px">
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:4px">
+            <h4 style="margin:0">@PlacementLabel(_activePlacement)</h4>
+            <code style="font-size:11px;color:var(--cms-text-dim)">@PlacementHint(_activePlacement)</code>
+        </div>
+        <small style="color:var(--cms-text-muted);display:block;margin-bottom:14px">@PlacementDescription(_activePlacement)</small>
+
+        @if (group.Count == 0)
+        {
+            <div style="font-size:13px;color:var(--cms-text-dim);padding:8px 0">@L["SiteCode_EmptyPlacement"]</div>
+        }
+        else
+        {
+            @foreach (SiteCodeSnippetResponse snippet in group)
+            {
+                    <div style="display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--cms-border);border-radius:6px;margin-bottom:8px;opacity:@(snippet.IsEnabled ? "1" : "0.55")">
+                        <div style="display:flex;flex-direction:column;gap:2px">
+                            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["SiteCode_MoveUp"]"
+                                    @onclick="() => Move(snippet.Id, true)" disabled="@(group[0].Id == snippet.Id)">
+                                <i class="bi bi-chevron-up"></i>
+                            </button>
+                            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["SiteCode_MoveDown"]"
+                                    @onclick="() => Move(snippet.Id, false)" disabled="@(group[^1].Id == snippet.Id)">
+                                <i class="bi bi-chevron-down"></i>
+                            </button>
+                        </div>
+
+                        <div style="flex:1;min-width:0">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                                <strong>@snippet.Name</strong>
+                                <span class="badge-cms badge-info">@PresetLabel(snippet.Preset)</span>
+                                <span class="badge-cms badge-neutral">@KindLabel(snippet.Kind)</span>
+                                @if (!snippet.IsEnabled)
+                                {
+                                    <span class="badge-cms badge-warning">@L["SiteCode_Disabled"]</span>
+                                }
+                            </div>
+                            @if (snippet.Notes.HasValue())
+                            {
+                                <small style="color:var(--cms-text-muted);display:block;margin-top:2px">@snippet.Notes</small>
+                            }
+                            <pre style="margin:8px 0 0;padding:8px;background:var(--cms-bg);border-radius:4px;font-size:11px;max-height:110px;overflow:auto"><code>@snippet.Content</code></pre>
+                        </div>
+
+                        <div style="display:flex;gap:4px">
+                            <button class="btn-cms btn-ghost btn-sm-cms btn-icon"
+                                    title="@(snippet.IsEnabled ? L["SiteCode_TurnOff"] : L["SiteCode_TurnOn"])"
+                                    @onclick="() => Toggle(snippet)">
+                                <i class="bi @(snippet.IsEnabled ? "bi-toggle-on" : "bi-toggle-off")"></i>
+                            </button>
+                            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Edit"]"
+                                    @onclick="() => OpenEdit(snippet)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Common_Delete"]"
+                                    @onclick="() => _deleteTarget = snippet">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+}
+
+@* ── Add / edit ───────────────────────────────────────────────────────────── *@
+<CmsModal Title="@(_editId is null ? L["SiteCode_AddBtn"] : L["SiteCode_EditTitle"])"
+          IsVisible="_showForm" OnClose="() => _showForm = false" Size="md">
+    <Body>
+        <div class="form-group">
+            <label class="cms-label">@L["SiteCode_FieldName"]</label>
+            <input @bind="_name" @bind:event="oninput" class="cms-input" placeholder="@L["SiteCode_FieldNamePlaceholder"]" />
+            <small style="color:var(--cms-text-muted);font-size:12px">@L["SiteCode_FieldNameHint"]</small>
+        </div>
+
+        <div class="form-group">
+            <label class="cms-label">@L["SiteCode_FieldPreset"]</label>
+            <select class="cms-input" value="@_preset" @onchange="OnPresetChanged">
+                @foreach (SiteCodePreset preset in Presets)
+                {
+                    <option value="@preset">@PresetLabel(preset)</option>
+                }
+            </select>
+            <small style="color:var(--cms-text-muted);font-size:12px">@PresetHint(_preset)</small>
+        </div>
+
+        @* Presets decide their own type and position — showing those controls would
+           imply a choice that gets overwritten on save. *@
+        @if (_preset == SiteCodePreset.Custom)
+        {
+            <div class="form-row cols-2">
+                <div class="form-group">
+                    <label class="cms-label">@L["SiteCode_FieldKind"]</label>
+                    <select class="cms-input" @bind="_kind">
+                        @foreach (SiteCodeKind kind in Kinds)
+                        {
+                            <option value="@kind">@KindLabel(kind)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="cms-label">@L["SiteCode_FieldPlacement"]</label>
+                    <select class="cms-input" @bind="_placement">
+                        @foreach (SiteCodePlacement placement in Placements)
+                        {
+                            <option value="@placement">@PlacementLabel(placement)</option>
+                        }
+                    </select>
+                </div>
+            </div>
+        }
+
+        <div class="form-group">
+            <label class="cms-label">@(_preset == SiteCodePreset.Custom ? L["SiteCode_FieldContent"] : L["SiteCode_FieldPresetInput"])</label>
+            <CodeEditor @ref="_codeEditor" ElementId="site-code-editor" @bind-Value="_rawInput" Kind="@_kind.ToString()"
+                        Placeholder="@PresetPlaceholder(_preset)" />
+        </div>
+
+        <div class="form-group">
+            <label class="cms-label">@L["SiteCode_FieldNotes"]</label>
+            <input @bind="_notes" class="cms-input" placeholder="@L["SiteCode_FieldNotesPlaceholder"]" />
+        </div>
+
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+            <input type="checkbox" @bind="_isEnabled" />
+            <span>@L["SiteCode_FieldEnabled"]</span>
+        </label>
+
+        @if (_formError.HasValue())
+        {
+            <div class="cms-callout" style="margin-top:14px;padding:12px;border:1px solid var(--cms-danger);border-radius:6px;color:var(--cms-danger)">
+                <i class="bi bi-exclamation-octagon-fill"></i> @_formError
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showForm = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="Save" disabled="@_saving">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-floppy"></i>
+            }
+            @L["Settings_SaveBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete confirmation ──────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Common_Delete"]" IsVisible="_deleteTarget is not null"
+          OnClose="() => _deleteTarget = null" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["SiteCode_DeleteConfirm"], _deleteTarget?.Name ?? "")</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _deleteTarget = null">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete">
+            <i class="bi bi-trash3"></i> @L["Common_Delete"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private static readonly SiteCodePlacement[] Placements =
+        [SiteCodePlacement.HeadStart, SiteCodePlacement.HeadEnd, SiteCodePlacement.BodyStart, SiteCodePlacement.BodyEnd];
+
+    private static readonly SiteCodeKind[] Kinds =
+        [SiteCodeKind.Script, SiteCodeKind.Style, SiteCodeKind.MetaTag, SiteCodeKind.RawHtml];
+
+    private static readonly SiteCodePreset[] Presets =
+    [
+        SiteCodePreset.GoogleAnalytics4, SiteCodePreset.GoogleTagManager, SiteCodePreset.MetaPixel,
+        SiteCodePreset.SearchConsoleVerification, SiteCodePreset.CookieConsent, SiteCodePreset.Custom,
+    ];
+
+    private List<SiteCodeSnippetResponse> _snippets = [];
+    private bool _loading = true;
+    private SiteCodePlacement _activePlacement = SiteCodePlacement.HeadStart;
+
+    private bool _showForm;
+    private bool _saving;
+    private int? _editId;
+    private string _name = "";
+    private SiteCodePreset _preset = SiteCodePreset.GoogleAnalytics4;
+    private SiteCodeKind _kind = SiteCodeKind.Script;
+    private SiteCodePlacement _placement = SiteCodePlacement.HeadEnd;
+    private string _rawInput = "";
+    private CodeEditor? _codeEditor;
+    private string _notes = "";
+    private bool _isEnabled = true;
+    private string _formError = "";
+
+    private SiteCodeSnippetResponse? _deleteTarget;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.CustomCodeAuthor))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetSiteCodeSnippetsQuery())).Match(
+                list => _snippets = list,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+        finally { _loading = false; }
+    }
+
+    private void OpenCreate()
+    {
+        _editId = null;
+        _name = "";
+        _preset = SiteCodePreset.GoogleAnalytics4;
+        _kind = SiteCodeKind.Script;
+        _placement = SiteCodePlacement.HeadEnd;
+        _rawInput = "";
+        _notes = "";
+        _isEnabled = true;
+        _formError = "";
+        _showForm = true;
+    }
+
+    private void OpenEdit(SiteCodeSnippetResponse snippet)
+    {
+        _editId = snippet.Id;
+        _name = snippet.Name;
+        _preset = snippet.Preset;
+        _kind = snippet.Kind;
+        _placement = snippet.Placement;
+        // Editing shows the generated markup, not the id it came from: that is what
+        // is actually on the site, and it stays editable by hand from here on.
+        _rawInput = snippet.Content ?? "";
+        _notes = snippet.Notes ?? "";
+        _isEnabled = snippet.IsEnabled;
+        _formError = "";
+        _showForm = true;
+    }
+
+    private void OnPresetChanged(ChangeEventArgs e)
+    {
+        if (Enum.TryParse((string?)e.Value, out SiteCodePreset preset))
+            _preset = preset;
+
+        _formError = "";
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        _formError = "";
+        try
+        {
+            // Read the editor directly — its change event can lag the last
+            // keystroke, and a snippet saved missing its final line is the kind of
+            // bug nobody notices until the tag it was supposed to close breaks.
+            string content = (_codeEditor is not null
+                ? await _codeEditor.GetCurrentValueAsync()
+                : _rawInput) ?? "";
+
+            bool ok = false;
+            SaveSiteCodeSnippetResult? result = null;
+
+            (await Sender.Send(new SaveSiteCodeSnippetCommand(
+                    _editId, _name, _preset, _kind, _placement, content, _isEnabled, _notes)))
+                .Match(
+                    r => { ok = true; result = r; },
+                    // Shown inside the form rather than as a toast: the message names
+                    // what to change, and it needs to stay on screen while they change it.
+                    error => _formError = L.Error(error));
+
+            if (!ok) return;
+
+            _showForm = false;
+            await LoadAsync();
+
+            if (result!.Warnings.Contains("DocumentWrite"))
+                Toast.Warning(L["SiteCode_WarnDocumentWrite"]);
+
+            // Tag Manager quietly grows a second row; say so, or it looks like a bug.
+            if (_editId is null && result.CreatedCount > 1)
+                Toast.Success(string.Format(L["SiteCode_SavedMultiple"], result.CreatedCount));
+            else
+                Toast.Success(L["Settings_Saved"]);
+        }
+        finally { _saving = false; }
+    }
+
+    private async Task Toggle(SiteCodeSnippetResponse snippet)
+    {
+        (await Sender.Send(new SetSiteCodeSnippetEnabledCommand(snippet.Id, !snippet.IsEnabled)))
+            .Match(() => { }, error => Toast.Error(L.Error(error)));
+
+        await LoadAsync();
+    }
+
+    private async Task Move(int id, bool up)
+    {
+        (await Sender.Send(new MoveSiteCodeSnippetCommand(id, up)))
+            .Match(() => { }, error => Toast.Error(L.Error(error)));
+
+        await LoadAsync();
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+
+        (await Sender.Send(new DeleteSiteCodeSnippetCommand(_deleteTarget.Id)))
+            .Match(
+                () => Toast.Success(L["SiteCode_Deleted"]),
+                error => Toast.Error(L.Error(error)));
+
+        _deleteTarget = null;
+        await LoadAsync();
+    }
+
+    // ── Labels ───────────────────────────────────────────────────────────────
+    private string PlacementLabel(SiteCodePlacement p) => L[$"SiteCode_Placement_{p}"];
+
+    private string PlacementDescription(SiteCodePlacement p) => L[$"SiteCode_PlacementDesc_{p}"];
+
+    private static string PlacementHint(SiteCodePlacement p) => p switch
+    {
+        SiteCodePlacement.HeadStart => "<head> ↑",
+        SiteCodePlacement.HeadEnd => "</head> ↑",
+        SiteCodePlacement.BodyStart => "<body> ↓",
+        _ => "</body> ↑",
+    };
+
+    private string KindLabel(SiteCodeKind k) => L[$"SiteCode_Kind_{k}"];
+
+    private string PresetLabel(SiteCodePreset p) => L[$"SiteCode_Preset_{p}"];
+
+    private string PresetHint(SiteCodePreset p) => L[$"SiteCode_PresetHint_{p}"];
+
+    private static string PresetPlaceholder(SiteCodePreset p) => p switch
+    {
+        SiteCodePreset.GoogleAnalytics4 => "G-XXXXXXXXXX",
+        SiteCodePreset.GoogleTagManager => "GTM-XXXXXXX",
+        SiteCodePreset.MetaPixel => "1234567890123456",
+        SiteCodePreset.SearchConsoleVerification => "<meta name=\"google-site-verification\" content=\"...\" />",
+        SiteCodePreset.CookieConsent => "<script src=\"https://cdn.cookieyes.com/...\"></script>",
+        _ => "<script>...</script>",
+    };
+}

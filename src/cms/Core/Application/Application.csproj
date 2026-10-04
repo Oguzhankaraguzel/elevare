@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<ItemGroup>
+		<!-- Reads the page's own builder HTML so the structured-data draft can be
+		     pre-filled from content the editor already wrote (FAQ questions), rather
+		     than asking them to type it a second time into a form. -->
+		<PackageReference Include="AngleSharp" />
+		<PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
+		<PackageReference Include="MediatR" />
+		<PackageReference Include="Microsoft.EntityFrameworkCore" />
+		<PackageReference Include="Microsoft.Extensions.Localization.Abstractions" />
+		<PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+		<PackageReference Include="Serilog" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\..\..\SharedKernel\SharedKernel.csproj" />
+		<ProjectReference Include="..\Domain\Domain.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="Cms.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Folder Include="Features\EventHandlers\" />
+	</ItemGroup>
+
+</Project>

@@ -1,0 +1,350 @@
+﻿@using System.Text.Json
+@using System.Text.Json.Nodes
+@using Application.Features.Commands.StructuredData.BuildDraft
+@using Domain.Entities.StructuredData
+
+@* Two panes: the JSON that will ship (read-only, left) and the controls that
+   shape it (right). The preview is deliberately not editable — it is generated
+   from the graph on every change, so typing into it would be overwritten on the
+   next keystroke elsewhere. Everything remains reachable through the freeform
+   rows, which edit the graph rather than the text. *@
+<div class="sd-panel">
+
+    <div class="sd-preview">
+        <div class="sd-preview-header">
+            <span><i class="bi bi-braces"></i> @L["StructuredData_PreviewTitle"]</span>
+            <span class="sd-preview-meta">@_graph.Nodes.Count @L["StructuredData_NodeCountSuffix"]</span>
+        </div>
+
+        @if (_rawUnparseable is not null)
+        {
+            @* Hand-written JSON that will not parse. Kept verbatim rather than
+               discarded: it is someone's work, and replacing it with an empty
+               builder would destroy it on open. *@
+            <div class="sd-legacy-warning">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <div>
+                    <strong>@L["StructuredData_LegacyTitle"]</strong>
+                    <p>@L["StructuredData_LegacyBody"]</p>
+                    <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="DiscardLegacy">
+                        <i class="bi bi-arrow-repeat"></i> @L["StructuredData_LegacyRebuild"]
+                    </button>
+                </div>
+            </div>
+            <pre class="sd-json"><code>@_rawUnparseable</code></pre>
+        }
+        else if (_graph.IsEmpty)
+        {
+            <div class="sd-preview-empty">
+                <i class="bi bi-diagram-3"></i>
+                <p>@L["StructuredData_EmptyPreview"]</p>
+            </div>
+        }
+        else
+        {
+            <pre class="sd-json"><code>@_serialized</code></pre>
+        }
+
+        @if (_issues.Count > 0)
+        {
+            <div class="sd-issues">
+                @foreach (SchemaValidationIssue issue in _issues)
+                {
+                    <div class="sd-issue @(issue.Severity == SchemaValidationSeverity.Error ? "sd-issue-error" : "sd-issue-warning")">
+                        <i class="bi @(issue.Severity == SchemaValidationSeverity.Error ? "bi-x-octagon-fill" : "bi-exclamation-triangle-fill")"></i>
+                        <span>@Describe(issue)</span>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    <div class="sd-controls">
+        <div class="sd-actions">
+            <button type="button" class="btn-cms btn-primary-cms" @onclick="BuildDraft" disabled="@_building">
+                @if (_building)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                else
+                {
+                    <i class="bi bi-magic"></i>
+                }
+                @(_graph.IsEmpty ? L["StructuredData_BuildDraft"] : L["StructuredData_RebuildDraft"])
+            </button>
+            @if (!_graph.IsEmpty)
+            {
+                <a class="btn-cms btn-ghost" target="_blank" rel="noopener noreferrer"
+                   href="https://search.google.com/test/rich-results">
+                    <i class="bi bi-box-arrow-up-right"></i> @L["StructuredData_TestInGoogle"]
+                </a>
+            }
+        </div>
+        <p class="sd-hint">@L["StructuredData_BuildDraftHint"]</p>
+
+
+        @for (int i = 0; i < _graph.Nodes.Count; i++)
+        {
+            int index = i;
+            JsonObject node = _graph.Nodes[index];
+            string? type = SchemaGraph.TypeOf(node);
+            SchemaTemplate? template = SchemaCatalog.Find(type);
+
+            <div class="sd-node">
+                <div class="sd-node-header">
+                    <button type="button" class="sd-node-toggle" @onclick="() => Toggle(index)">
+                        <i class="bi @(_expanded.Contains(index) ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                        <span class="sd-node-title">@(template?.Label ?? type ?? L["StructuredData_UnknownType"])</span>
+                        <code class="sd-node-type">@type</code>
+                    </button>
+                    <button type="button" class="btn-cms btn-ghost btn-sm-cms sd-node-remove"
+                            title="@L["StructuredData_RemoveNode"]" @onclick="() => RemoveNode(index)">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+
+                @if (template?.Note is { } note)
+                {
+                    <div class="sd-note"><i class="bi bi-info-circle"></i> <span>@note</span></div>
+                }
+
+                @if (_expanded.Contains(index))
+                {
+                    <div class="sd-node-body">
+                        <SchemaNodeEditor Node="node" Template="template" OnChanged="Refresh" />
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="sd-field">
+            <label class="cms-label">@L["StructuredData_AddNode"]</label>
+            <select class="cms-input" value="@_addMode" @onchange="OnAddModeChanged">
+                <option value="catalog">@L["StructuredData_AddModeCatalog"]</option>
+                <option value="paste">@L["StructuredData_AddModePaste"]</option>
+            </select>
+        </div>
+
+        @if (_addMode == "paste")
+        {
+            @* For an editor who already has a finished node — from the JSON builder in
+               the right bar, from another site's markup, from ChatGPT — the catalogue's
+               guided fields are a detour, not a help. This takes the JSON as-is. *@
+            <div class="sd-field">
+                <textarea class="cms-input sd-jsonbuilder-custom" rows="6"
+                          placeholder="@L["StructuredData_JsonBuilderCustomPlaceholder"]"
+                          @bind="_pasteJson"></textarea>
+                <div class="sd-hint">@L["StructuredData_PasteHint"]</div>
+            </div>
+
+            @if (_pasteError is not null)
+            {
+                <div class="sd-jsonbuilder-error">
+                    <i class="bi bi-exclamation-triangle"></i> @_pasteError
+                </div>
+            }
+
+            <div class="sd-add">
+                <button type="button" class="btn-cms btn-ghost" disabled="@string.IsNullOrWhiteSpace(_pasteJson)"
+                        @onclick="AddFromPaste">
+                    <i class="bi bi-plus-lg"></i> @L["StructuredData_AddNode"]
+                </button>
+            </div>
+        }
+        else
+        {
+            <div class="sd-add">
+                <select class="cms-input" @bind="_typeToAdd">
+                    <option value="">@L["StructuredData_ChooseType"]</option>
+                    @foreach (SchemaTemplate t in SchemaCatalog.All)
+                    {
+                        <option value="@t.Type">@t.Label (@t.Type)</option>
+                    }
+                </select>
+                <button type="button" class="btn-cms btn-ghost" disabled="@string.IsNullOrWhiteSpace(_typeToAdd)"
+                        @onclick="AddNode">
+                    <i class="bi bi-plus-lg"></i> @L["StructuredData_AddNode"]
+                </button>
+            </div>
+            @if (SchemaCatalog.Find(_typeToAdd) is { Description: var description })
+            {
+                <p class="sd-hint">@description</p>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Page whose draft the "build" button generates. </summary>
+    [Parameter, EditorRequired] public int PageId { get; set; }
+
+    /// <summary>The stored JSON-LD. Two-way bound to the page editor's field.</summary>
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    private SchemaGraph _graph = SchemaGraph.CreateEmpty();
+    private string _serialized = "";
+    private string? _rawUnparseable;
+    private IReadOnlyList<SchemaValidationIssue> _issues = [];
+
+    /// <summary>
+    /// Turns a finding's code and arguments into a sentence in the editor's language.
+    /// The validator deliberately hands over a key rather than prose: it lives in the
+    /// domain layer, which has no business deciding what language anyone reads.
+    /// </summary>
+    private string Describe(SchemaValidationIssue issue) =>
+        issue.Args.Count == 0
+            ? L[issue.Code]
+            : string.Format(System.Globalization.CultureInfo.CurrentCulture, L[issue.Code], [.. issue.Args]);
+    private readonly HashSet<int> _expanded = [];
+    private string _typeToAdd = "";
+    private bool _building;
+
+    private string _addMode = "catalog";
+    private string _pasteJson = "";
+    private string? _pasteError;
+
+    private void OnAddModeChanged(ChangeEventArgs e)
+    {
+        _addMode = e.Value?.ToString() ?? "catalog";
+        _pasteError = null;
+    }
+
+    /// <summary>
+    /// Parses the stored JSON back into a live graph. The document IS the state,
+    /// so there is nothing else to load and no second copy that could disagree
+    /// with what actually ships.
+    /// </summary>
+    protected override void OnParametersSet()
+    {
+        // Only re-read when the incoming value is not already what we produced,
+        // otherwise every keystroke would reset the editor's expansion state.
+        if (Value == _serialized) return;
+
+        if (SchemaGraph.TryParse(Value, out SchemaGraph parsed))
+        {
+            _graph = parsed;
+            _rawUnparseable = null;
+            _serialized = _graph.IsEmpty ? "" : _graph.Serialize();
+        }
+        else
+        {
+            _graph = SchemaGraph.CreateEmpty();
+            _rawUnparseable = Value;
+            _serialized = Value ?? "";
+        }
+
+        _issues = SchemaValidator.Validate(Value);
+    }
+
+    private async Task Refresh()
+    {
+        _serialized = _graph.IsEmpty ? "" : _graph.Serialize();
+        _issues = SchemaValidator.Validate(_serialized);
+        await ValueChanged.InvokeAsync(_graph.IsEmpty ? null : _serialized);
+    }
+
+    private void Toggle(int index)
+    {
+        if (!_expanded.Remove(index)) _expanded.Add(index);
+    }
+
+    private async Task BuildDraft()
+    {
+        _building = true;
+        try
+        {
+            (await Sender.Send(new BuildStructuredDataDraftCommand(PageId))).Match(
+                json =>
+                {
+                    if (SchemaGraph.TryParse(json, out SchemaGraph draft))
+                    {
+                        _graph = draft;
+                        _rawUnparseable = null;
+                        _expanded.Clear();
+                    }
+                },
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["StructuredData_BuildFailed"]);
+        }
+        finally { _building = false; }
+
+        await Refresh();
+    }
+
+    private async Task AddNode()
+    {
+        SchemaTemplate? template = SchemaCatalog.Find(_typeToAdd);
+        if (template is null) return;
+
+        _graph.Add(new JsonObject { [SchemaGraph.TypeKey] = template.Type });
+        // Open the node just added: adding a template and then hunting for it in
+        // a long collapsed list is the kind of friction that makes a tool feel slow.
+        _expanded.Add(_graph.Nodes.Count - 1);
+        _typeToAdd = "";
+        await Refresh();
+    }
+
+    /// <summary>
+    /// Adds one or more nodes from hand-written or pasted JSON, bypassing the
+    /// catalogue entirely — the same "the document IS the state" reasoning as
+    /// <see cref="SchemaGraph"/> itself. Accepts a single node object, a bare array
+    /// of nodes, or a whole <c>@graph</c> document, since all three are things an
+    /// editor plausibly has sitting in their clipboard.
+    /// </summary>
+    private async Task AddFromPaste()
+    {
+        _pasteError = null;
+
+        if (string.IsNullOrWhiteSpace(_pasteJson))
+        {
+            _pasteError = L["StructuredData_PasteEmpty"];
+            return;
+        }
+
+        JsonNode? parsed;
+        try { parsed = JsonNode.Parse(_pasteJson); }
+        catch (JsonException ex) { _pasteError = ex.Message; return; }
+
+        List<JsonObject> toAdd = parsed switch
+        {
+            JsonObject obj when obj["@graph"] is JsonArray inner => [.. inner.OfType<JsonObject>()],
+            JsonObject obj => [obj],
+            JsonArray arr => [.. arr.OfType<JsonObject>()],
+            _ => [],
+        };
+
+        if (toAdd.Count == 0)
+        {
+            _pasteError = L["StructuredData_PasteInvalid"];
+            return;
+        }
+
+        foreach (JsonObject node in toAdd)
+            _graph.Add(node);
+
+        _expanded.Add(_graph.Nodes.Count - 1);
+        _pasteJson = "";
+        _addMode = "catalog";
+        await Refresh();
+    }
+
+    private async Task RemoveNode(int index)
+    {
+        _graph.RemoveAt(index);
+        _expanded.Clear();
+        await Refresh();
+    }
+
+    private async Task DiscardLegacy()
+    {
+        _rawUnparseable = null;
+        _graph = SchemaGraph.CreateEmpty();
+        await Refresh();
+    }
+}

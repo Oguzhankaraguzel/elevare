@@ -1,0 +1,171 @@
+@page "/admin/auth-logs"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_AuthLogs"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_AuthLogs"]</h1>
+    <p>@L["AuthLogs_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="AuthEventResponse"
+             Data="_events"
+             Loading="_loading"
+             Title="@L["Nav_AuthLogs"]"
+             Columns="_columns"
+             ToolbarEnd="RefreshButton"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["AuthLogs_Empty"]"
+             PageSize="50" />
+
+@code {
+    private List<AuthEventResponse> _events = [];
+    private bool _loading = true;
+
+    private CancellationTokenSource? _loadCts;
+
+    private List<GridColumnDef<AuthEventResponse>> _columns = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.AuthLogsView))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadEvents(forceReload: true);
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<AuthEventResponse>
+            {
+                PropertyName  = "CreatedAtUtc",
+                Title         = L["AuthLogs_ColDate"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = e => (object?)e.CreatedAtUtc,
+                CellTemplate  = DateTemplate,
+                Sortable      = true,
+                Width         = "160px",
+            },
+            new GridColumnDef<AuthEventResponse>
+            {
+                PropertyName  = "EventType",
+                Title         = L["AuthLogs_ColEvent"],
+                PropertyType  = typeof(string),
+                ValueAccessor = e => EventLabel(e.EventType),
+                CellTemplate  = EventTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "150px",
+            },
+            new GridColumnDef<AuthEventResponse>
+            {
+                PropertyName  = "UserNameSnapshot",
+                Title         = L["AuthLogs_ColUser"],
+                PropertyType  = typeof(string),
+                ValueAccessor = e => e.UserNameSnapshot,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<AuthEventResponse>
+            {
+                PropertyName  = "IpAddress",
+                Title         = L["AuthLogs_ColIp"],
+                PropertyType  = typeof(string),
+                ValueAccessor = e => (object?)e.IpAddress ?? "—",
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "150px",
+            },
+            new GridColumnDef<AuthEventResponse>
+            {
+                PropertyName  = "UserAgent",
+                Title         = L["AuthLogs_ColUserAgent"],
+                PropertyType  = typeof(string),
+                ValueAccessor = e => (object?)e.UserAgent ?? "—",
+                Sortable      = true,
+                Filterable    = true,
+            },
+        ];
+    }
+
+    private static RenderFragment<AuthEventResponse> DateTemplate => e => __builder =>
+    {
+        <span style="font-size:13px;color:var(--cms-text-muted)">@e.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</span>
+    };
+
+    private RenderFragment<AuthEventResponse> EventTemplate => e => __builder =>
+    {
+        <span class="badge-cms @EventBadgeClass(e.EventType)">@EventLabel(e.EventType)</span>
+    };
+
+    private RenderFragment RefreshButton => __builder =>
+    {
+        <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => LoadEvents(forceReload: true)" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise @(_loading ? "spin" : "")"></i> @L["Logs_RefreshBtn"]
+        </button>
+    };
+
+    private static string EventBadgeClass(AuthEventType type) => type switch
+    {
+        AuthEventType.LoginSucceeded => "badge-success",
+        AuthEventType.LoginFailed => "badge-danger",
+        AuthEventType.Logout => "badge-neutral",
+        AuthEventType.SessionExpired => "badge-warning",
+        _ => "badge-neutral",
+    };
+
+    private string EventLabel(AuthEventType type) => type switch
+    {
+        AuthEventType.LoginSucceeded => L["AuthLogs_Event_LoginSucceeded"],
+        AuthEventType.LoginFailed => L["AuthLogs_Event_LoginFailed"],
+        AuthEventType.Logout => L["AuthLogs_Event_Logout"],
+        AuthEventType.SessionExpired => L["AuthLogs_Event_SessionExpired"],
+        _ => type.ToString(),
+    };
+
+    private async Task LoadEvents(bool forceReload = false)
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        if (!forceReload && _events.Count > 0)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            Result<PagedResult<AuthEventResponse>> result = await Sender.Send(new GetAuthEventsQuery(), ct);
+            result.Match(
+                success => { _events = [.. success.Items]; },
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (OperationCanceledException)
+        {
+            // request was cancelled - nothing to do
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["AuthLogs_ErrorLoad"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

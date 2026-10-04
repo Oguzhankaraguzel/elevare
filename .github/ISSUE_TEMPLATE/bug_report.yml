@@ -1,0 +1,78 @@
+name: Bug report
+description: Something behaves differently from what it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The questions below are the ones that otherwise
+        cost a round-trip each — most bugs here turn out to depend on which of the
+        two applications is involved and how it was started.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where does it happen?
+      options:
+        - CMS (the admin panel)
+        - Public site
+        - Both
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: setup
+    attributes:
+      label: How are you running it?
+      options:
+        - Docker Compose
+        - dotnet run / Visual Studio
+        - Something else
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. The page shows …
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Errors from the log or the browser console
+      description: >
+        Container logs come from `docker compose logs cms` (or `web`). Browser errors
+        are in the developer tools console. Paste the text rather than a screenshot
+        where you can — it is searchable.
+      render: text
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      placeholder: e.g. v1.2.0, or the commit SHA you are on
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this is not already reported.
+          required: true
+        - label: I removed any passwords, keys or personal data from what I pasted.
+          required: true

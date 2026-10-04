@@ -1,0 +1,673 @@
+@page "/admin/settings"
+@layout CMSLayout
+
+<PageTitle>@L["Settings_PageTitle"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Settings_Title"]</h1>
+    <p>@L["Settings_Subtitle"]</p>
+</div>
+
+@if (_loading)
+{
+    <div style="padding:40px;text-align:center;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else
+{
+    <div class="cms-tabs" style="display:flex;gap:4px;border-bottom:1px solid var(--cms-border);margin-bottom:20px;flex-wrap:wrap">
+        @foreach (SiteSettingGroup group in _groups)
+        {
+            <button class="cms-tab @(!_activeIsSecrets && _activeGroup == group ? "active" : "")"
+                    style="padding:10px 18px;background:none;border:none;border-bottom:2px solid @(!_activeIsSecrets && _activeGroup == group ? "var(--cms-accent)" : "transparent");color:@(!_activeIsSecrets && _activeGroup == group ? "var(--cms-text)" : "var(--cms-text-muted)");font-weight:@(!_activeIsSecrets && _activeGroup == group ? "600" : "400");cursor:pointer"
+                    @onclick="() => SelectGroup(group)">
+                @GroupLabel(group)
+            </button>
+        }
+        @if (_canManageSecrets)
+        {
+            <button class="cms-tab @(_activeIsSecrets ? "active" : "")"
+                    style="padding:10px 18px;background:none;border:none;border-bottom:2px solid @(_activeIsSecrets ? "var(--cms-accent)" : "transparent");color:@(_activeIsSecrets ? "var(--cms-text)" : "var(--cms-text-muted)");font-weight:@(_activeIsSecrets ? "600" : "400");cursor:pointer"
+                    @onclick="() => _activeIsSecrets = true">
+                <i class="bi bi-shield-lock"></i> @L["Settings_Group_Secrets"]
+            </button>
+        }
+    </div>
+
+    @if (_activeIsSecrets)
+    {
+        <div class="cms-card" style="padding:20px;max-width:760px">
+            <div class="cms-callout" style="margin-bottom:18px;padding:12px 14px;border:1px solid var(--cms-info);background:color-mix(in srgb, var(--cms-info) 8%, transparent)">
+                <p style="margin:0;font-size:12.5px;color:var(--cms-text)">@L["Secrets_Intro"]</p>
+                <a href="/admin/knowledge-base#secrets" target="_blank" style="font-size:12.5px">@L["Secrets_MoreInfo"]</a>
+            </div>
+
+            @foreach (IntegrationSecretCategory category in _secrets.Select(s => s.Category).Distinct().OrderBy(c => c))
+            {
+                <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin:18px 0 10px">
+                    @SecretCategoryLabel(category)
+                </div>
+                @foreach (IntegrationSecretResponse secret in _secrets.Where(s => s.Category == category))
+                {
+                    <div class="form-group" style="margin-bottom:18px">
+                        <label class="cms-label">@L[secret.DisplayName]</label>
+                        @RenderSecretField(secret)
+                        @if (secret.Description.HasValue())
+                        {
+                            <small style="color:var(--cms-text-muted);font-size:12px;display:block;margin-top:4px">@L[secret.Description!]</small>
+                        }
+                        @if (secret.IsSecret && secret.IsSet && !_secretsToClear.Contains(secret.Key))
+                        {
+                            <button type="button" class="btn-cms btn-ghost btn-sm-cms" style="margin-top:6px;padding:2px 8px;font-size:11.5px" @onclick="() => _secretsToClear.Add(secret.Key)">
+                                <i class="bi bi-x-circle"></i> @L["Secrets_ClearBtn"]
+                            </button>
+                        }
+                        @if (_secretsToClear.Contains(secret.Key))
+                        {
+                            <div style="margin-top:6px;font-size:11.5px;color:var(--cms-warning)">
+                                <i class="bi bi-exclamation-triangle"></i> @L["Secrets_WillBeCleared"]
+                                <button type="button" class="btn-cms btn-ghost btn-sm-cms" style="padding:2px 8px;font-size:11.5px" @onclick="() => _secretsToClear.Remove(secret.Key)">
+                                    @L["Secrets_UndoClear"]
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            <div style="display:flex;justify-content:flex-end;margin-top:8px">
+                <button class="btn-cms btn-primary-cms" @onclick="SaveSecrets" disabled="@_savingSecrets">
+                    @if (_savingSecrets)
+                    {
+                        <i class="bi bi-arrow-clockwise spin"></i>
+                    }
+                    else
+                    {
+                        <i class="bi bi-floppy"></i>
+                    }
+                    @L["Settings_SaveBtn"]
+                </button>
+            </div>
+        </div>
+    }
+    else
+    {
+    <div class="cms-card" style="padding:20px;max-width:760px">
+        @foreach (SiteSettingResponse setting in _settings.Where(s => s.Group == _activeGroup))
+        {
+            <div class="form-group" style="margin-bottom:18px">
+                <label class="cms-label">@L[setting.DisplayName]</label>
+                @RenderField(setting)
+                @if (setting.Description.HasValue())
+                {
+                    <small style="color:var(--cms-text-muted);font-size:12px;display:block;margin-top:4px">@L[setting.Description!]</small>
+                }
+                @if (IsCustomCodeField(setting) && !UserContext.CanAuthorCustomCode)
+                {
+                    <small style="color:var(--cms-warning);font-size:12px;display:block;margin-top:4px">
+                        <i class="bi bi-lock"></i> @L["Settings_CustomCodeLocked"]
+                    </small>
+                }
+            </div>
+        }
+
+        @* Structured data copies these values into each page's JSON at the moment a
+           draft is built, so changing them here reaches nothing already published.
+           The button is what closes that gap, and it only appears on the groups the
+           graph actually reads from. *@
+        @if (AffectsStructuredData(_activeGroup))
+        {
+            <div class="cms-callout" style="margin-top:20px;padding:14px;border:1px solid var(--cms-border);border-radius:6px">
+                <div style="font-weight:600;margin-bottom:4px">
+                    <i class="bi bi-arrow-repeat"></i> @L["Settings_RefreshStructuredDataTitle"]
+                </div>
+                <small style="color:var(--cms-text-muted);display:block;margin-bottom:10px">
+                    @L["Settings_RefreshStructuredDataHint"]
+                </small>
+                <button class="btn-cms btn-ghost" @onclick="RefreshStructuredData" disabled="@_refreshing">
+                    @if (_refreshing)
+                    {
+                        <i class="bi bi-arrow-clockwise spin"></i>
+                    }
+                    @L["Settings_RefreshStructuredDataBtn"]
+                </button>
+                @if (_refreshSkipped.Count > 0)
+                {
+                    <div style="margin-top:10px;color:var(--cms-warning);font-size:12px">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        @L["Settings_RefreshStructuredDataSkipped"]
+                        <ul style="margin:4px 0 0 18px">
+                            @foreach (string slug in _refreshSkipped)
+                            {
+                                <li>@slug</li>
+                            }
+                        </ul>
+                    </div>
+                }
+            </div>
+        }
+
+        @* ── Prove it works, before something that matters depends on it ──────────
+           Both of these settings fail silently by nature: a wrong SMTP host means a
+           password-reset mail that never arrives, a wrong CDN prefix means every
+           NEW upload is broken on the live site. Neither shows any sign inside the
+           CMS, because the CMS never sends that mail or fetches that URL itself. *@
+        @if (_activeGroup == SiteSettingGroup.System)
+        {
+            <div class="cms-callout" style="margin-top:20px;padding:14px;border:1px solid var(--cms-border);border-radius:6px">
+                <div style="font-weight:600;margin-bottom:4px">
+                    <i class="bi bi-envelope-check"></i> @L["Settings_TestEmailTitle"]
+                </div>
+                <small style="color:var(--cms-text-muted);display:block;margin-bottom:10px">
+                    @L["Settings_TestEmailHint"]
+                </small>
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                    <input class="cms-input" style="flex:1;min-width:220px" type="email"
+                           placeholder="@L["Settings_TestEmailPlaceholder"]"
+                           value="@_testEmailTo"
+                           @onchange="e => _testEmailTo = e.Value?.ToString()" />
+                    <button class="btn-cms btn-ghost" @onclick="SendTestEmail" disabled="@_testingEmail">
+                        @if (_testingEmail)
+                        {
+                            <i class="bi bi-arrow-clockwise spin"></i>
+                        }
+                        @L["Settings_TestEmailBtn"]
+                    </button>
+                </div>
+                @if (_emailTestOutcome is { } emailOutcome)
+                {
+                    <div style="margin-top:10px;font-size:12.5px;color:@(emailOutcome.Ok ? "var(--cms-success)" : "var(--cms-danger)")">
+                        <i class="bi @(emailOutcome.Ok ? "bi-check-circle-fill" : "bi-x-circle-fill")"></i>
+                        @emailOutcome.Message
+                    </div>
+                    @if (emailOutcome.Detail.HasValue())
+                    {
+                        <div style="margin-top:6px;font-size:11.5px;color:var(--cms-text-muted);word-break:break-word">
+                            @emailOutcome.Detail
+                        </div>
+                    }
+                }
+            </div>
+        }
+
+        @if (_activeGroup == SiteSettingGroup.Integrations)
+        {
+            <div class="cms-callout" style="margin-top:20px;padding:14px;border:1px solid var(--cms-border);border-radius:6px">
+                <div style="font-weight:600;margin-bottom:4px">
+                    <i class="bi bi-hdd-network"></i> @L["Settings_TestCdnTitle"]
+                </div>
+                <small style="color:var(--cms-text-muted);display:block;margin-bottom:10px">
+                    @L["Settings_TestCdnHint"]
+                </small>
+                <button class="btn-cms btn-ghost" @onclick="TestCdn" disabled="@_testingCdn">
+                    @if (_testingCdn)
+                    {
+                        <i class="bi bi-arrow-clockwise spin"></i>
+                    }
+                    @L["Settings_TestCdnBtn"]
+                </button>
+                @if (_cdnTestOutcome is { } cdnOutcome)
+                {
+                    <div style="margin-top:10px;font-size:12.5px;color:@(cdnOutcome.Ok ? "var(--cms-success)" : "var(--cms-danger)")">
+                        <i class="bi @(cdnOutcome.Ok ? "bi-check-circle-fill" : "bi-x-circle-fill")"></i>
+                        @cdnOutcome.Message
+                    </div>
+                    @if (cdnOutcome.Detail.HasValue())
+                    {
+                        <div style="margin-top:6px;font-size:11.5px;color:var(--cms-text-muted);word-break:break-all">
+                            @cdnOutcome.Detail
+                        </div>
+                    }
+                }
+            </div>
+        }
+
+        <div style="display:flex;justify-content:flex-end;margin-top:8px">
+            <button class="btn-cms btn-primary-cms" @onclick="SaveActiveGroup" disabled="@_saving">
+                @if (_saving)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                else
+                {
+                    <i class="bi bi-floppy"></i>
+                }
+                @L["Settings_SaveBtn"]
+            </button>
+        </div>
+    </div>
+    }
+}
+
+@code {
+    private List<SiteSettingResponse> _settings = [];
+    private readonly Dictionary<string, string?> _values = [];
+    private List<SiteSettingGroup> _groups = [];
+    private SiteSettingGroup _activeGroup;
+    private bool _loading = true;
+    private bool _saving;
+
+    // ── Secrets tab (SMTP/CAPTCHA/S3 credentials — separate table, separate
+    // permission; see IntegrationSecret) ────────────────────────────────────────
+    private bool _canManageSecrets;
+    private bool _activeIsSecrets;
+    private List<IntegrationSecretResponse> _secrets = [];
+    private readonly Dictionary<string, string?> _secretValues = [];
+    private readonly HashSet<string> _secretsToClear = [];
+    private bool _savingSecrets;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.SiteSettingsManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        _canManageSecrets = UserContext.HasPermission(PermissionKeys.SecretsManage);
+
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery())).Match(
+                // SEO settings moved to their own screen (/admin/seo), which is gated on
+                // Seo.Manage rather than SiteSettings.Manage. Leaving a duplicate tab here
+                // would let a second permission edit them and give two answers to
+                // "where do I change the meta description".
+                // "hidden": rows the CMS writes for its own bookkeeping (the favicon
+                // set's version) — real settings, nothing for a person to type into.
+                items => _settings = [.. items.Where(s => s.Group != SiteSettingGroup.Seo && s.DataType != "hidden")],
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Settings_LoadError"]);
+        }
+        finally
+        {
+            foreach (SiteSettingResponse s in _settings)
+                _values[s.Key] = s.Value;
+
+            _groups = [.. _settings.Select(s => s.Group).Distinct().OrderBy(g => g)];
+            _activeGroup = _groups.FirstOrDefault();
+
+            // Send-to-self is the right default: the configured sender is the one
+            // address the operator is certain to be able to check, and a test that
+            // arrives there proves the whole path end to end.
+            _testEmailTo = GetValue("Email.FromAddress");
+
+            if (_canManageSecrets)
+                await LoadSecrets();
+
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadSecrets()
+    {
+        try
+        {
+            (await Sender.Send(new GetIntegrationSecretsQuery())).Match(
+                items => _secrets = items,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Settings_LoadError"]);
+        }
+        finally
+        {
+            // A secret field is never pre-filled with what was typed last time,
+            // including right after saving it — clearing its entry here is what
+            // makes the field revert to the "configured" placeholder instead of
+            // still showing what was just typed. A plain field is the opposite:
+            // pre-filled with its real value so an unrelated save doesn't blank it.
+            foreach (IntegrationSecretResponse s in _secrets)
+                _secretValues[s.Key] = s.IsSecret ? null : s.Value;
+        }
+    }
+
+    private void SelectGroup(SiteSettingGroup group)
+    {
+        _activeIsSecrets = false;
+        _activeGroup = group;
+    }
+
+    private string GroupLabel(SiteSettingGroup group) => group switch
+    {
+        SiteSettingGroup.Identity => L["Settings_Group_Identity"],
+        SiteSettingGroup.ContactSocial => L["Settings_Group_ContactSocial"],
+        SiteSettingGroup.System => L["Settings_Group_System"],
+        SiteSettingGroup.Integrations => L["Settings_Group_Integrations"],
+        _ => group.ToString()
+    };
+
+    private string SecretCategoryLabel(IntegrationSecretCategory category) => category switch
+    {
+        IntegrationSecretCategory.Email => L["Secrets_Category_Email"],
+        IntegrationSecretCategory.Captcha => L["Secrets_Category_Captcha"],
+        IntegrationSecretCategory.ObjectStorage => L["Secrets_Category_ObjectStorage"],
+        _ => category.ToString(),
+    };
+
+    private RenderFragment RenderSecretField(IntegrationSecretResponse secret) => __builder =>
+    {
+        bool cleared = _secretsToClear.Contains(secret.Key);
+
+        switch (secret.DataType)
+        {
+            case "bool":
+                bool boolVal = _secretValues.TryGetValue(secret.Key, out string? bv) && bv == "true";
+                <label class="cms-toggle">
+                    <input type="checkbox" checked="@boolVal" disabled="@cleared" @onchange="e => SetSecretBoolValue(secret.Key, e)" />
+                    <span class="cms-toggle-slider"></span>
+                </label>
+                break;
+
+            case "storage-provider":
+                <select class="cms-input" value="@GetSecretValue(secret.Key)" disabled="@cleared" @onchange="e => SetSecretStringValue(secret.Key, e)">
+                    <option value="Local">@L["Secrets_Storage_Local"]</option>
+                    <option value="S3">@L["Secrets_Storage_S3"]</option>
+                </select>
+                break;
+
+            default:
+                if (secret.IsSecret)
+                {
+                    <input type="password" class="cms-input" autocomplete="new-password" disabled="@cleared"
+                           placeholder="@(secret.IsSet ? L["Secrets_ConfiguredPlaceholder"] : L["Secrets_NotSetPlaceholder"])"
+                           value="@GetSecretValue(secret.Key)"
+                           @onchange="e => SetSecretStringValue(secret.Key, e)" />
+                }
+                else
+                {
+                    <input class="cms-input" disabled="@cleared" value="@GetSecretValue(secret.Key)" @onchange="e => SetSecretStringValue(secret.Key, e)" />
+                }
+                break;
+        }
+    };
+
+    private string? GetSecretValue(string key) => _secretValues.TryGetValue(key, out string? v) ? v : null;
+
+    private void SetSecretBoolValue(string key, ChangeEventArgs e) => _secretValues[key] = (bool)e.Value! ? "true" : "false";
+
+    private void SetSecretStringValue(string key, ChangeEventArgs e) => _secretValues[key] = e.Value?.ToString();
+
+    private async Task SaveSecrets()
+    {
+        _savingSecrets = true;
+        try
+        {
+            int errorCount = 0;
+            foreach (IntegrationSecretResponse secret in _secrets)
+            {
+                if (_secretsToClear.Contains(secret.Key))
+                {
+                    (await Sender.Send(new ClearIntegrationSecretCommand(secret.Key, UserContext.UserId)))
+                        .Match(() => { }, error => { Toast.Error($"{L[secret.DisplayName]}: {L.Error(error)}"); errorCount++; });
+                    continue;
+                }
+
+                string? pending = GetSecretValue(secret.Key);
+
+                // Secrets never arrive pre-filled (nothing to diff against), so typing
+                // anything at all counts as a change; a plain field only counts if it
+                // differs from what was loaded.
+                bool shouldSend = secret.IsSecret ? !string.IsNullOrEmpty(pending) : pending != secret.Value;
+                if (!shouldSend) continue;
+
+                (await Sender.Send(new UpdateIntegrationSecretCommand(secret.Key, pending ?? "", UserContext.UserId)))
+                    .Match(() => { }, error => { Toast.Error($"{L[secret.DisplayName]}: {L.Error(error)}"); errorCount++; });
+            }
+
+            if (errorCount == 0)
+            {
+                Toast.Success(L["Settings_Saved"]);
+                _secretsToClear.Clear();
+                await LoadSecrets();
+            }
+        }
+        finally { _savingSecrets = false; }
+    }
+
+    private static bool IsCustomCodeField(SiteSettingResponse s) => s.DataType == "html";
+
+    private RenderFragment RenderField(SiteSettingResponse setting) => __builder =>
+    {
+        bool locked = IsCustomCodeField(setting) && !UserContext.CanAuthorCustomCode;
+
+        switch (setting.DataType)
+        {
+            case "bool":
+                bool boolVal = _values.TryGetValue(setting.Key, out string? bv) && bv == "true";
+                <label class="cms-toggle">
+                    <input type="checkbox" checked="@boolVal" @onchange="e => SetBoolValue(setting.Key, e)" />
+                    <span class="cms-toggle-slider"></span>
+                </label>
+                break;
+
+            case "html":
+                <textarea class="cms-input" rows="8" style="font-family:monospace;font-size:12.5px"
+                          disabled="@locked"
+                          value="@GetValue(setting.Key)"
+                          @onchange="e => SetStringValue(setting.Key, e)"></textarea>
+                break;
+
+            case "captcha-provider":
+                <select class="cms-input" value="@GetValue(setting.Key)" @onchange="e => SetStringValue(setting.Key, e)">
+                    <option value="none">@L["Settings_Captcha_None"]</option>
+                    <option value="recaptcha">Google reCAPTCHA</option>
+                    <option value="hcaptcha">hCaptcha</option>
+                    <option value="turnstile">Cloudflare Turnstile</option>
+                </select>
+                break;
+
+            default:
+                <input class="cms-input" value="@GetValue(setting.Key)" @onchange="e => SetStringValue(setting.Key, e)" />
+                break;
+        }
+    };
+
+    private string? GetValue(string key) => _values.TryGetValue(key, out string? v) ? v : null;
+
+    private void SetBoolValue(string key, ChangeEventArgs e) => _values[key] = (bool)e.Value! ? "true" : "false";
+
+    private void SetStringValue(string key, ChangeEventArgs e) => _values[key] = e.Value?.ToString();
+
+    private bool _refreshing;
+    private IReadOnlyList<string> _refreshSkipped = [];
+
+    // ── Connectivity tests (e-mail, CDN) ──────────────────────────────────────
+    private sealed record TestOutcome(bool Ok, string Message, string? Detail = null);
+
+    private bool _testingEmail;
+    private string? _testEmailTo;
+    private TestOutcome? _emailTestOutcome;
+
+    private bool _testingCdn;
+    private TestOutcome? _cdnTestOutcome;
+
+    private async Task SendTestEmail()
+    {
+        _testingEmail = true;
+        _emailTestOutcome = null;
+        try
+        {
+            (await Sender.Send(new SendTestEmailCommand(_testEmailTo ?? string.Empty))).Match(
+                () => _emailTestOutcome = new TestOutcome(true, string.Format(L["Settings_TestEmailSent"], _testEmailTo)),
+                // Localized headline PLUS the raw description underneath: the
+                // translated line says what happened, but the SMTP server's own words
+                // ("5.7.8 authentication failed", "No such host is known") are the only
+                // part that says which setting to go fix — and a translation cannot
+                // carry them, since it replaces the description wholesale.
+                error => _emailTestOutcome = new TestOutcome(
+                    false,
+                    L.Error(error),
+                    Detail: error.Description == L.Error(error) ? null : error.Description));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _emailTestOutcome = new TestOutcome(false, L["Settings_TestEmailFailed"]);
+        }
+        finally
+        {
+            _testingEmail = false;
+        }
+    }
+
+    private async Task TestCdn()
+    {
+        _testingCdn = true;
+        _cdnTestOutcome = null;
+        try
+        {
+            // Deliberately the value currently in the FORM, not the saved one: the
+            // point is to find out whether a prefix works before publishing it to
+            // every future upload.
+            string candidate = GetValue("Integrations.CdnBaseUrl") ?? string.Empty;
+
+            (await Sender.Send(new TestCdnCommand(candidate))).Match(
+                result => _cdnTestOutcome = DescribeCdnResult(result),
+                error => _cdnTestOutcome = new TestOutcome(false, L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            _cdnTestOutcome = new TestOutcome(false, L["Settings_TestCdnFailed"]);
+        }
+        finally
+        {
+            _testingCdn = false;
+        }
+    }
+
+    /// <summary>
+    /// Turns a probe result into one sentence naming the actual fault. "It didn't
+    /// work" would send the operator back to guessing between a wrong host, a CDN
+    /// pointed at another origin, and an edge serving its own error page — which are
+    /// three different fixes.
+    /// </summary>
+    private TestOutcome DescribeCdnResult(CdnProbeResult r)
+    {
+        string detail = string.Format(
+            L["Settings_TestCdnDetail"],
+            r.TestedUrl,
+            Math.Round(r.ResponseTime.TotalMilliseconds),
+            r.CacheHeader ?? L["Settings_TestCdnNoCacheHeader"]);
+
+        if (!r.Reachable)
+            return new TestOutcome(false, string.Format(L["Settings_TestCdnUnreachable"], r.Error), detail);
+
+        if (r.StatusCode is not (>= 200 and < 300))
+            return new TestOutcome(false, string.Format(L["Settings_TestCdnBadStatus"], r.StatusCode), detail);
+
+        // 200 with the wrong number of bytes is the silent failure this whole check
+        // exists for: the edge answered, but with somebody else's file or its own
+        // "not found" page dressed up as a success.
+        if (r.ServedBytes != r.ExpectedBytes)
+            return new TestOutcome(false, string.Format(L["Settings_TestCdnSizeMismatch"], r.ExpectedBytes, r.ServedBytes), detail);
+
+        return new TestOutcome(true, L["Settings_TestCdnOk"], detail);
+    }
+
+    /// <summary>
+    /// The groups whose values the draft builder copies into a page's graph. Showing
+    /// the refresh button anywhere else would offer a fix for a problem that group
+    /// cannot cause. Integrations and System hold nothing the structured-data
+    /// templates read.
+    /// </summary>
+    private static bool AffectsStructuredData(SiteSettingGroup group) =>
+        group is SiteSettingGroup.Identity or SiteSettingGroup.ContactSocial;
+
+    private async Task RefreshStructuredData()
+    {
+        _refreshing = true;
+        _refreshSkipped = [];
+        try
+        {
+            (await Sender.Send(new RefreshStructuredDataCommand())).Match(
+                result =>
+                {
+                    _refreshSkipped = result.Skipped;
+                    Toast.Success(string.Format(
+                        System.Globalization.CultureInfo.CurrentCulture,
+                        L["Settings_RefreshStructuredDataDone"],
+                        result.Updated, result.Unchanged, result.Skipped.Count));
+                },
+                error => Toast.Error(L.Error(error)));
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
+    /// <summary>
+    /// Blocks a captcha provider from saving without its site key.
+    /// <para>
+    /// The public site only reports the real provider name to the browser widget when
+    /// a site key is present (see _Layout.cshtml) — with no key it always tells the
+    /// widget "none", so it never loads and never produces a token. The server-side
+    /// verifier, meanwhile, reads the provider directly: with it set to anything but
+    /// "none" it rejects every submission that arrives without a token. A provider
+    /// saved without its key therefore doesn't leave captcha half-configured — it
+    /// silently rejects every public form on the site, with nothing in the UI to
+    /// explain why. Checked against the pending form values, not one setting in
+    /// isolation, because the provider and key save as two separate commands and an
+    /// admin filling in both at once must not be blocked mid-edit.
+    /// </para>
+    /// </summary>
+    private bool CaptchaMissingSiteKey() =>
+        _values.TryGetValue("Integrations.CaptchaProvider", out string? provider)
+        && provider.HasValue() && provider != "none"
+        && !(_values.TryGetValue("Integrations.CaptchaSiteKey", out string? key) && key.HasValue());
+
+    private async Task SaveActiveGroup()
+    {
+        if (_activeGroup == SiteSettingGroup.Integrations && CaptchaMissingSiteKey())
+        {
+            Toast.Error(L["Settings_CaptchaSiteKeyRequired"]);
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            int errorCount = 0;
+            foreach (SiteSettingResponse setting in _settings.Where(s => s.Group == _activeGroup))
+            {
+                string? newValue = _values.TryGetValue(setting.Key, out string? v) ? v : null;
+                if (newValue == setting.Value) continue;
+
+                (await Sender.Send(new UpdateSiteSettingCommand(setting.Key, newValue, UserContext.UserId)))
+                    .Match(
+                        () => { },
+                        error =>
+                        {
+                            Toast.Error($"{setting.DisplayName}: {L.Error(error)}");
+                            errorCount++;
+                        });
+            }
+
+            if (errorCount == 0)
+            {
+                Toast.Success(L["Settings_Saved"]);
+                _settings = [.. _settings.Select(ApplyPendingValue)];
+            }
+        }
+        finally { _saving = false; }
+    }
+
+    private SiteSettingResponse ApplyPendingValue(SiteSettingResponse s)
+    {
+        if (s.Group != _activeGroup)
+            return s;
+
+        string? pending = _values.TryGetValue(s.Key, out string? v) ? v : s.Value;
+        return s with { Value = pending };
+    }
+}

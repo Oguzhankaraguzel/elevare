@@ -1,0 +1,35 @@
+<CascadingAuthenticationState>
+    <Router AppAssembly="typeof(Wasm.Marker.ICmsWasm).Assembly"
+            AdditionalAssemblies="_additionalAssemblies">
+        <Found Context="routeData">
+            <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.CMSLayout)">
+                <NotAuthorized>
+                    <RedirectToLogin />
+                </NotAuthorized>
+                <Authorizing>
+                    <div style="display:flex;align-items:center;justify-content:center;height:100vh;color:var(--cms-text-muted)">
+                        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+                    </div>
+                </Authorizing>
+            </AuthorizeRouteView>
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        </Found>
+        <NotFound>
+            <LayoutView Layout="typeof(Layout.CMSLayout)">
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;padding:80px 20px;color:var(--cms-text-muted)">
+                    <i class="bi bi-signpost-split" style="font-size:48px;opacity:.3;margin-bottom:16px"></i>
+                    <h2 style="color:var(--cms-text);margin-bottom:8px">@L["NotFound_Title"]</h2>
+                    <p>@L["NotFound_Description"]</p>
+                    <a href="/" class="btn-cms btn-primary-cms" style="margin-top:16px">
+                        <i class="bi bi-house"></i> @L["NotFound_BackToDashboard"]
+                    </a>
+                </div>
+            </LayoutView>
+        </NotFound>
+    </Router>
+</CascadingAuthenticationState>
+
+@code {
+    private static readonly System.Reflection.Assembly[] _additionalAssemblies =
+        [typeof(Wasm.Client._Imports).Assembly];
+}

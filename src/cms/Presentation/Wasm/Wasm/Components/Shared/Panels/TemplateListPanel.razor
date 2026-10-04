@@ -1,0 +1,311 @@
+﻿@implements IDisposable
+@inject IJSRuntime JS
+
+<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px">
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn-cms btn-sm-cms @(_filter is null ? "btn-primary-cms" : "btn-ghost")" @onclick="() => SetFilter(null)">@L["Templates_FilterAll"]</button>
+        <button class="btn-cms btn-sm-cms @(_filter == PageTemplateType.Menu ? "btn-primary-cms" : "btn-ghost")" @onclick="() => SetFilter(PageTemplateType.Menu)">@L["Templates_TypeMenu"]</button>
+        <button class="btn-cms btn-sm-cms @(_filter == PageTemplateType.FullPage ? "btn-primary-cms" : "btn-ghost")" @onclick="() => SetFilter(PageTemplateType.FullPage)">@L["Templates_TypeFullPage"]</button>
+        <button class="btn-cms btn-sm-cms @(_filter == PageTemplateType.Button ? "btn-primary-cms" : "btn-ghost")" @onclick="() => SetFilter(PageTemplateType.Button)">@L["Templates_TypeButton"]</button>
+        <button class="btn-cms btn-sm-cms @(_filter == PageTemplateType.Other ? "btn-primary-cms" : "btn-ghost")" @onclick="() => SetFilter(PageTemplateType.Other)">@L["Templates_TypeOther"]</button>
+    </div>
+    <a href="/templates" class="btn-cms btn-ghost btn-sm-cms"><i class="bi bi-gear"></i> @L["Templates_ManageBtn"]</a>
+</div>
+
+<select class="cms-input cms-input-sm" style="margin-bottom:12px;max-width:220px" @bind="_languageFilterId" @bind:after="Load">
+    <option value="">@L["Templates_LanguageAny"]</option>
+    @foreach (LanguageResponse lang in _languages)
+    {
+        <option value="@lang.Id">@lang.NameInNative</option>
+    }
+</select>
+
+@if (_loading)
+{
+    <div style="display:flex;align-items:center;justify-content:center;padding:60px">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:22px;color:var(--cms-text-muted)"></i>
+    </div>
+}
+else if (_templates.Count == 0)
+{
+    <div style="text-align:center;padding:40px 20px;color:var(--cms-text-muted)">
+        <i class="bi bi-collection" style="font-size:36px;display:block;margin-bottom:12px;opacity:.4"></i>
+        <p>@L["Templates_Empty"]</p>
+    </div>
+}
+else
+{
+    @* With "any language" selected the list is grouped by language, so the TR and
+       EN copies of the same header are never mistaken for one another; filtered to
+       one language the header would only repeat the filter. *@
+    <div class="tpl-panel-list">
+        @foreach (TemplateGroup g in Grouped())
+        {
+            @if (string.IsNullOrEmpty(_languageFilterId))
+            {
+                <div class="tpl-panel-group">
+                    @LanguageMark(g.Language, g.IsShared)
+                    <span>@g.Title</span>
+                    <span class="tpl-panel-group-count">@string.Format(L["Templates_GroupCount"], g.Items.Count)</span>
+                </div>
+            }
+            @foreach (PageTemplateListItemResponse t in g.Items)
+            {
+            <div class="tpl-panel-row">
+                <div class="tpl-panel-icon">
+                    <i class="bi @TypeIcon(t.Type)"></i>
+                </div>
+                <div class="tpl-panel-body">
+                    <div class="tpl-panel-name" title="@t.Name">@t.Name</div>
+                    <div class="tpl-panel-meta">
+                        @LanguageBadge(t)
+                        @TypeBadge(t.Type)
+                        @if (t.IsLinked)
+                        {
+                            <span class="badge-cms badge-accent"><i class="bi bi-link-45deg"></i> @L["Templates_Linked"]</span>
+                        }
+                        else
+                        {
+                            <span class="badge-cms badge-neutral"><i class="bi bi-files"></i> @L["Templates_Copy"]</span>
+                        }
+                        <span class="tpl-panel-date">@string.Format(L["Templates_UpdatedOn"], (t.UpdateDate ?? t.CreateDate).ToLocalTime().ToString("dd.MM.yyyy HH:mm"))</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:6px;flex-shrink:0">
+                    <button class="btn-cms btn-ghost btn-sm-cms btn-icon" title="@L["Templates_CopyBtn"]"
+                            disabled="@(_busyId == t.Id)" @onclick="() => CopyTemplate(t)">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                    <button class="btn-cms btn-primary-cms btn-sm-cms" title="@L["Templates_InsertBtn"]"
+                            disabled="@(_busyId == t.Id)" @onclick="() => InsertTemplate(t)">
+                        @if (_busyId == t.Id)
+                        {
+                            <i class="bi bi-arrow-clockwise spin"></i>
+                        }
+                        else
+                        {
+                            <i class="bi bi-box-arrow-in-down"></i>
+                        }
+                        @L["Templates_InsertBtn"]
+                    </button>
+                </div>
+            </div>
+            }
+        }
+    </div>
+}
+
+@* The template's HTML has to be fetched before it can be copied, so the copy
+   cannot happen in the click that asked for it — and a clipboard write outside a
+   user gesture is refused. Fetching first and copying second is that constraint
+   made visible, and it also lets the editor see what they are about to paste. *@
+@if (_copyPayload is not null)
+{
+    <div class="tpl-copy-box">
+        <label class="cms-label">@_copyPayloadName</label>
+        <textarea id="tpl-copy-payload" class="cms-input tpl-copy-payload" rows="5" readonly>@_copyPayload</textarea>
+        <div class="tpl-copy-actions">
+            <button type="button" class="btn-cms btn-primary-cms btn-sm-cms"
+                    data-copy-target="#tpl-copy-payload"
+                    data-copy-idle-label="@L["Templates_CopyBtn"]"
+                    data-copied-label="@L["Templates_Copied"]"
+                    data-copyfail-label="@L["Templates_CopyFailed"]">
+                <i class="bi bi-clipboard"></i>
+                <span data-copy-label>@L["Templates_CopyBtn"]</span>
+            </button>
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms" @onclick="() => _copyPayload = null">
+                @L["Pages_CancelBtn"]
+            </button>
+        </div>
+    </div>
+}
+
+@code {
+    private string? _copyPayload;
+    private string? _copyPayloadName;
+
+    private List<PageTemplateListItemResponse> _templates = [];
+    private List<LanguageResponse> _languages = [];
+    private bool _loading = true;
+    private PageTemplateType? _filter;
+    private string _languageFilterId = "";
+    private int? _busyId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        (await Sender.Send(new GetLanguagesQuery(IsActive: true))).Match(
+            success => _languages = [.. success.Items],
+            _ => { });
+        await Load();
+    }
+
+    private async Task SetFilter(PageTemplateType? type)
+    {
+        _filter = type;
+        await Load();
+    }
+
+    private async Task Load()
+    {
+        _loading = true;
+        try
+        {
+            int? languageId = int.TryParse(_languageFilterId, out int lid) ? lid : null;
+            (await Sender.Send(new GetPageTemplatesQuery(_filter, languageId))).Match(
+                items => _templates = items,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Templates_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string TypeIcon(PageTemplateType type) => type switch
+    {
+        PageTemplateType.Menu => "bi-list-nested",
+        PageTemplateType.FullPage => "bi-file-earmark-text",
+        PageTemplateType.Button => "bi-hand-index",
+        _ => "bi-box"
+    };
+
+    private sealed record TemplateGroup(LanguageResponse? Language, bool IsShared, string Title, List<PageTemplateListItemResponse> Items);
+
+    private LanguageResponse? LanguageOf(int? id) => id is null ? null : _languages.FirstOrDefault(l => l.Id == id);
+
+    // Default language first, then the site's language order, templates that are
+    // not tied to a language last.
+    private List<TemplateGroup> Grouped() =>
+    [
+        .. _templates
+            .GroupBy(t => t.LanguageId)
+            .Select(g =>
+            {
+                LanguageResponse? lang = LanguageOf(g.Key);
+                string title = g.Key is null
+                    ? L["Templates_LanguageNone"]
+                    : lang?.NameInNative ?? g.First().LanguageName ?? "";
+                return new TemplateGroup(lang, g.Key is null, title, [.. g]);
+            })
+            .OrderBy(g => g.IsShared)
+            .ThenByDescending(g => g.Language?.IsDefault == true)
+            .ThenBy(g => g.Language?.DisplayOrder ?? int.MaxValue)
+            .ThenBy(g => g.Title)
+    ];
+
+    private static RenderFragment LanguageMark(LanguageResponse? lang, bool isShared) => __builder =>
+    {
+        @if (isShared)
+        {
+            <i class="bi bi-globe2"></i>
+        }
+        else if (!string.IsNullOrEmpty(lang?.FlagIconPath))
+        {
+            <img class="tpl-flag" src="@lang.FlagIconPath" alt="" />
+        }
+        else
+        {
+            <i class="bi bi-translate"></i>
+        }
+    };
+
+    private RenderFragment LanguageBadge(PageTemplateListItemResponse t) => __builder =>
+    {
+        LanguageResponse? lang = LanguageOf(t.LanguageId);
+        if (t.LanguageId is null)
+        {
+            <span class="badge-cms tpl-lang" title="@L["Templates_LanguageNone"]">
+                @LanguageMark(null, true) @L["Templates_LanguageEvery"]
+            </span>
+        }
+        else
+        {
+            string name = lang?.NameInNative ?? t.LanguageName ?? "";
+            <span class="badge-cms tpl-lang" title="@string.Format(L["Templates_LanguageTitle"], name)">
+                @LanguageMark(lang, false) @name
+                @if (lang is not null)
+                {
+                    <span class="tpl-lang-code">@lang.TwoLetterCode.ToUpperInvariant()</span>
+                }
+            </span>
+        }
+    };
+
+    private RenderFragment TypeBadge(PageTemplateType type) => __builder =>
+    {
+        (string cls, string text) = type switch
+        {
+            PageTemplateType.Menu => ("badge-info", L["Templates_TypeMenu"]),
+            PageTemplateType.FullPage => ("badge-success", L["Templates_TypeFullPage"]),
+            PageTemplateType.Button => ("badge-warning", L["Templates_TypeButton"]),
+            _ => ("badge-neutral", L["Templates_TypeOther"])
+        };
+        <span class="badge-cms @cls">@text</span>
+    };
+
+    private async Task CopyTemplate(PageTemplateListItemResponse t)
+    {
+        _busyId = t.Id;
+        try
+        {
+            PageTemplateEditorResponse? full = null;
+            (await Sender.Send(new GetPageTemplateByIdQuery(t.Id))).Match(
+                r => full = r,
+                error => Toast.Error(L.Error(error)));
+            if (full is null) return;
+
+            _copyPayload = full.GjsCss.HasValue()
+                ? $"<style>{full.GjsCss}</style>{full.GjsHtml}"
+                : full.GjsHtml ?? "";
+            _copyPayloadName = full.Name;
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Templates_LoadError"]);
+        }
+        finally { _busyId = null; }
+    }
+
+    private async Task InsertTemplate(PageTemplateListItemResponse t)
+    {
+        _busyId = t.Id;
+        try
+        {
+            bool active = await JS.InvokeAsync<bool>("grapesEditor.isActive");
+            if (!active)
+            {
+                Toast.Error(L["Templates_NoActiveEditor"]);
+                return;
+            }
+
+            PageTemplateEditorResponse? full = null;
+            (await Sender.Send(new GetPageTemplateByIdQuery(t.Id))).Match(
+                r => full = r,
+                error => Toast.Error(L.Error(error)));
+            if (full is null) return;
+
+            bool inserted = full.IsLinked
+                ? await JS.InvokeAsync<bool>("grapesEditor.insertLinkedTemplate", full.Id, full.GjsHtml, full.GjsCss)
+                : await JS.InvokeAsync<bool>("grapesEditor.insertSnapshotTemplate",
+                    full.Id, full.Version.ToString("o"), full.GjsHtml, full.GjsCss);
+
+            if (inserted) Toast.Success(L["Templates_Inserted"]);
+            else Toast.Error(L["Templates_NoActiveEditor"]);
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Templates_LoadError"]);
+        }
+        finally { _busyId = null; }
+    }
+
+    public void Dispose() { }
+}

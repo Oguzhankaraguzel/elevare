@@ -1,0 +1,914 @@
+/* ═══════════════════════════════════════════════════════
+   ElevareGrid — Scoped Component Styles
+   Uses CMS CSS variables for full theme consistency
+   ═══════════════════════════════════════════════════════ */
+
+/* ── Container ── */
+.eg-grid {
+    background: var(--cms-card);
+    border: 1px solid var(--cms-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+}
+
+/* ── Toolbar ── */
+.eg-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--cms-border);
+    flex-wrap: wrap;
+}
+
+.eg-toolbar-start {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.eg-toolbar-end {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.eg-title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+    color: var(--cms-text);
+}
+
+/* ── Search ── */
+.eg-search {
+    display: flex;
+    align-items: center;
+    background: var(--cms-bg);
+    border: 1px solid var(--cms-border);
+    border-radius: var(--radius-sm);
+    padding: 0 10px;
+    min-width: 200px;
+    max-width: 360px;
+    flex: 1;
+    transition: border-color var(--transition);
+}
+
+.eg-search:focus-within {
+    border-color: var(--cms-accent);
+    box-shadow: 0 0 0 3px var(--cms-accent-light);
+}
+
+.eg-search i {
+    color: var(--cms-text-dim);
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.eg-search input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 7px 8px;
+    color: var(--cms-text);
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+}
+
+.eg-search input::placeholder {
+    color: var(--cms-text-dim);
+}
+
+.eg-search-clear {
+    background: none;
+    border: none;
+    color: var(--cms-text-dim);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    transition: color var(--transition);
+}
+
+.eg-search-clear:hover {
+    color: var(--cms-danger);
+}
+
+/* ── Toolbar Buttons ── */
+.eg-tbtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--cms-border);
+    background: transparent;
+    color: var(--cms-text-muted);
+    cursor: pointer;
+    transition: all var(--transition);
+    position: relative;
+    font-size: 15px;
+}
+
+.eg-tbtn:hover {
+    background: var(--cms-card-hover);
+    color: var(--cms-text);
+    border-color: var(--cms-border-light);
+}
+
+.eg-tbtn.eg-tbtn-active {
+    background: var(--cms-accent-light);
+    color: var(--cms-accent);
+    border-color: var(--cms-accent);
+}
+
+.eg-tbtn-badge {
+    color: var(--cms-accent);
+}
+
+.eg-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: var(--cms-accent);
+    color: #fff;
+    font-size: 9px;
+    font-weight: 700;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* ── Dropdown ── */
+.eg-dropdown-wrap {
+    position: relative;
+    display: inline-block;
+}
+
+.eg-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+}
+
+.eg-dropdown-panel {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 200px;
+    background: var(--cms-card);
+    border: 1px solid var(--cms-border-light);
+    border-radius: var(--radius);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, .45);
+    z-index: 100;
+    padding: 8px 0;
+    animation: fadeIn .12s ease;
+}
+
+.eg-dropdown-title {
+    padding: 6px 14px 8px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--cms-text-dim);
+    border-bottom: 1px solid var(--cms-border);
+    margin-bottom: 4px;
+}
+
+.eg-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    color: var(--cms-text-muted);
+    cursor: pointer;
+    transition: background var(--transition), color var(--transition);
+}
+
+.eg-dropdown-item:hover {
+    background: var(--cms-accent-light);
+    color: var(--cms-text);
+}
+
+.eg-dropdown-item input[type="checkbox"] {
+    accent-color: var(--cms-accent);
+}
+
+/* ── Group Panel ── */
+.eg-group-panel {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 18px;
+    border-bottom: 1px solid var(--cms-border);
+    background: rgba(99, 102, 241, .04);
+    flex-wrap: wrap;
+}
+
+.eg-group-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 10px 3px 12px;
+    background: var(--cms-accent-light);
+    color: var(--cms-accent);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.eg-group-chip button {
+    background: none;
+    border: none;
+    color: var(--cms-accent);
+    cursor: pointer;
+    padding: 0 2px;
+    display: flex;
+    align-items: center;
+    font-size: 14px;
+    opacity: .6;
+    transition: opacity var(--transition);
+}
+
+.eg-group-chip button:hover {
+    opacity: 1;
+}
+
+.eg-group-clear {
+    background: none;
+    border: none;
+    color: var(--cms-text-dim);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 2px 6px;
+    transition: color var(--transition);
+}
+
+.eg-group-clear:hover {
+    color: var(--cms-danger);
+}
+
+/* ── Table Wrapper ── */
+.eg-table-wrap {
+    overflow-x: auto;
+}
+
+/* ── Table ── */
+.eg-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+/* ── Header ── */
+.eg-table thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--cms-text-muted);
+    background: var(--cms-sidebar);
+    border-bottom: 1px solid var(--cms-border);
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+/* Sticky column cells */
+.eg-table td[style*="position:sticky"],
+.eg-table th[style*="position:sticky"] {
+    box-shadow: 2px 0 6px rgba(0,0,0,0.04);
+}
+
+.eg-th-inner {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.eg-th-check,
+.eg-th-expand,
+.eg-th-num {
+    width: 40px;
+    text-align: center;
+}
+
+.eg-th-num {
+    color: var(--cms-text-dim);
+}
+
+/* ── Sort Button ── */
+.eg-sort-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--cms-text-muted);
+    font-size: 12.5px;
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 0;
+    transition: color var(--transition);
+}
+
+.eg-sort-btn:hover {
+    color: var(--cms-text);
+}
+
+.eg-sort-btn.active {
+    color: var(--cms-accent);
+}
+
+.eg-sort-btn i {
+    font-size: 12px;
+    opacity: .4;
+    transition: opacity var(--transition);
+}
+
+.eg-sort-btn.active i {
+    opacity: 1;
+}
+
+.eg-sort-idx {
+    font-size: 9px;
+    background: var(--cms-accent);
+    color: #fff;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+/* ── Group Button (in header) ── */
+.eg-grp-btn {
+    background: none;
+    border: none;
+    color: var(--cms-text-dim);
+    cursor: pointer;
+    padding: 2px;
+    font-size: 12px;
+    opacity: 0;
+    transition: opacity var(--transition), color var(--transition);
+    margin-left: auto;
+}
+
+.eg-th-inner:hover .eg-grp-btn {
+    opacity: .6;
+}
+
+.eg-grp-btn:hover {
+    opacity: 1 !important;
+    color: var(--cms-accent);
+}
+
+.eg-grp-btn.active {
+    opacity: 1 !important;
+    color: var(--cms-accent);
+}
+
+/* ── Filter Row ── */
+.eg-filter-row th {
+    padding: 6px 8px !important;
+    background: var(--cms-bg) !important;
+    border-bottom: 1px solid var(--cms-border);
+}
+
+.eg-finput {
+    width: 100%;
+    padding: 5px 8px;
+    background: var(--cms-card);
+    border: 1px solid var(--cms-border);
+    border-radius: var(--radius-sm);
+    color: var(--cms-text);
+    font-size: 12px;
+    font-family: inherit;
+    transition: border-color var(--transition);
+}
+
+.eg-finput:focus {
+    outline: none;
+    border-color: var(--cms-accent);
+}
+
+.eg-finput::placeholder {
+    color: var(--cms-text-dim);
+}
+
+.eg-finput option {
+    background: var(--cms-card);
+}
+
+/* ── Data Rows ── */
+.eg-table tbody td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--cms-border);
+    font-size: 14.5px;
+    vertical-align: middle;
+    color: var(--cms-text);
+}
+
+.eg-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.eg-hover tbody .eg-data-row:hover td {
+    background: var(--cms-card-hover);
+}
+
+.eg-striped tbody .eg-data-row:nth-child(even) td {
+    background: rgba(255, 255, 255, .015);
+}
+
+.eg-bordered td,
+.eg-bordered th {
+    border-right: 1px solid var(--cms-border);
+}
+
+.eg-bordered td:last-child,
+.eg-bordered th:last-child {
+    border-right: none;
+}
+
+.eg-data-row {
+    cursor: default;
+    transition: background var(--transition);
+}
+
+.eg-data-row.eg-selected td {
+    background: var(--cms-accent-light) !important;
+}
+
+/* ── Alignment ── */
+.eg-center {
+    text-align: center !important;
+}
+
+.eg-right {
+    text-align: right !important;
+}
+
+/* ── Checkbox / Expand cells ── */
+.eg-td-check,
+.eg-td-expand,
+.eg-td-num {
+    width: 40px;
+    text-align: center;
+    color: var(--cms-text-dim);
+}
+
+.eg-td-check input[type="checkbox"] {
+    accent-color: var(--cms-accent);
+    cursor: pointer;
+}
+
+.eg-expand-btn {
+    background: none;
+    border: none;
+    color: var(--cms-text-dim);
+    cursor: pointer;
+    padding: 2px 4px;
+    font-size: 13px;
+    transition: color var(--transition);
+}
+
+.eg-expand-btn:hover {
+    color: var(--cms-accent);
+}
+
+/* ── Group Row ── */
+.eg-group-row {
+    cursor: pointer;
+}
+
+.eg-group-row td {
+    background: var(--cms-bg) !important;
+    padding: 8px 14px !important;
+    border-bottom: 1px solid var(--cms-border);
+}
+
+.eg-group-row:hover td {
+    background: var(--cms-card-hover) !important;
+}
+
+.eg-group-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+}
+
+.eg-group-icon {
+    color: var(--cms-text-dim);
+    font-size: 12px;
+    transition: transform var(--transition);
+}
+
+.eg-group-label {
+    color: var(--cms-text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+.eg-group-count {
+    color: var(--cms-text-dim);
+    font-size: 12px;
+    margin-left: 2px;
+}
+
+.eg-group-agg {
+    margin-left: 12px;
+    font-size: 11px;
+    color: var(--cms-text-dim);
+    display: flex;
+    gap: 8px;
+}
+
+/* ── Detail Row ── */
+.eg-detail-row td {
+    background: var(--cms-bg) !important;
+    padding: 16px 24px !important;
+    border-bottom: 1px solid var(--cms-border);
+}
+
+/* ── Empty State ── */
+.eg-empty {
+    padding: 0 !important;
+}
+
+.eg-empty-inner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 56px 20px;
+    color: var(--cms-text-dim);
+    gap: 12px;
+}
+
+.eg-empty-inner i {
+    font-size: 40px;
+    opacity: .3;
+}
+
+.eg-empty-inner span {
+    font-size: 14px;
+}
+
+/* ── Loading ── */
+.eg-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 56px 20px;
+    gap: 10px;
+    color: var(--cms-text-muted);
+    font-size: 14px;
+}
+
+.eg-loading i {
+    font-size: 20px;
+}
+
+/* ── Footer ── */
+.eg-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 18px;
+    border-top: 1px solid var(--cms-border);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.eg-footer-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: var(--cms-text-muted);
+}
+
+.eg-sel-count {
+    color: var(--cms-accent);
+    font-weight: 500;
+}
+
+.eg-filtered-hint {
+    color: var(--cms-warning);
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.eg-footer-paging {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.eg-pagesize {
+    padding: 4px 8px;
+    background: var(--cms-bg);
+    border: 1px solid var(--cms-border);
+    border-radius: var(--radius-sm);
+    color: var(--cms-text-muted);
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.eg-pagesize:focus {
+    outline: none;
+    border-color: var(--cms-accent);
+}
+
+.eg-pagesize option {
+    background: var(--cms-card);
+}
+
+.eg-pages {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.eg-pg {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 30px;
+    height: 30px;
+    padding: 0 6px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--cms-border);
+    background: transparent;
+    color: var(--cms-text-muted);
+    font-size: 12px;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.eg-pg:hover:not(:disabled) {
+    background: var(--cms-card-hover);
+    color: var(--cms-text);
+}
+
+.eg-pg.active {
+    background: var(--cms-accent);
+    color: #fff;
+    border-color: var(--cms-accent);
+}
+
+.eg-pg:disabled {
+    opacity: .3;
+    cursor: not-allowed;
+}
+
+.eg-pg-ellipsis {
+    color: var(--cms-text-dim);
+    padding: 0 4px;
+    font-size: 12px;
+}
+
+/* ── Density Variants ── */
+.eg-compact .eg-table thead th {
+    padding: 6px 10px;
+    font-size: 10px;
+}
+
+.eg-compact .eg-table tbody td {
+    padding: 5px 10px;
+    font-size: 12.5px;
+}
+
+.eg-compact .eg-finput {
+    padding: 3px 6px;
+    font-size: 11px;
+}
+
+.eg-comfortable .eg-table thead th {
+    padding: 14px 18px;
+}
+
+.eg-comfortable .eg-table tbody td {
+    padding: 16px 18px;
+    font-size: 14px;
+}
+
+/* ── Action Column ──
+   Pinned to the right edge, not just placed last. A grid with enough columns to
+   need horizontal scrolling (the media library, with its full-URL column, is one)
+   otherwise parks Edit/Delete past the right edge of the viewport, where they are
+   not merely awkward to reach but genuinely unclickable until someone thinks to
+   scroll a table sideways. Row actions are the one column that must never be the
+   part that scrolls away. */
+.eg-th-actions,
+.eg-td-actions {
+    position: sticky;
+    right: 0;
+    z-index: 2;
+}
+
+.eg-th-actions {
+    width: 1px; /* shrink to content */
+    white-space: nowrap;
+    text-align: right;
+    background: var(--cms-surface, var(--cms-card));
+}
+
+.eg-td-actions {
+    white-space: nowrap;
+    text-align: right;
+    padding-right: 10px !important;
+    /* Opaque, or the columns sliding underneath show through the buttons. */
+    background: var(--cms-card);
+}
+
+.eg-data-row:hover .eg-td-actions {
+    background: var(--cms-hover, var(--cms-card));
+}
+
+/* Only the hover-reveal is dropped once the column can overlap scrolled content:
+   an invisible button over other columns is worse than a visible one. */
+.eg-td-actions .btn-cms {
+    opacity: 1;
+}
+
+/* ── Inline Editing ── */
+.eg-data-row.eg-editing td {
+    background: rgba(99, 102, 241, .06) !important;
+}
+
+.eg-data-row.eg-modified td {
+    background: rgba(251, 191, 36, .06) !important;
+    border-left: 3px solid var(--cms-warning);
+}
+
+.eg-data-row.eg-modified td:first-child {
+    border-left: 3px solid var(--cms-warning);
+}
+
+.eg-edit-input {
+    width: 100%;
+    padding: 4px 8px;
+    background: var(--cms-card);
+    border: 1px solid var(--cms-accent);
+    border-radius: var(--radius-sm);
+    color: var(--cms-text);
+    font-size: 12.5px;
+    font-family: inherit;
+    transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.eg-edit-input:focus {
+    outline: none;
+    border-color: var(--cms-accent);
+    box-shadow: 0 0 0 2px var(--cms-accent-light);
+}
+
+.eg-edit-input option {
+    background: var(--cms-card);
+}
+
+.eg-edit-toggle {
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.eg-edit-toggle input[type="checkbox"] {
+    accent-color: var(--cms-accent);
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+.eg-edit-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--cms-text-dim);
+    cursor: pointer;
+    font-size: 14px;
+    transition: all var(--transition);
+    opacity: 0;
+}
+
+.eg-data-row:hover .eg-edit-btn,
+.eg-editing .eg-edit-btn {
+    opacity: 1;
+}
+
+.eg-edit-btn:hover {
+    background: var(--cms-card-hover);
+    color: var(--cms-accent);
+    border-color: var(--cms-border);
+}
+
+.eg-edit-btn.eg-edit-done {
+    color: var(--cms-success, #22c55e);
+    opacity: 1;
+}
+
+.eg-edit-btn.eg-edit-done:hover {
+    background: rgba(34, 197, 94, .1);
+    color: var(--cms-success, #22c55e);
+    border-color: var(--cms-success, #22c55e);
+}
+
+.eg-edit-btn.eg-edit-cancel {
+    color: var(--cms-danger);
+    opacity: 1;
+}
+
+.eg-edit-btn.eg-edit-cancel:hover {
+    background: rgba(239, 68, 68, .1);
+    color: var(--cms-danger);
+    border-color: var(--cms-danger);
+}
+
+.eg-pending-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    background: rgba(251, 191, 36, .12);
+    color: var(--cms-warning);
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.eg-pending-badge i {
+    font-size: 12px;
+}
+
+.eg-tbtn-save {
+    color: var(--cms-success, #22c55e) !important;
+    border-color: var(--cms-success, #22c55e) !important;
+}
+
+.eg-tbtn-save:hover {
+    background: rgba(34, 197, 94, .12) !important;
+}
+
+.eg-tbtn-discard {
+    color: var(--cms-danger) !important;
+    border-color: var(--cms-danger) !important;
+}
+
+.eg-tbtn-discard:hover {
+    background: rgba(239, 68, 68, .12) !important;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .eg-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .eg-toolbar-start,
+    .eg-toolbar-end {
+        flex-wrap: wrap;
+    }
+
+    .eg-search {
+        max-width: 100%;
+    }
+
+    .eg-footer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}

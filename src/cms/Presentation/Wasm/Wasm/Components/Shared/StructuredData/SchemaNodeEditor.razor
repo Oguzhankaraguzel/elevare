@@ -1,0 +1,416 @@
+@using System.Text.Json.Nodes
+@using Domain.Entities.StructuredData
+
+@* Edits ONE node of the graph. Renders itself recursively for nested entities
+   (an Article's author, a LocalBusiness's address), so the same code handles any
+   depth the data happens to have instead of special-casing the first level. *@
+
+@if (Template is not null)
+{
+    @foreach (SchemaProperty property in Template.Properties)
+    {
+        <div class="sd-field">
+            <label class="cms-label">
+                @property.Label
+                @if (property.Recommended)
+                {
+                    <span class="sd-recommended" title="@L["StructuredData_RecommendedHint"]">@L["StructuredData_Recommended"]</span>
+                }
+            </label>
+
+            @* The value's own shape decides first. The catalogue calls a logo and a
+               language a single value, but the draft writes an ImageObject and a list
+               of languages there — shown as a line of JSON, and a single keystroke in
+               it saved the whole thing back as a quoted string no search engine reads
+               as a logo. An object is edited as an object, a list as a list. *@
+            @if (!IsStructuredKind(property.Kind) && Node[property.Name] is JsonObject shaped)
+            {
+                <div class="sd-entity-body">
+                    <SchemaNodeEditor Node="shaped" Template="SchemaCatalog.Find(SchemaGraph.TypeOf(shaped))" OnChanged="OnChanged" />
+                </div>
+            }
+            else if (!IsStructuredKind(property.Kind) && Node[property.Name] is JsonArray objects && objects.Any(x => x is JsonObject))
+            {
+                @foreach (JsonObject item in objects.OfType<JsonObject>())
+                {
+                    <div class="sd-entity-body">
+                        <SchemaNodeEditor Node="item" Template="SchemaCatalog.Find(SchemaGraph.TypeOf(item))" OnChanged="OnChanged" />
+                    </div>
+                }
+            }
+            else if (property.Kind != SchemaPropertyKind.TextList && !IsStructuredKind(property.Kind) && Node[property.Name] is JsonArray)
+            {
+                <textarea class="cms-input" rows="3" value="@ListOf(property.Name)"
+                          @onchange="e => SetList(property.Name, e)"></textarea>
+                <div class="sd-hint">@L["StructuredData_OnePerLine"]</div>
+            }
+            else
+            {
+            @switch (property.Kind)
+            {
+                case SchemaPropertyKind.LongText:
+                    <textarea class="cms-input" rows="3" value="@ScalarOf(property.Name)"
+                              @onchange="e => SetScalar(property, e)"></textarea>
+                    break;
+
+                case SchemaPropertyKind.TextList:
+                    @* One value per line: a comma would be ambiguous the moment a
+                       value legitimately contains one. *@
+                    <textarea class="cms-input" rows="3" value="@ListOf(property.Name)"
+                              @onchange="e => SetList(property.Name, e)"></textarea>
+                    break;
+
+                case SchemaPropertyKind.Entity:
+                    <div class="sd-entity">
+                        <select class="cms-input sd-entity-type" value="@EntityTypeOf(property.Name)"
+                                @onchange="e => SetEntityType(property, e)">
+                            <option value="">@L["StructuredData_NoValue"]</option>
+                            @foreach (string type in property.AcceptedTypes ?? [])
+                            {
+                                <option value="@type">@(SchemaCatalog.Find(type)?.Label ?? type)</option>
+                            }
+                        </select>
+                        @if (Node[property.Name] is JsonObject nested && SchemaGraph.TypeOf(nested) is { } nestedType)
+                        {
+                            <div class="sd-entity-body">
+                                <SchemaNodeEditor Node="nested"
+                                                  Template="SchemaCatalog.Find(nestedType)"
+                                                  OnChanged="OnChanged" />
+                            </div>
+                        }
+                    </div>
+                    break;
+
+                case SchemaPropertyKind.EntityList:
+                    @* Repeating children (FAQ questions, breadcrumb steps). Each row
+                       opens into a full editor for that item — without it, anything
+                       added here would be stuck showing its bare type forever. *@
+                    <div class="sd-entity-list">
+                        @if (Node[property.Name] is JsonArray list && list.Count > 0)
+                        {
+                            @for (int i = 0; i < list.Count; i++)
+                            {
+                                int index = i;
+                                string key = property.Name + ":" + index;
+                                bool open = _openItems.Contains(key);
+                                <div class="sd-entity-list-item">
+                                    <div class="sd-entity-list-row">
+                                        <button type="button" class="sd-entity-list-toggle"
+                                                aria-expanded="@open.ToString().ToLowerInvariant()"
+                                                @onclick="() => ToggleItem(key)">
+                                            <i class="bi @(open ? "bi-chevron-down" : "bi-chevron-right")"></i>
+                                            <span class="sd-entity-list-label">@Summarise(list[index])</span>
+                                        </button>
+                                        <button type="button" class="btn-cms btn-ghost btn-sm-cms"
+                                                title="@L["StructuredData_RemoveItem"]"
+                                                @onclick="() => RemoveFromList(property.Name, index)">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                    @if (open && list[index] is JsonObject item)
+                                    {
+                                        <div class="sd-entity-list-body">
+                                            @* The stored @type wins over the property's first
+                                               accepted type, so an item that is already a
+                                               Question is not edited as if it were something else. *@
+                                            <SchemaNodeEditor Node="item"
+                                                              Template="TemplateForItem(item, property)"
+                                                              OnChanged="OnChanged" />
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        }
+                        else
+                        {
+                            <span class="sd-empty">@L["StructuredData_ListEmpty"]</span>
+                        }
+                        <button type="button" class="btn-cms btn-ghost btn-sm-cms"
+                                @onclick="() => AddToList(property)">
+                            <i class="bi bi-plus-lg"></i> @L["StructuredData_AddItem"]
+                        </button>
+                    </div>
+                    break;
+
+                default:
+                    <div class="sd-scalar">
+                        <input class="cms-input" type="@InputTypeFor(property.Kind)" value="@ScalarOf(property.Name)"
+                               @onchange="e => SetScalar(property, e)" />
+                        @* An image address gets a small window on the image, so a wrong
+                           picture is noticed here and not in a rich result. *@
+                        @if (ImagePreview(ScalarOf(property.Name)) is { } image)
+                        {
+                            <a class="sd-thumb" href="@image" target="_blank" rel="noopener" title="@image">
+                                <span style="background-image:url('@image')"></span>
+                            </a>
+                        }
+                    </div>
+                    break;
+            }
+            }
+
+            @if (!string.IsNullOrWhiteSpace(property.Hint))
+            {
+                <div class="sd-hint">@property.Hint</div>
+            }
+        </div>
+    }
+}
+
+@* ── Freeform rows ────────────────────────────────────────────────────────── *@
+@* Everything the catalogue does not describe: properties of an unknown type, and
+   anything the editor wants to add by hand. Values may be plain text or JSON, so
+   the full vocabulary stays reachable without the catalogue having to grow. *@
+<div class="sd-raw">
+    <div class="sd-raw-header">
+        <span>@L["StructuredData_CustomFields"]</span>
+    </div>
+
+    @foreach (string key in ExtraKeys())
+    {
+        <div class="sd-raw-row">
+            <input class="cms-input sd-raw-key" value="@key" readonly />
+            <textarea class="cms-input sd-raw-value" rows="1"
+                      value="@RawOf(key)" @onchange="e => SetRaw(key, e)"></textarea>
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms"
+                    title="@L["StructuredData_RemoveField"]" @onclick="() => RemoveKey(key)">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+    }
+
+    <div class="sd-raw-row">
+        <input class="cms-input sd-raw-key" placeholder="@L["StructuredData_NewFieldKey"]"
+               @bind="_newKey" @bind:event="oninput" />
+        <textarea class="cms-input sd-raw-value" rows="1" placeholder="@L["StructuredData_NewFieldValue"]"
+                  @bind="_newValue" @bind:event="oninput"></textarea>
+        <button type="button" class="btn-cms btn-ghost btn-sm-cms"
+                disabled="@string.IsNullOrWhiteSpace(_newKey)" @onclick="AddKey">
+            <i class="bi bi-plus-lg"></i>
+        </button>
+    </div>
+    <div class="sd-hint">@L["StructuredData_CustomFieldsHint"]</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public JsonObject Node { get; set; } = null!;
+
+    /// <summary>Null for a type the catalogue does not cover — only freeform rows are shown.</summary>
+    [Parameter] public SchemaTemplate? Template { get; set; }
+
+    /// <summary>Raised after any mutation so the panel can re-serialise the preview.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string _newKey = "";
+    private string _newValue = "";
+
+    /// <summary>Which list rows are expanded, keyed by "property:index".</summary>
+    private readonly HashSet<string> _openItems = [];
+
+    private void ToggleItem(string key)
+    {
+        if (!_openItems.Add(key))
+            _openItems.Remove(key);
+    }
+
+    /// <summary>
+    /// The catalogue entry to edit a list item against: what the item says it is,
+    /// falling back to what the property accepts. Null is fine — the item still
+    /// gets the freeform rows, so nothing becomes uneditable.
+    /// </summary>
+    private static SchemaTemplate? TemplateForItem(JsonObject item, SchemaProperty property)
+    {
+        string? type = SchemaGraph.TypeOf(item) ?? property.AcceptedTypes?.FirstOrDefault();
+        return type is null ? null : SchemaCatalog.Find(type);
+    }
+
+    /// <summary>
+    /// Keys present on the node that the template does not already render, so
+    /// nothing an editor wrote can become invisible just because the catalogue
+    /// has no field for it.
+    /// </summary>
+    private List<string> ExtraKeys() =>
+    [
+        .. Node
+            .Select(p => p.Key)
+            .Where(k => k is not (SchemaGraph.TypeKey or SchemaGraph.IdKey))
+            .Where(k => Template is null || Template.Properties.All(p => p.Name != k)),
+    ];
+
+    private static bool IsStructuredKind(SchemaPropertyKind kind) =>
+        kind is SchemaPropertyKind.Entity or SchemaPropertyKind.EntityList;
+
+    private static string InputTypeFor(SchemaPropertyKind kind) => kind switch
+    {
+        SchemaPropertyKind.Url => "url",
+        SchemaPropertyKind.Date => "date",
+        SchemaPropertyKind.DateTime => "datetime-local",
+        SchemaPropertyKind.Number => "number",
+        _ => "text",
+    };
+
+    private static readonly string[] ImageExtensions = [".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"];
+
+    /// <summary>The value itself when it is an image address worth previewing.</summary>
+    private static string? ImagePreview(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || value.Contains('\'', StringComparison.Ordinal))
+            return null;
+        string path = value.Trim();
+        if (Uri.TryCreate(path, UriKind.Absolute, out Uri? uri))
+            path = uri.AbsolutePath;
+        else if (!path.StartsWith('/'))
+            return null;
+        return ImageExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase)) ? value.Trim() : null;
+    }
+
+    private string ScalarOf(string name) => Node[name] switch
+    {
+        JsonValue v => v.ToString(),
+        null => "",
+        // A structured value in a scalar slot: show its JSON rather than "[object]",
+        // so the editor can at least see what is there.
+        JsonNode n => n.ToJsonString(),
+    };
+
+    private string ListOf(string name) => Node[name] is JsonArray a
+        ? string.Join('\n', a.Select(x => x?.ToString() ?? ""))
+        : ScalarOf(name);
+
+    private string RawOf(string name) => Node[name] switch
+    {
+        JsonValue v => v.ToString(),
+        null => "",
+        JsonNode n => n.ToJsonString(),
+    };
+
+    private string? EntityTypeOf(string name) =>
+        Node[name] is JsonObject o ? SchemaGraph.TypeOf(o) : "";
+
+    private async Task Notify() => await OnChanged.InvokeAsync();
+
+    private async Task SetScalar(SchemaProperty property, ChangeEventArgs e)
+    {
+        string value = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            Node.Remove(property.Name);
+        }
+        else
+        {
+            // A numeric property is stored as a JSON number, matching what the draft
+            // builder emits. Otherwise a hand-edited breadcrumb position would ship
+            // as "3" while every generated one ships as 3 — same graph, two shapes.
+            Node[property.Name] = property.Kind == SchemaPropertyKind.Number
+                && double.TryParse(value, System.Globalization.NumberStyles.Any,
+                    System.Globalization.CultureInfo.InvariantCulture, out double number)
+                ? JsonValue.Create(number)
+                : JsonValue.Create(value);
+        }
+        await Notify();
+    }
+
+    private async Task SetList(string name, ChangeEventArgs e)
+    {
+        string[] lines = (e.Value?.ToString() ?? "")
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        if (lines.Length == 0) Node.Remove(name);
+        else
+        {
+            JsonArray array = [];
+            foreach (string line in lines) array.Add(line);
+            Node[name] = array;
+        }
+        await Notify();
+    }
+
+    private async Task SetEntityType(SchemaProperty property, ChangeEventArgs e)
+    {
+        string type = e.Value?.ToString() ?? "";
+        if (string.IsNullOrWhiteSpace(type))
+        {
+            Node.Remove(property.Name);
+        }
+        else if (Node[property.Name] is JsonObject existing)
+        {
+            // Retype in place: switching author from Person to Organization should
+            // keep the name that was already typed, not silently discard it.
+            existing[SchemaGraph.TypeKey] = type;
+        }
+        else
+        {
+            Node[property.Name] = new JsonObject { [SchemaGraph.TypeKey] = type };
+        }
+        await Notify();
+    }
+
+    private async Task AddToList(SchemaProperty property)
+    {
+        JsonArray list = Node[property.Name] as JsonArray ?? [];
+        string type = property.AcceptedTypes?.FirstOrDefault() ?? "Thing";
+        list.Add(new JsonObject { [SchemaGraph.TypeKey] = type });
+        Node[property.Name] = list;
+        await Notify();
+    }
+
+    private async Task RemoveFromList(string name, int index)
+    {
+        if (Node[name] is JsonArray list && index >= 0 && index < list.Count)
+        {
+            list.RemoveAt(index);
+            if (list.Count == 0) Node.Remove(name);
+        }
+        await Notify();
+    }
+
+    private async Task RemoveKey(string key)
+    {
+        Node.Remove(key);
+        await Notify();
+    }
+
+    private async Task AddKey()
+    {
+        if (string.IsNullOrWhiteSpace(_newKey)) return;
+        Node[_newKey.Trim()] = ParseValue(_newValue);
+        _newKey = "";
+        _newValue = "";
+        await Notify();
+    }
+
+    private async Task SetRaw(string key, ChangeEventArgs e)
+    {
+        Node[key] = ParseValue(e.Value?.ToString() ?? "");
+        await Notify();
+    }
+
+    /// <summary>
+    /// Stores a typed value when the text parses as JSON, a plain string
+    /// otherwise. This is what lets a custom field hold a nested object or an
+    /// array — without it, a hand-written <c>{"@type":"Person"}</c> would be
+    /// buried in the output as a quoted string that no consumer reads as an entity.
+    /// </summary>
+    private static JsonNode? ParseValue(string text)
+    {
+        string trimmed = text.Trim();
+        if (trimmed.Length == 0) return "";
+
+        // Only attempt JSON when it actually looks structured — otherwise "123"
+        // and "true" would silently stop being the strings the editor typed.
+        bool looksStructured = trimmed[0] is '{' or '[';
+        if (!looksStructured) return trimmed;
+
+        try { return JsonNode.Parse(trimmed); }
+        catch (System.Text.Json.JsonException) { return trimmed; }
+    }
+
+    /// <summary>Short label for a list row — the item's name, or its type as a fallback.</summary>
+    private static string Summarise(JsonNode? node)
+    {
+        if (node is not JsonObject o) return node?.ToString() ?? "—";
+        string? name = o["name"]?.ToString();
+        if (!string.IsNullOrWhiteSpace(name)) return name;
+        return SchemaGraph.TypeOf(o) ?? "—";
+    }
+}

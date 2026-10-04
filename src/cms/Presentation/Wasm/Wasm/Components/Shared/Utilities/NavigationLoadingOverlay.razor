@@ -1,0 +1,41 @@
+@implements IDisposable
+@inject NavigationManager Nav
+@inject CmsLocalizer L
+
+@if (_isNavigating)
+{
+    <div class="cms-nav-loading-overlay" role="status" aria-live="polite">
+        <div class="cms-loading-card">
+            <div class="cms-loading-spinner"></div>
+            <p class="cms-loading-text">@_text</p>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isNavigating;
+    private string _text = "";
+
+    protected override void OnInitialized()
+    {
+        _text = L["Common_Loading"];
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        _isNavigating = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_isNavigating)
+        {
+            _isNavigating = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+}

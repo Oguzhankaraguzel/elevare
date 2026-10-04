@@ -1,0 +1,689 @@
+﻿@using SharedKernel.Media
+@implements IDisposable
+@inject IJSRuntime JS
+
+<div class="media-manager">
+    @* How this library is meant to be used, said where it is used — the full
+       explanation (sizes, compression, alt text) lives in the Knowledge Base so
+       this screen doesn't have to spend its own space on it. *@
+    <div class="cms-card" style="padding:10px 14px;margin-bottom:14px;border:1px solid var(--cms-info);background:color-mix(in srgb, var(--cms-info) 8%, transparent)">
+        <div style="display:flex;align-items:center;gap:10px">
+            <i class="bi bi-info-circle-fill" style="color:var(--cms-info);font-size:15px;flex-shrink:0"></i>
+            <p style="margin:0;font-size:12.5px;color:var(--cms-text);flex:1;min-width:0">@L["Media_ResponsiveIntro"]</p>
+            <a href="/admin/knowledge-base#responsive-images" target="_blank" style="font-size:12.5px;white-space:nowrap;flex-shrink:0">@L["Media_ResponsiveMoreInfo"]</a>
+        </div>
+    </div>
+
+    @if (string.IsNullOrWhiteSpace(PublicSiteBaseUrl))
+    {
+        <div class="cms-card" style="padding:12px 14px;margin-bottom:14px;border:1px solid var(--cms-warning);background:color-mix(in srgb, var(--cms-warning) 10%, transparent)">
+            <div style="display:flex;align-items:flex-start;gap:10px">
+                <i class="bi bi-exclamation-triangle-fill" style="color:var(--cms-warning);font-size:15px;margin-top:2px;flex-shrink:0"></i>
+                <p style="margin:0;font-size:12.5px;color:var(--cms-text)">
+                    @L["Media_PublicUrlMissing"]
+                    <a href="/admin/settings">@L["Media_PublicUrlMissingLink"]</a>
+                </p>
+            </div>
+        </div>
+    }
+
+    <ElevareGrid TItem="MediaFileDto"
+                 Data="_items"
+                 Loading="_loading"
+                 Title="@L["Media_GridTitle"]"
+                 Columns="_columns"
+                 ActionTemplate="_actionTemplate"
+                 ShowImport="false"
+                 ShowRowNumbers
+                 EmptyText="@L["Media_Empty"]"
+                 PageSize="24"
+                 ServerMode
+                 TotalCount="_total"
+                 OnStateChanged="OnGridStateChanged">
+        <ToolbarEnd>
+            <button class="btn-cms btn-primary-cms" @onclick="OpenUpload">
+                <i class="bi bi-cloud-arrow-up"></i> @L["Media_UploadBtn"]
+            </button>
+        </ToolbarEnd>
+    </ElevareGrid>
+
+    @if (_showUpload)
+    {
+        <CmsModal Title="@L["Media_UploadTitle"]" IsVisible="true" OnClose="CloseUpload">
+            <Body>
+                    @* Drop zone — InputFile positioned absolutely handles both click and native drag-and-drop *@
+                    <div style="position:relative;border:2px dashed @_dropBorder;border-radius:var(--radius);background:@_dropBg;transition:border-color .2s,background .2s;min-height:150px;display:flex;align-items:center;justify-content:center;padding:24px;margin-bottom:16px;cursor:pointer;overflow:hidden"
+                         @ondragenter="OnDragEnter"
+                         @ondragleave="OnDragLeave">
+
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;pointer-events:none;text-align:center">
+                            @if (_singlePreviewLoading)
+                            {
+                                <span class="spin" style="font-size:34px">↻</span>
+                                <span style="font-size:12px;color:var(--cms-text-muted)">@L["Media_PreviewLoading"]</span>
+                            }
+                            else if (_singleFile is null)
+                            {
+                                <span style="font-size:38px">📁</span>
+                                <span style="font-weight:600;font-size:14px">@L["Media_DropHere"]</span>
+                                <span style="font-size:12px;color:var(--cms-text-muted)">@L["Media_ClickToSelect"]</span>
+                            }
+                            else
+                            {
+                                <div style="display:flex;flex-direction:column;align-items:center;gap:4px;max-width:150px">
+                                    @if (_singleFile.PreviewUrl is not null)
+                                    {
+                                        <img src="@_singleFile.PreviewUrl" style="max-height:88px;max-width:140px;border-radius:var(--radius-sm);object-fit:contain" alt="" />
+                                    }
+                                    else
+                                    {
+                                        <span style="font-size:34px">@GetFileIcon(_singleFile.File.ContentType)</span>
+                                    }
+                                    <span style="font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px">@_singleFile.File.Name</span>
+                                    <span style="font-size:10px;color:var(--cms-text-muted)">@FormatFileSize(_singleFile.File.Size)</span>
+                                </div>
+                                <span style="font-size:11px;color:var(--cms-accent)">@L["Media_ChangeFile"]</span>
+                            }
+                        </div>
+
+                        <InputFile OnChange="HandleSingleFileSelected"
+                                   style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%" />
+                    </div>
+                    <p style="margin:-6px 0 14px;font-size:12px;color:var(--cms-text-muted)">@L["Media_UploadHint"]</p>
+
+                <div class="form-group">
+                    <label class="cms-label">@L["Media_TitleLabel"]</label>
+                    <input @bind="_uploadTitle" placeholder="@L["Media_TitlePlaceholder"]" class="cms-input" />
+                </div>
+                <div class="form-group">
+                    <label class="cms-label">@L["Media_AltLabel"]</label>
+                    <input @bind="_uploadAlt" placeholder="@L["Media_AltPlaceholder"]" class="cms-input" />
+                    <div style="font-size:11px;color:var(--cms-text-muted);margin-top:4px">@L["Media_AltHint"]</div>
+                </div>
+            </Body>
+            <Footer>
+                <button class="btn-cms btn-ghost" @onclick="CloseUpload">@L["Media_Cancel"]</button>
+                <button class="btn-cms btn-primary-cms" @onclick="UploadFile" disabled="@(!CanUpload || _isUploading)">
+                    @if (_isUploading) { <span class="spin" style="display:inline-block;margin-right:6px">↻</span> }
+                    @L["Media_Upload"]
+                </button>
+            </Footer>
+        </CmsModal>
+    }
+
+    @* Edit window — opened when a row's edit button is clicked *@
+    @if (_editingId is not null && _editingItem is not null)
+    {
+        <CmsModal Title="@L["Media_EditTitle"]" IsVisible="true" OnClose="CancelEdit" Size="lg">
+            <Body>
+                    <div style="display:flex;gap:16px;margin-bottom:20px;padding:16px;background:var(--cms-bg);border-radius:var(--radius);border:1px solid var(--cms-border)">
+                        <div style="width:80px;height:80px;flex-shrink:0;border-radius:var(--radius-sm);overflow:hidden;background:var(--cms-card);border:1px solid var(--cms-border);display:flex;align-items:center;justify-content:center">
+                            @if (_editingItem.MediaType == MediaType.Image)
+                            {
+                                <img src="@_editingItem.FilePath" style="width:100%;height:100%;object-fit:contain" alt="" />
+                            }
+                            else
+                            {
+                                <span style="font-size:32px">@GetFileIcon(_editingItem.MimeType)</span>
+                            }
+                        </div>
+                        <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;gap:8px 20px;font-size:12px;align-content:start">
+                            <div>
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_OriginalName"]</div>
+                                <div style="word-break:break-all">@_editingItem.OriginalFileName</div>
+                            </div>
+                            <div>
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_MimeType"]</div>
+                                <div>@_editingItem.MimeType</div>
+                            </div>
+                            <div>
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_Size"]</div>
+                                <div>@SizeLine(_editingItem)</div>
+                            </div>
+                            @if (_editingItem.MediaType == MediaType.Image)
+                            {
+                                <div style="grid-column:1 / -1">
+                                    <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_RenditionsLabel"]</div>
+                                    <div>@RenditionSummary(_editingItem)</div>
+                                    <div style="font-size:11px;color:var(--cms-text-dim);margin-top:2px">@L["Media_RenditionsHint"]</div>
+                                </div>
+                            }
+                            <div>
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_MediaType"]</div>
+                                <div><span class="badge-cms @GetMediaTypeBadge(_editingItem.MediaType)">@_editingItem.MediaType</span></div>
+                            </div>
+                            <div>
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_UploadDate"]</div>
+                                <div>@_editingItem.CreateDate.ToString("dd MMMM yyyy HH:mm", System.Globalization.CultureInfo.CurrentUICulture)</div>
+                            </div>
+                            <div style="grid-column:1 / -1">
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_FilePath"]</div>
+                                <div style="font-size:11px;color:var(--cms-text-dim);word-break:break-all">@_editingItem.FilePath</div>
+                            </div>
+                            <div style="grid-column:1 / -1">
+                                <div style="color:var(--cms-text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em;font-size:10px;margin-bottom:2px">@L["Media_FullUrl"]</div>
+                                <div style="display:flex;align-items:center;gap:8px">
+                                    <div style="font-size:11px;color:var(--cms-text-dim);word-break:break-all;flex:1">@AbsoluteUrl(_editingItem.FilePath)</div>
+                                    <button type="button" class="btn-cms btn-ghost btn-sm-cms btn-icon" data-copy-text="@AbsoluteUrl(_editingItem.FilePath)" title="@L["Media_CopyFullUrl"]">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="cms-label">@L["Media_TitleLabel"]</label>
+                        <input @bind="_editTitle" placeholder="@L["Media_TitlePlaceholder"]" class="cms-input" />
+                    </div>
+                    <div class="form-group">
+                        <label class="cms-label">@L["Media_AltLabel"]</label>
+                        <input @bind="_editAlt" placeholder="@L["Media_AltPlaceholder"]" class="cms-input" />
+                        <div style="font-size:11px;color:var(--cms-text-muted);margin-top:4px">@L["Media_AltHint"]</div>
+                    </div>
+            </Body>
+            <Footer>
+                <button class="btn-cms btn-ghost" @onclick="CancelEdit">@L["Media_Cancel"]</button>
+                <button class="btn-cms btn-primary-cms" @onclick="SaveEdit">@L["Media_Save"]</button>
+            </Footer>
+        </CmsModal>
+    }
+</div>
+
+
+@code {
+    private List<MediaFileDto> _items = new();
+    private bool _loading = true;
+    private int _page = 1;
+    private int _pageSize = 24;
+    private int _total;
+    private string? _search;
+    private string? _sortBy;
+    private bool _sortDescending = true;
+    private MediaType? _mediaTypeFilter;
+    private bool _grouping;
+
+    /// <summary>How many rows to pull in one go while the grid is grouping.</summary>
+    private const int GroupingFetchLimit = 500;
+
+    private int? _editingId;
+    private MediaFileDto? _editingItem;
+    private string? _editTitle;
+    private string? _editAlt;
+
+    private bool _showUpload;
+    private bool _isUploading;
+    private SelectedUpload? _singleFile;
+    private string? _uploadTitle;
+    private string? _uploadAlt;
+
+    /// <summary>One file staged in the upload dialog, with its preview if it has one.</summary>
+    private sealed record SelectedUpload(IBrowserFile File, byte[]? Bytes, string? PreviewUrl);
+    private int _dragDepth;
+    private bool _isDragOver => _dragDepth > 0;
+    private string _dropBorder => _isDragOver ? "var(--cms-accent)" : "var(--cms-border)";
+    private string _dropBg    => _isDragOver ? "var(--cms-accent-light)" : "var(--cms-bg)";
+    private readonly long _maxUploadBytes = 10_000_000;
+
+    /// <summary>
+    /// A real photo's preview is a synchronous read-into-memory plus a base64 encode
+    /// (see <see cref="TryReadPreviewAsync"/>) — slow enough on a multi-megabyte
+    /// camera photo that the drop zone would otherwise sit blank right after
+    /// picking a file, before <see cref="_singleFile"/> has anything to show.
+    /// </summary>
+    private bool _singlePreviewLoading;
+
+    private bool CanUpload => _singleFile is not null;
+
+    private List<GridColumnDef<MediaFileDto>> _columns = [];
+    private RenderFragment<MediaFileDto>? _actionTemplate;
+
+    private CancellationTokenSource? _loadCts;
+
+    private const string PublicSiteBaseUrlKey = "Advanced.PublicSiteBaseUrl";
+
+    /// <summary>
+    /// The public site's address, read once so "copy link" can hand out the URL a
+    /// visitor would use rather than the admin panel's. Empty until an operator
+    /// fills it in on the Site Settings page, which is what
+    /// <c>Media_PublicUrlMissing</c> warns about.
+    /// </summary>
+    private string? PublicSiteBaseUrl { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        BuildGridColumns();
+
+        try
+        {
+            (await Sender.Send(new GetSiteSettingsQuery())).Match(
+                settings => PublicSiteBaseUrl = settings.FirstOrDefault(s => s.Key == PublicSiteBaseUrlKey)?.Value,
+                // Not worth a toast: the only consequence is that copied links fall
+                // back to the CMS host, and the banner already says so.
+                _ => { });
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
+
+        await Load();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<MediaFileDto>
+            {
+                PropertyName  = "Preview",
+                Title         = L["Media_ColPreview"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.FilePath,
+                CellTemplate  = PreviewTemplate,
+                Sortable      = false,
+                Filterable    = false,
+                Groupable     = false,
+                Exportable    = false,
+                Width         = "70px",
+            },
+            new GridColumnDef<MediaFileDto>
+            {
+                PropertyName  = "FileName",
+                Title         = L["Media_ColFileName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.Title ?? r.FileName,
+                CellTemplate  = FileInfoTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<MediaFileDto>
+            {
+                // The one URL a file has, with a copy button right in the row; the
+                // export carries it too, since Exportable columns must also be
+                // Visible and this is the only column that has it.
+                PropertyName  = "FullUrl",
+                Title         = L["Media_ColFullUrl"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => AbsoluteUrl(r.FilePath),
+                CellTemplate  = FullUrlTemplate,
+                Sortable      = false,
+                Filterable    = false,
+                Groupable     = false,
+                Width         = "230px",
+            },
+            new GridColumnDef<MediaFileDto>
+            {
+                PropertyName  = "FileSize",
+                Title         = L["Media_ColSize"],
+                PropertyType  = typeof(long),
+                ValueAccessor = r => (object?)r.FileSize,
+                CellTemplate  = SizeTemplate,
+                Sortable      = true,
+                Filterable    = false,
+                Width         = "100px",
+                Align         = TextAlign.Right,
+            },
+            new GridColumnDef<MediaFileDto>
+            {
+                PropertyName  = "MediaType",
+                Title         = L["Media_ColType"],
+                PropertyType  = typeof(MediaType),
+                ValueAccessor = r => (object?)r.MediaType,
+                CellTemplate  = TypeBadgeTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "110px",
+                Align         = TextAlign.Center,
+            },
+            new GridColumnDef<MediaFileDto>
+            {
+                PropertyName  = "CreateDate",
+                Title         = L["Media_ColDate"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = r => (object?)r.CreateDate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "120px",
+                Format        = "dd MMM yyyy",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    // ── Renditions ───────────────────────────────────────────────────────────
+    /// <summary>
+    /// "WebP · 480–1920 px" — what the CMS derived from an image, in one phrase.
+    /// Read from the row's Renditions JSON (see SharedKernel.Media.ImageRenditions);
+    /// an image the backfill has not reached yet reads as "none yet".
+    /// </summary>
+    private string RenditionSummary(MediaFileDto f)
+    {
+        IReadOnlyList<ImageRendition> items = ImageRenditions.Parse(f.Renditions);
+        if (items.Count == 0) return L["Media_RenditionsNone"];
+        bool webp = items.Any(r => r.WebpPath is not null);
+        string range = items.Count == 1
+            ? $"{items[0].Width} px"
+            : $"{items[0].Width}–{items[^1].Width} px";
+        return string.Format(L["Media_RenditionsSummary"], webp ? "WebP · " : "", items.Count, range);
+    }
+
+    // ── Cell templates ─────────────────────────────────────────────────────
+    private static RenderFragment<MediaFileDto> PreviewTemplate => f => __builder =>
+    {
+        <div style="display:flex;align-items:center;gap:4px">
+            <div style="width:48px;height:48px;border-radius:var(--radius-sm);overflow:hidden;background:var(--cms-bg);border:1px solid var(--cms-border);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+                @if (f.MediaType == MediaType.Image)
+                {
+                    <img src="@f.FilePath" style="width:100%;height:100%;object-fit:cover" alt="@f.AltText" loading="lazy" />
+                }
+                else
+                {
+                    <span style="font-size:22px">@GetFileIcon(f.MimeType)</span>
+                }
+            </div>
+
+        </div>
+    };
+
+    private RenderFragment<MediaFileDto> FileInfoTemplate => f => __builder =>
+    {
+        <div>
+            <div style="font-weight:500;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:340px" title="@f.Title">
+                @(f.Title ?? f.FileName)
+            </div>
+            <div style="font-size:11px;color:var(--cms-text-muted);margin-top:3px">
+                @f.OriginalFileName
+            </div>
+            @if (f.Width.HasValue && f.Height.HasValue)
+            {
+                <div style="font-size:10px;color:var(--cms-text-dim);margin-top:1px">
+                    @f.Width × @f.Height px
+                    @if (ImageRenditions.Parse(f.Renditions).Count > 0)
+                    {
+                        <span class="badge-cms badge-info" style="margin-left:6px;font-size:9.5px;padding:1px 6px" title="@L["Media_RenditionsLabel"]"><i class="bi bi-magic"></i> WebP</span>
+                    }
+                </div>
+            }
+        </div>
+    };
+
+    private static RenderFragment<MediaFileDto> SizeTemplate => f => __builder =>
+    {
+        <span style="font-size:12px;color:var(--cms-text-muted)">@FormatFileSize(f.FileSize)</span>
+    };
+
+    private static RenderFragment<MediaFileDto> TypeBadgeTemplate => f => __builder =>
+    {
+        <span class="badge-cms @GetMediaTypeBadge(f.MediaType)">@f.MediaType</span>
+    };
+
+    private RenderFragment<MediaFileDto> FullUrlTemplate => f => __builder =>
+    {
+        <button type="button" class="btn-cms btn-ghost btn-sm-cms"
+                data-copy-text="@AbsoluteUrl(f.FilePath)"
+                title="@AbsoluteUrl(f.FilePath)"
+                style="font-size:11px;padding:2px 8px">
+            <i class="bi bi-clipboard"></i> @L["Media_CopyFullUrl"]
+        </button>
+    };
+
+    private RenderFragment<MediaFileDto> ActionButtons => f => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button type="button" class="btn-cms btn-ghost btn-sm-cms btn-icon" data-copy-text="@AbsoluteUrl(f.FilePath)" title="@L["Media_CopyFullUrl"]">
+                <i class="bi bi-link-45deg"></i>
+            </button>
+            <button class="btn-cms btn-ghost btn-sm-cms btn-icon" @onclick="() => StartEdit(f)" title="@L["Media_EditBtn"]">
+                <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn-cms btn-danger-cms btn-sm-cms btn-icon" @onclick="() => Delete(f.Id)" title="@L["Media_DeleteBtn"]">
+                <i class="bi bi-trash3"></i>
+            </button>
+        </div>
+    };
+
+    // ── Grid state change handler (server-mode pagination/filter) ──────────
+    // Everything the grid reports has to be carried through to the query. This used
+    // to take only Page/PageSize and send Search: null, which meant searching,
+    // filtering and sorting silently applied to the 24 rows of the current page
+    // instead of the library — a search for a file on page 3 found nothing while
+    // looking exactly like it had searched.
+    private async Task OnGridStateChanged(GridQueryState state)
+    {
+        // Grouping happens in the browser over whatever the grid is holding, so
+        // while it is on the whole library has to be in hand — otherwise the groups
+        // describe one page and quietly claim to describe everything. Capped rather
+        // than unbounded: a library past this size needs server-side grouping, not a
+        // bigger fetch.
+        _grouping = state.GroupByColumns.Count > 0;
+        _page = _grouping ? 1 : state.Page;
+        _pageSize = _grouping ? GroupingFetchLimit : state.PageSize;
+        _search = state.GlobalSearch;
+        _sortBy = state.SortProperty;
+        _sortDescending = state.SortDirection == SortDirection.Descending;
+        _mediaTypeFilter = ParseEnumFilter<MediaType>(state.ColumnFilters, "MediaType");
+        await Load();
+    }
+
+    /// <summary>
+    /// Column filters arrive as the display text the grid rendered, so both the
+    /// enum name and its localized label have to match. An unrecognised value means
+    /// "no filter" rather than "no results" — a filter the server cannot understand
+    /// must not silently empty the library.
+    /// </summary>
+    private static TEnum? ParseEnumFilter<TEnum>(IReadOnlyDictionary<string, string> filters, string key)
+        where TEnum : struct, Enum =>
+        filters.TryGetValue(key, out string? raw) && Enum.TryParse(raw, ignoreCase: true, out TEnum parsed)
+            ? parsed
+            : null;
+
+    private async Task Load()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        _loading = true;
+        try
+        {
+            Result<PagedResult<MediaFileResponse>> result = await Sender.Send(
+                new GetMediaFilesQuery(
+                    Search: _search,
+                    MediaType: _mediaTypeFilter,
+                    Page: _page,
+                    PageSize: _pageSize,
+                    SortBy: _sortBy,
+                    SortDescending: _sortDescending), ct);
+
+            result.Match(
+                success =>
+                {
+                    List<MediaFileDto> all = [.. success.Items.Select(i => new MediaFileDto(
+                        i.Id, i.FileName, i.OriginalFileName, i.FilePath, i.MimeType,
+                        i.FileSize, i.AltText, i.Title, i.MediaType,
+                        i.Width, i.Height, i.CreateDate, i.Renditions))];
+
+                    _items = all;
+                    _total = success.TotalCount;
+                },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            // request superseded by a newer one — nothing to do
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Common_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void StartEdit(MediaFileDto f)
+    {
+        _editingId      = f.Id;
+        _editingItem    = f;
+        _editTitle      = f.Title;
+        _editAlt        = f.AltText;
+    }
+
+    private void CancelEdit()
+    {
+        _editingId = null; _editingItem = null;
+        _editTitle = null; _editAlt = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (_editingId is null || _editingItem is null) return;
+        try
+        {
+            bool anyFailed = false;
+            (await Sender.Send(new UpdateMediaFileCommand(_editingId.Value, _editTitle, _editAlt)))
+                .Match(() => { }, error => { anyFailed = true; Toast.Error(L.Error(error)); });
+
+            if (!anyFailed) { Toast.Success(L["Media_Toast_Updated"]); CancelEdit(); await Load(); }
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(L["Common_LoadError"]); }
+    }
+
+    private async Task Delete(int id)
+    {
+        try
+        {
+            Result result = await Sender.Send(new DeleteMediaFileCommand(id));
+            bool succeeded = false;
+            result.Match(() => succeeded = true, error => Toast.Error(L.Error(error)));
+            if (succeeded) { Toast.Success(L["Media_Toast_Deleted"]); await Load(); }
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(L["Common_LoadError"]); }
+    }
+
+    private void OpenUpload() => _showUpload = true;
+
+    private void CloseUpload()
+    {
+        _showUpload     = false;
+        _singleFile     = null;
+        _uploadTitle    = null;
+        _uploadAlt      = null;
+        _dragDepth      = 0;
+        _singlePreviewLoading = false;
+    }
+
+    private void OnDragEnter() => _dragDepth++;
+    private void OnDragLeave() => _dragDepth = Math.Max(0, _dragDepth - 1);
+
+    private async Task HandleSingleFileSelected(InputFileChangeEventArgs e)
+    {
+        _dragDepth = 0;
+        IBrowserFile file = e.File;
+
+        _singlePreviewLoading = true;
+        try
+        {
+            (byte[]? bytes, string? preview, string? error) = await TryReadPreviewAsync(file);
+            if (error is not null) { Toast.Error(L["Media_Toast_ReadError"] + error); return; }
+
+            _singleFile = new SelectedUpload(file, bytes, preview);
+        }
+        finally { _singlePreviewLoading = false; }
+    }
+
+    private async Task UploadFile()
+    {
+        if (_singleFile is null) { Toast.Error(L["Media_Toast_SelectFile"]); return; }
+        _isUploading = true;
+        try
+        {
+            SelectedUpload selected = _singleFile;
+            Stream content = selected.Bytes is not null
+                ? new MemoryStream(selected.Bytes)
+                : OpenUploadStream(selected.File);
+
+            bool ok = false;
+            await using (content)
+            {
+                var req = new FileUploadRequest
+                {
+                    FileName    = selected.File.Name,
+                    ContentType = selected.File.ContentType,
+                    Content     = content,
+                    FileSize    = selected.File.Size,
+                    AltText     = _uploadAlt,
+                    Title       = _uploadTitle,
+                };
+
+                (await Sender.Send(new CreateMediaFileCommand(req)))
+                    .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
+            }
+
+            if (ok)
+            {
+                Toast.Success(L["Media_Toast_Uploaded"]);
+                CloseUpload();
+                await Load();
+            }
+        }
+        catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); Toast.Error(ex.Message); }
+        finally { _isUploading = false; }
+    }
+
+    // ── Absolute URL ─────────────────────────────────────────────────────────
+    // Pages embed media by its site-relative path (see MediaPickerAsset), but a URL
+    // copied out of here is going somewhere else entirely — an email, a social
+    // card, another site — where only a full address works. Built against the
+    // public site, not the CMS, so what is copied is the address visitors use.
+    private string AbsoluteUrl(string relativePath)
+    {
+        string? publicBase = PublicSiteBaseUrl;
+        return string.IsNullOrWhiteSpace(publicBase)
+            ? new Uri(new Uri(Nav.BaseUri), relativePath).ToString()
+            : $"{publicBase.TrimEnd('/')}{relativePath}";
+    }
+
+
+    /// <summary>"188,5 KB · 1920 × 1047 px" for an image, just the bytes otherwise.</summary>
+    private static string SizeLine(MediaFileDto f) =>
+        f.DimensionLabel is null ? FormatFileSize(f.FileSize) : $"{FormatFileSize(f.FileSize)} · {f.DimensionLabel} px";
+
+    // Written with if/return rather than a switch expression on purpose: relational
+    // patterns put a bare "<" at the start of a line, and the Razor parser reads that
+    // as the opening of an HTML tag inside @code. It compiles on some SDKs and fails
+    // with RZ9980/RZ1006 on others — the plain form is unambiguous everywhere.
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes < 1_024) return $"{bytes} B";
+        if (bytes < 1_048_576) return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes / 1_048_576.0:F1} MB";
+    }
+
+    private static string GetFileIcon(string mimeType) => mimeType switch
+    {
+        var m when m.StartsWith("video/") => "🎬",
+        var m when m.StartsWith("audio/") => "🎵",
+        "application/pdf"                 => "📄",
+        _                                 => "📎"
+    };
+
+    private static string GetMediaTypeBadge(MediaType mt) => mt switch
+    {
+        MediaType.Image    => "badge-info",
+        MediaType.Video    => "badge-accent",
+        MediaType.Audio    => "badge-warning",
+        _                  => "badge-neutral"
+    };
+
+    public void Dispose()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+    }
+
+    }

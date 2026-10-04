@@ -1,0 +1,162 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@* Monaco replacement for a plain code textarea (Site Codes' HTML/CSS/JS snippets).
+   Same shape as HtmlEditor.razor: renders a real <textarea> first, so the field
+   still works exactly as before if the editor script cannot load, and JS hides
+   it in favour of the Monaco canvas only once Monaco actually attaches.
+
+   The Monaco container used to be a fixed 260px regardless of how much was typed
+   into it — no drag-resize, no way to see more than a few lines at once. It now
+   ships with a resize handle (plain CSS, `resize: vertical`) for small nudges,
+   plus a fullscreen toggle for pasting or reviewing something long. Fullscreen
+   escapes the modal via `position: fixed` — the modal has no `transform` on it,
+   so that stays anchored to the viewport rather than the modal's own box.
+
+   The wrapper's own positioning has to come from a CSS class, not an inline
+   style: an inline `style="position:relative"` here previously beat the
+   `.code-editor-fullscreen{position:fixed}` rule outright (inline style always
+   wins over a stylesheet, regardless of specificity), so toggling fullscreen
+   flipped the class but the box never actually left `position:relative` —
+   `inset:20px` on a relatively-positioned box just nudges it, it doesn't
+   resize it, so the editor looked unchanged. *@
+<div class="code-editor-wrap @(_fullscreen ? "code-editor-fullscreen" : "")">
+    <textarea id="@FallbackId" class="cms-input" rows="9" placeholder="@Placeholder"
+              style="font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px"
+              @bind="Value" @bind:event="oninput" @bind:after="OnFallbackChanged"></textarea>
+    <div id="@ElementId" class="code-editor-canvas" style="display:none"></div>
+    @if (_attached)
+    {
+        <button type="button" class="btn-cms btn-ghost btn-sm-cms btn-icon code-editor-fullscreen-btn"
+                title="@(_fullscreen ? L["SiteCode_EditorExitFullscreen"] : L["SiteCode_EditorFullscreen"])" @onclick="ToggleFullscreen">
+            <i class="bi @(_fullscreen ? "bi-fullscreen-exit" : "bi-arrows-fullscreen")"></i>
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>Unique DOM id. Must be stable for the lifetime of the component — Monaco keys its instance on it.</summary>
+    [Parameter, EditorRequired] public string ElementId { get; set; } = "";
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>SiteCodeKind as a string ("Script"/"Style"/"MetaTag"/"RawHtml") — decides the Monaco language.</summary>
+    [Parameter] public string Kind { get; set; } = "RawHtml";
+
+    /// <summary>Only ever shown on the fallback textarea — Monaco has no native placeholder.</summary>
+    [Parameter] public string? Placeholder { get; set; }
+
+    private string FallbackId => $"{ElementId}-fallback";
+
+    private DotNetObjectReference<CodeEditor>? _ref;
+    private bool _attached;
+    private bool _fullscreen;
+    private string _lastKind = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ref = DotNetObjectReference.Create(this);
+            try
+            {
+                bool ok = await JS.InvokeAsync<bool>("elevareCodeEditor.attach", ElementId, Value, Kind, _ref);
+                if (ok)
+                {
+                    _attached = true;
+                    _lastKind = Kind;
+                    StateHasChanged();
+                }
+            }
+            catch (JSException ex)
+            {
+                LoggerFactory.CreateLogger(GetType()).LogWarning(ex, "Code editor could not attach; the plain textarea stays usable.");
+            }
+            return;
+        }
+
+        // The panel is reused across rows (Site Codes opens the same modal for every
+        // snippet) — a parameter change after the initial mount means "load a
+        // different row into the same editor instance", not a re-render to ignore.
+        if (_attached && Kind != _lastKind)
+        {
+            _lastKind = Kind;
+            try { await JS.InvokeVoidAsync("elevareCodeEditor.setValue", ElementId, Value ?? "", Kind); }
+            catch (JSException) { /* not attached, or already gone */ }
+        }
+    }
+
+    private async Task OnFallbackChanged()
+    {
+        // Only reachable while Monaco failed to attach — once it has, the textarea
+        // is hidden and nothing types into it.
+        if (_attached) return;
+        await ValueChanged.InvokeAsync(Value);
+    }
+
+    [JSInvokable]
+    public async Task OnContentChanged(string? content)
+    {
+        Value = content;
+        await ValueChanged.InvokeAsync(content);
+    }
+
+    private async Task ToggleFullscreen()
+    {
+        _fullscreen = !_fullscreen;
+
+        if (_fullscreen && _ref is not null)
+            await JS.InvokeVoidAsync("elevareCodeEditor.enterFullscreen", ElementId, _ref);
+        else
+            await JS.InvokeVoidAsync("elevareCodeEditor.exitFullscreen", ElementId);
+
+        // The CSS class switch resizes the container in the same frame Monaco's
+        // ResizeObserver callback is scheduled for, which can leave the canvas one
+        // paint behind (rendered at the old size, gray band in the corner) until
+        // something else nudges it — asking directly closes that gap.
+        await JS.InvokeVoidAsync("elevareCodeEditor.relayout", ElementId);
+    }
+
+    [JSInvokable]
+    public async Task OnFullscreenEscape()
+    {
+        _fullscreen = false;
+        await JS.InvokeVoidAsync("elevareCodeEditor.exitFullscreen", ElementId);
+        await JS.InvokeVoidAsync("elevareCodeEditor.relayout", ElementId);
+        StateHasChanged();
+    }
+
+    /// <summary>
+    /// Reads straight from Monaco. Its change event fires per edit, but a caller
+    /// about to SAVE should still prefer this over the bound value — same reasoning
+    /// as HtmlEditor.GetCurrentHtmlAsync.
+    /// </summary>
+    public async Task<string?> GetCurrentValueAsync()
+    {
+        if (!_attached) return Value;
+
+        try
+        {
+            string? value = await JS.InvokeAsync<string?>("elevareCodeEditor.getValue", ElementId);
+            if (value is not null)
+            {
+                Value = value;
+            }
+            return value ?? Value;
+        }
+        catch (JSException)
+        {
+            return Value;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("elevareCodeEditor.destroy", ElementId); }
+        catch (JSException) { /* the circuit may already be gone */ }
+        catch (InvalidOperationException) { /* prerendering / disconnected circuit */ }
+
+        _ref?.Dispose();
+    }
+}

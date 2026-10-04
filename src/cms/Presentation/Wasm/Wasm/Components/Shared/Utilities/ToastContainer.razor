@@ -1,0 +1,47 @@
+@implements IDisposable
+
+<div class="toast-container">
+    @foreach (var msg in Toast.Messages)
+    {
+        <div class="cms-toast @GetClass(msg.Type)">
+            <i class="bi @GetIcon(msg.Type)" style="font-size:18px;margin-top:1px;flex-shrink:0;color:@GetColor(msg.Type)"></i>
+            <span style="flex:1;font-size:13.5px">@msg.Text</span>
+        </div>
+    }
+</div>
+
+@code {
+    private Func<Task>? _handler;
+
+    protected override void OnInitialized()
+    {
+        _handler = () => InvokeAsync(StateHasChanged);
+        Toast.OnChange += _handler;
+    }
+
+    public void Dispose() => Toast.OnChange -= _handler;
+
+    private static string GetClass(ToastType t) => t switch
+    {
+        ToastType.Success => "success",
+        ToastType.Error   => "error",
+        ToastType.Warning => "warning",
+        _                 => "info"
+    };
+
+    private static string GetIcon(ToastType t) => t switch
+    {
+        ToastType.Success => "bi-check-circle-fill",
+        ToastType.Error   => "bi-x-circle-fill",
+        ToastType.Warning => "bi-exclamation-triangle-fill",
+        _                 => "bi-info-circle-fill"
+    };
+
+    private static string GetColor(ToastType t) => t switch
+    {
+        ToastType.Success => "var(--cms-success)",
+        ToastType.Error   => "var(--cms-danger)",
+        ToastType.Warning => "var(--cms-warning)",
+        _                 => "var(--cms-info)"
+    };
+}

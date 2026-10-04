@@ -1,0 +1,361 @@
+﻿@page "/admin/roles"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Roles"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Roles"]</h1>
+    <p>@L["Roles_Subtitle"]</p>
+</div>
+
+@if (_loading)
+{
+    <div style="display:flex;justify-content:center;padding:40px;color:var(--cms-text-muted)">
+        <i class="bi bi-arrow-clockwise spin" style="font-size:24px"></i>
+    </div>
+}
+else
+{
+    <div class="cms-card" style="margin-bottom:16px">
+        <div style="display:flex;gap:8px;align-items:flex-end">
+            <div class="form-group" style="flex:1;margin:0">
+                <label class="cms-label">@L["Roles_NewRoleLabel"]</label>
+                <input @bind="_newRoleName" @bind:event="oninput" class="cms-input" placeholder="@L["Roles_NewRoleLabel"]" />
+            </div>
+            <button class="btn-cms btn-primary-cms" @onclick="CreateRole" disabled="@(_creating || _newRoleName.IsNullOrWhiteSpace())">
+                @if (_creating)
+                {
+                    <i class="bi bi-arrow-clockwise spin"></i>
+                }
+                else
+                {
+                    <i class="bi bi-plus-lg"></i>
+                }
+                @L["Roles_CreateBtn"]
+            </button>
+        </div>
+    </div>
+
+    <ElevareGrid TItem="RoleResponse"
+                 Data="_roles"
+                 Loading="_loading"
+                 Title="@L["Nav_Roles"]"
+                 Columns="_columns"
+                 ActionTemplate="_actionTemplate"
+                 ShowGroupPanel="false"
+                 ShowImport="false"
+                 ShowRowNumbers
+                 EmptyText="@L["Roles_Empty"]"
+                 PageSize="20" />
+}
+
+@* ── Permission matrix ────────────────────────────────────────────────────── *@
+<CmsModal Title="@(_permTarget is null ? "" : string.Format(L["Roles_PermissionsTitle"], _permTarget.Name))"
+          IsVisible="_showPermissions" OnClose="() => _showPermissions = false" Size="lg">
+    <Body>
+        @if (_permTarget is not null)
+        {
+            @foreach (var group in PermissionGroups)
+            {
+                <div style="margin-bottom:16px">
+                    <div style="font-weight:600;color:var(--cms-text);margin-bottom:6px">@GroupLabel(group.Key)</div>
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px">
+                        @foreach (string key in group.Value)
+                        {
+                            <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:var(--cms-text)">
+                                <input type="checkbox" checked="@_selectedPermissions.Contains(key)"
+                                       @onchange="e => TogglePermission(key, (bool)e.Value!)" />
+                                @PermissionLabel(key)
+                            </label>
+                        }
+                    </div>
+                </div>
+            }
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showPermissions = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="SavePermissions" disabled="@_savingPermissions">
+            @if (_savingPermissions)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-check-lg"></i>
+            }
+            @L["Roles_SaveBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Delete confirmation ──────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Roles_DeleteBtn"]" IsVisible="_showDelete" OnClose="() => _showDelete = false" Size="sm">
+    <Body>
+        <p style="color:var(--cms-text)">@string.Format(L["Roles_DeleteConfirm"], _deleteTarget?.Name ?? "")</p>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDelete = false">@L["Pages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmDelete" disabled="@_deleting">
+            @if (_deleting)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-trash3"></i>
+            }
+            @L["Roles_DeleteBtn"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<RoleResponse> _roles = [];
+    private bool _loading = true;
+
+    private string _newRoleName = "";
+    private bool _creating;
+
+    private bool _showPermissions;
+    private RoleResponse? _permTarget;
+    private HashSet<string> _selectedPermissions = [];
+    private bool _savingPermissions;
+
+    private bool _showDelete;
+    private RoleResponse? _deleteTarget;
+    private bool _deleting;
+
+    private List<GridColumnDef<RoleResponse>> _columns = [];
+    private RenderFragment<RoleResponse>? _actionTemplate;
+
+    private static readonly Dictionary<string, string[]> PermissionGroups = new()
+    {
+        ["Pages"] = [PermissionKeys.PagesCreate, PermissionKeys.PagesEdit, PermissionKeys.PagesDelete, PermissionKeys.PagesPublish],
+        ["Templates"] = [PermissionKeys.TemplatesCreate, PermissionKeys.TemplatesEdit, PermissionKeys.TemplatesDelete],
+        ["Media"] = [PermissionKeys.MediaUpload, PermissionKeys.MediaDelete],
+        ["System"] = [PermissionKeys.LanguagesManage, PermissionKeys.UsersManage, PermissionKeys.RolesManage, PermissionKeys.SiteSettingsManage, PermissionKeys.RedirectsManage],
+        ["Secrets"] = [PermissionKeys.SecretsManage],
+        ["Forms"] = [PermissionKeys.FormsViewSubmissions, PermissionKeys.FormsManageActions],
+        ["BulkEdit"] = [PermissionKeys.BulkEditApply, PermissionKeys.BulkEditRevert],
+        ["Trash"] = [PermissionKeys.TrashView, PermissionKeys.TrashRestore],
+        ["CustomCode"] = [PermissionKeys.CustomCodeAuthor],
+        ["Workflow"] = [PermissionKeys.WorkflowsManage, PermissionKeys.ApprovalsDecide],
+        ["Operations"] = [PermissionKeys.HangfireAccess, PermissionKeys.BackupCreate, PermissionKeys.CacheManage, PermissionKeys.LogsView],
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.RolesManage))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadRoles();
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<RoleResponse>
+            {
+                PropertyName  = "Name",
+                Title         = L["Roles_ColName"],
+                PropertyType  = typeof(string),
+                ValueAccessor = r => r.Name,
+                CellTemplate  = NameTemplate,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<RoleResponse>
+            {
+                PropertyName  = "PermissionCount",
+                Title         = L["Roles_ColPermissionCount"],
+                PropertyType  = typeof(int),
+                ValueAccessor = r => (object?)r.Permissions.Count,
+                Sortable      = true,
+                Width         = "200px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private RenderFragment<RoleResponse> NameTemplate => r => __builder =>
+    {
+        @r.Name
+        @if (r.IsBuiltIn)
+        {
+            <span class="badge-cms badge-neutral" style="margin-left:6px">@L["Roles_BuiltIn"]</span>
+        }
+    };
+
+    private RenderFragment<RoleResponse> ActionButtons => r => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end;white-space:nowrap">
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => OpenPermissions(r)">
+                <i class="bi bi-shield-lock"></i> @L["Roles_ManagePermissionsBtn"]
+            </button>
+            @if (!r.IsBuiltIn)
+            {
+                <button class="btn-cms btn-danger-cms btn-sm-cms btn-icon" @onclick="() => OpenDelete(r)">
+                    <i class="bi bi-trash3"></i>
+                </button>
+            }
+        </div>
+    };
+
+    private async Task LoadRoles()
+    {
+        _loading = true;
+        try
+        {
+            (await Sender.Send(new GetRolesQuery())).Match(
+                list => _roles = list,
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Roles_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task CreateRole()
+    {
+        if (_newRoleName.IsNullOrWhiteSpace()) return;
+        _creating = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new CreateRoleCommand(_newRoleName.Trim())))
+                .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Roles_Created"]);
+                _newRoleName = "";
+                await LoadRoles();
+            }
+        }
+        finally { _creating = false; }
+    }
+
+    private void OpenPermissions(RoleResponse role)
+    {
+        _permTarget = role;
+        _selectedPermissions = role.Permissions.ToHashSet();
+        _showPermissions = true;
+    }
+
+    private void TogglePermission(string key, bool isChecked)
+    {
+        if (isChecked) _selectedPermissions.Add(key);
+        else _selectedPermissions.Remove(key);
+    }
+
+    private async Task SavePermissions()
+    {
+        if (_permTarget is null) return;
+        _savingPermissions = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new UpdateRolePermissionsCommand(_permTarget.Id, _selectedPermissions.ToList())))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Roles_PermissionsSaved"]);
+                _showPermissions = false;
+                _permTarget = null;
+                await LoadRoles();
+            }
+        }
+        finally { _savingPermissions = false; }
+    }
+
+    private void OpenDelete(RoleResponse role)
+    {
+        _deleteTarget = role;
+        _showDelete = true;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (_deleteTarget is null) return;
+        _deleting = true;
+        try
+        {
+            bool ok = false;
+            (await Sender.Send(new DeleteRoleCommand(_deleteTarget.Id)))
+                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+
+            if (ok)
+            {
+                Toast.Success(L["Roles_Deleted"]);
+                _showDelete = false;
+                _deleteTarget = null;
+                await LoadRoles();
+            }
+        }
+        finally { _deleting = false; }
+    }
+
+    private string GroupLabel(string group) => group switch
+    {
+        "Pages" => L["Roles_Group_Pages"],
+        "Templates" => L["Roles_Group_Templates"],
+        "Media" => L["Roles_Group_Media"],
+        "System" => L["Roles_Group_System"],
+        "Secrets" => L["Roles_Group_Secrets"],
+        "Forms" => L["Roles_Group_Forms"],
+        "BulkEdit" => L["Roles_Group_BulkEdit"],
+        "Trash" => L["Roles_Group_Trash"],
+        "CustomCode" => L["Roles_Group_CustomCode"],
+        "Workflow" => L["Roles_Group_Workflow"],
+        "Operations" => L["Roles_Group_Operations"],
+        _ => group,
+    };
+
+    private string PermissionLabel(string key) => key switch
+    {
+        PermissionKeys.PagesCreate => L["Perm_PagesCreate"],
+        PermissionKeys.PagesEdit => L["Perm_PagesEdit"],
+        PermissionKeys.PagesDelete => L["Perm_PagesDelete"],
+        PermissionKeys.PagesPublish => L["Perm_PagesPublish"],
+        PermissionKeys.TemplatesCreate => L["Perm_TemplatesCreate"],
+        PermissionKeys.TemplatesEdit => L["Perm_TemplatesEdit"],
+        PermissionKeys.TemplatesDelete => L["Perm_TemplatesDelete"],
+        PermissionKeys.MediaUpload => L["Perm_MediaUpload"],
+        PermissionKeys.MediaDelete => L["Perm_MediaDelete"],
+        PermissionKeys.LanguagesManage => L["Perm_LanguagesManage"],
+        PermissionKeys.UsersManage => L["Perm_UsersManage"],
+        PermissionKeys.RolesManage => L["Perm_RolesManage"],
+        PermissionKeys.SiteSettingsManage => L["Perm_SiteSettingsManage"],
+        PermissionKeys.RedirectsManage => L["Perm_RedirectsManage"],
+        PermissionKeys.SecretsManage => L["Perm_SecretsManage"],
+        PermissionKeys.FormsViewSubmissions => L["Perm_FormsViewSubmissions"],
+        PermissionKeys.FormsManageActions => L["Perm_FormsManageActions"],
+        PermissionKeys.BulkEditApply => L["Perm_BulkEditApply"],
+        PermissionKeys.BulkEditRevert => L["Perm_BulkEditRevert"],
+        PermissionKeys.TrashView => L["Perm_TrashView"],
+        PermissionKeys.TrashRestore => L["Perm_TrashRestore"],
+        PermissionKeys.CustomCodeAuthor => L["Perm_CustomCodeAuthor"],
+        PermissionKeys.WorkflowsManage => L["Perm_WorkflowsManage"],
+        PermissionKeys.ApprovalsDecide => L["Perm_ApprovalsDecide"],
+        PermissionKeys.HangfireAccess => L["Perm_HangfireAccess"],
+        PermissionKeys.BackupCreate => L["Perm_BackupCreate"],
+        PermissionKeys.CacheManage => L["Perm_CacheManage"],
+        PermissionKeys.LogsView => L["Perm_LogsView"],
+        _ => key,
+    };
+}

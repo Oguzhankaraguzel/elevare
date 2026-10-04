@@ -1,0 +1,250 @@
+﻿@page "/admin/logs"
+@layout CMSLayout
+
+<PageTitle>@L["Nav_Logs"]</PageTitle>
+
+<div class="page-header">
+    <h1>@L["Nav_Logs"]</h1>
+    <p>@L["Logs_Subtitle"]</p>
+</div>
+
+<ElevareGrid TItem="AppLogResponse"
+             Data="_logs"
+             Loading="_loading"
+             Title="@L["Nav_Logs"]"
+             Columns="_columns"
+             ActionTemplate="_actionTemplate"
+             ToolbarEnd="RefreshButton"
+             ShowGroupPanel="true"
+             ShowImport="false"
+             ShowRowNumbers
+             EmptyText="@L["Logs_Empty"]"
+             PageSize="50" />
+
+@* ── Detail modal ────────────────────────────────────────────────────────── *@
+<CmsModal Title="@L["Logs_DetailTitle"]" IsVisible="_showDetail" OnClose="() => _showDetail = false" Size="lg">
+    <Body>
+        @if (_detailTarget is not null)
+        {
+            <div style="margin-bottom:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+                <span class="badge-cms @LevelBadgeClass(_detailTarget.Level)">@LevelLabel(_detailTarget.Level)</span>
+                <span class="badge-cms @SourceBadgeClass(_detailTarget.Source)">@SourceLabel(_detailTarget.Source)</span>
+                <span style="font-size:12px;color:var(--cms-text-muted)">@_detailTarget.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</span>
+            </div>
+            <p style="font-weight:600;font-size:14px;color:var(--cms-text);word-break:break-word">@_detailTarget.Message</p>
+            @if (!string.IsNullOrWhiteSpace(_detailTarget.Path))
+            {
+                <div style="margin-top:8px;font-size:13px"><strong>@L["Logs_PathLabel"]:</strong> <code>@_detailTarget.Path</code></div>
+            }
+            @if (!string.IsNullOrWhiteSpace(_detailTarget.UserAgent))
+            {
+                <div style="margin-top:4px;font-size:13px;color:var(--cms-text-muted);word-break:break-word"><strong>@L["Logs_UserAgentLabel"]:</strong> @_detailTarget.UserAgent</div>
+            }
+            <div style="margin-top:14px">
+                <strong style="font-size:13px">@L["Logs_ExceptionLabel"]</strong>
+                @if (!string.IsNullOrWhiteSpace(_detailTarget.Exception))
+                {
+                    <pre style="margin-top:6px;padding:10px;background:var(--cms-bg);border-radius:8px;font-size:12px;max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word">@_detailTarget.Exception</pre>
+                }
+                else
+                {
+                    <p style="margin-top:6px;font-size:13px;color:var(--cms-text-muted)">@L["Logs_NoException"]</p>
+                }
+            </div>
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _showDetail = false">@L["Logs_DetailClose"]</button>
+    </Footer>
+</CmsModal>
+
+@code {
+    private List<AppLogResponse> _logs = [];
+    private bool _loading = true;
+    private bool _showDetail;
+    private AppLogResponse? _detailTarget;
+
+    private CancellationTokenSource? _loadCts;
+
+    private List<GridColumnDef<AppLogResponse>> _columns = [];
+    private RenderFragment<AppLogResponse>? _actionTemplate;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!UserContext.HasPermission(PermissionKeys.LogsView))
+        {
+            Nav.NavigateTo("/", replace: true);
+            return;
+        }
+
+        BuildGridColumns();
+        await LoadLogs(forceReload: true);
+    }
+
+    private void BuildGridColumns()
+    {
+        _columns =
+        [
+            new GridColumnDef<AppLogResponse>
+            {
+                PropertyName  = "CreatedAtUtc",
+                Title         = L["Logs_ColDate"],
+                PropertyType  = typeof(DateTime),
+                ValueAccessor = l => (object?)l.CreatedAtUtc,
+                CellTemplate  = DateTemplate,
+                Sortable      = true,
+                Width         = "160px",
+            },
+            new GridColumnDef<AppLogResponse>
+            {
+                PropertyName  = "Level",
+                Title         = L["Logs_ColLevel"],
+                PropertyType  = typeof(string),
+                ValueAccessor = l => LevelLabel(l.Level),
+                CellTemplate  = LevelTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "120px",
+            },
+            new GridColumnDef<AppLogResponse>
+            {
+                PropertyName  = "Source",
+                Title         = L["Logs_ColSource"],
+                PropertyType  = typeof(string),
+                ValueAccessor = l => SourceLabel(l.Source),
+                CellTemplate  = SourceTemplate,
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "110px",
+            },
+            new GridColumnDef<AppLogResponse>
+            {
+                PropertyName  = "Message",
+                Title         = L["Logs_ColMessage"],
+                PropertyType  = typeof(string),
+                ValueAccessor = l => l.Message,
+                Sortable      = true,
+                Filterable    = true,
+            },
+            new GridColumnDef<AppLogResponse>
+            {
+                PropertyName  = "Path",
+                Title         = L["Logs_ColPath"],
+                PropertyType  = typeof(string),
+                ValueAccessor = l => (object?)l.Path ?? "—",
+                Sortable      = true,
+                Filterable    = true,
+                Width         = "220px",
+            },
+        ];
+
+        _actionTemplate = ActionButtons;
+    }
+
+    private static RenderFragment<AppLogResponse> DateTemplate => l => __builder =>
+    {
+        <span style="font-size:13px;color:var(--cms-text-muted)">@l.CreatedAtUtc.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</span>
+    };
+
+    private RenderFragment<AppLogResponse> LevelTemplate => l => __builder =>
+    {
+        <span class="badge-cms @LevelBadgeClass(l.Level)">@LevelLabel(l.Level)</span>
+    };
+
+    private RenderFragment<AppLogResponse> SourceTemplate => l => __builder =>
+    {
+        <span class="badge-cms @SourceBadgeClass(l.Source)">@SourceLabel(l.Source)</span>
+    };
+
+    private RenderFragment<AppLogResponse> ActionButtons => l => __builder =>
+    {
+        <div style="display:flex;gap:6px;justify-content:flex-end">
+            <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => OpenDetail(l)">
+                <i class="bi bi-eye"></i> @L["Logs_DetailBtn"]
+            </button>
+        </div>
+    };
+
+    private RenderFragment RefreshButton => __builder =>
+    {
+        <button class="btn-cms btn-ghost btn-sm-cms" @onclick="() => LoadLogs(forceReload: true)" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise @(_loading ? "spin" : "")"></i> @L["Logs_RefreshBtn"]
+        </button>
+    };
+
+    private void OpenDetail(AppLogResponse l)
+    {
+        _detailTarget = l;
+        _showDetail = true;
+    }
+
+    private static string LevelBadgeClass(AppLogLevel level) => level switch
+    {
+        AppLogLevel.Critical or AppLogLevel.Error => "badge-danger",
+        AppLogLevel.Warning => "badge-warning",
+        AppLogLevel.Information => "badge-info",
+        _ => "badge-neutral",
+    };
+
+    private string LevelLabel(AppLogLevel level) => level switch
+    {
+        AppLogLevel.Trace => L["Logs_Level_Trace"],
+        AppLogLevel.Debug => L["Logs_Level_Debug"],
+        AppLogLevel.Information => L["Logs_Level_Information"],
+        AppLogLevel.Warning => L["Logs_Level_Warning"],
+        AppLogLevel.Error => L["Logs_Level_Error"],
+        AppLogLevel.Critical => L["Logs_Level_Critical"],
+        _ => level.ToString(),
+    };
+
+    private static string SourceBadgeClass(AppLogSource source) => source switch
+    {
+        AppLogSource.Client => "badge-info",
+        _ => "badge-neutral",
+    };
+
+    private string SourceLabel(AppLogSource source) => source switch
+    {
+        AppLogSource.Server => L["Logs_Source_Server"],
+        AppLogSource.Client => L["Logs_Source_Client"],
+        _ => source.ToString(),
+    };
+
+    private async Task LoadLogs(bool forceReload = false)
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        if (!forceReload && _logs.Count > 0)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            Result<PagedResult<AppLogResponse>> result = await Sender.Send(new GetAppLogsQuery(), ct);
+            result.Match(
+                success => { _logs = [.. success.Items]; },
+                error => Toast.Error(L.Error(error)));
+        }
+        catch (OperationCanceledException)
+        {
+            // request was cancelled - nothing to do
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Logs_ErrorLoad"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

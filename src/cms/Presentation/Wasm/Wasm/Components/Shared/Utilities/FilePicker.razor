@@ -1,0 +1,199 @@
+@implements IDisposable
+
+@* A grid of thumbnails, not a table: this picks a picture, and a picture is found
+   by looking at it. One click chooses (single select) — the table it replaces made
+   the row's checkbox select and hid the confirming button below the fold of a
+   window that ran off the screen, so a click there seemed to do nothing. *@
+<div class="file-picker">
+    <div class="fp-toolbar">
+        <div class="fp-search">
+            <i class="bi bi-search"></i>
+            <input class="cms-input" type="search" placeholder="@L["FilePicker_SearchPlaceholder"]"
+                   value="@_search" @oninput="OnSearchInput" />
+        </div>
+        <span class="fp-hint">@(MultiSelect ? L["FilePicker_HintMulti"] : L["FilePicker_Hint"])</span>
+    </div>
+
+    @if (_loading && _items.Count == 0)
+    {
+        <div class="fp-empty"><span class="spinner-border spinner-border-sm"></span></div>
+    }
+    else if (_items.Count == 0)
+    {
+        <div class="fp-empty">@L["Media_Empty"]</div>
+    }
+    else
+    {
+        <div class="fp-grid">
+            @foreach (MediaFileDto item in _items)
+            {
+                bool selected = _selectedIds.Contains(item.Id);
+                string label = string.IsNullOrWhiteSpace(item.AltText) ? item.FileName : item.AltText;
+                <button type="button" class="fp-tile @(selected ? "fp-tile-selected" : "")"
+                        title="@item.FileName" aria-pressed="@(selected ? "true" : "false")"
+                        @onclick="() => Pick(item)">
+                    <span class="fp-thumb">
+                        @if (item.MediaType == MediaType.Image)
+                        {
+                            <img src="@item.FilePath" alt="@item.AltText" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="fp-icon">@GetFileIcon(item.MimeType)</span>
+                        }
+                    </span>
+                    <span class="fp-label">@label</span>
+                </button>
+            }
+        </div>
+        @if (_items.Count < _total)
+        {
+            <div class="fp-more">
+                <button type="button" class="btn-cms btn-ghost" @onclick="LoadMore" disabled="@_loading">
+                    @L["FilePicker_LoadMore"]
+                </button>
+            </div>
+        }
+    }
+
+    <div class="fp-actions">
+        <button class="btn-cms" @onclick="Cancel">@L["Media_Cancel"]</button>
+        @if (MultiSelect)
+        {
+            <button class="btn-cms btn-primary-cms" @onclick="Confirm" disabled="@(_selectedIds.Count == 0)">@L["Media_SelectBtn"]</button>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool MultiSelect { get; set; }
+    /// <summary>Only images are offered — a flag, a logo — unless this is turned off.</summary>
+    [Parameter] public bool ImagesOnly { get; set; } = true;
+    [Parameter] public EventCallback<IEnumerable<(int Id, string Path)>> OnSelected { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private const int PageSize = 30;
+
+    private readonly List<MediaFileDto> _items = [];
+    private readonly HashSet<int> _selectedIds = [];
+    private bool _loading = true;
+    private int _page = 1;
+    private int _total;
+    private string? _search;
+
+    private CancellationTokenSource? _loadCts;
+    private CancellationTokenSource? _searchDelay;
+
+    protected override Task OnInitializedAsync() => Load(reset: true);
+
+    private static string GetFileIcon(string mimeType)
+    {
+        if (mimeType.StartsWith("video/", StringComparison.OrdinalIgnoreCase)) return "🎬";
+        if (mimeType.StartsWith("audio/", StringComparison.OrdinalIgnoreCase)) return "🎵";
+        if (mimeType == "application/pdf") return "📄";
+        return "📎";
+    }
+
+    // A short pause after typing, so each keystroke is not a query of its own.
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString();
+        _searchDelay?.CancelAfter(TimeSpan.Zero);
+        _searchDelay?.Dispose();
+        _searchDelay = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(300, _searchDelay.Token);
+            await Load(reset: true);
+        }
+        catch (OperationCanceledException)
+        {
+            // a newer keystroke took over
+        }
+    }
+
+    private Task LoadMore()
+    {
+        _page++;
+        return Load(reset: false);
+    }
+
+    private async Task Load(bool reset)
+    {
+        if (reset) _page = 1;
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        CancellationToken ct = _loadCts.Token;
+
+        _loading = true;
+        try
+        {
+            Result<PagedResult<MediaFileResponse>> result = await Sender.Send(
+                new GetMediaFilesQuery(
+                    Search: string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+                    MediaType: ImagesOnly ? MediaType.Image : null,
+                    Page: _page,
+                    PageSize: PageSize,
+                    SortBy: null,
+                    SortDescending: true), ct);
+
+            result.Match(
+                success =>
+                {
+                    if (reset) _items.Clear();
+                    _items.AddRange(success.Items.Select(i => new MediaFileDto(
+                        i.Id, i.FileName, i.FilePath, i.MimeType,
+                        i.FileSize, i.AltText, i.Title, i.MediaType,
+                        i.Width, i.Height, i.CreateDate)));
+                    _total = success.TotalCount;
+                },
+                error => Toast.Error(L.Error(error))
+            );
+        }
+        catch (OperationCanceledException)
+        {
+            // superseded by a newer request — nothing to do
+        }
+        catch (Exception ex)
+        {
+            LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name);
+            Toast.Error(L["Common_LoadError"]);
+        }
+        finally
+        {
+            _loading = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task Pick(MediaFileDto item)
+    {
+        if (!MultiSelect)
+        {
+            await OnSelected.InvokeAsync([(item.Id, item.FilePath)]);
+            return;
+        }
+        if (!_selectedIds.Remove(item.Id)) _selectedIds.Add(item.Id);
+    }
+
+    private async Task Confirm()
+    {
+        var selected = _items.Where(i => _selectedIds.Contains(i.Id)).Select(i => (i.Id, i.FilePath)).ToList();
+        await OnSelected.InvokeAsync(selected);
+    }
+
+    private async Task Cancel()
+    {
+        _selectedIds.Clear();
+        await OnCancel.InvokeAsync();
+    }
+
+    public void Dispose()
+    {
+        _loadCts?.CancelAfter(TimeSpan.Zero);
+        _loadCts?.Dispose();
+        _searchDelay?.CancelAfter(TimeSpan.Zero);
+        _searchDelay?.Dispose();
+    }
+}
