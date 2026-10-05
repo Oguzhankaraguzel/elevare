@@ -2,32 +2,33 @@
 
 [English](CODE_OF_CONDUCT.md) · **Türkçe**
 
-Bu metin Contributor Covenant 2.1 temel alınarak hazırlandı. İki metin arasında bir
-fark olursa İngilizce asıl metin geçerlidir.
+Bu metin Contributor Covenant 2.1 temel alınarak hazırlanmıştır. Türkçe metin ile
+İngilizce asıl metin arasında bir fark olması durumunda İngilizce metin geçerlidir.
 
 ## Sözümüz
 
-Bu topluluğun üyeleri, katkıda bulunanları ve yöneticileri olarak, herkesin
-burada tacize uğramadan yer alabilmesi için söz veriyoruz. Yaşı, vücut ölçüleri,
-görünür ya da görünmez bir engeli, etnik kökeni, cinsiyet özellikleri, cinsiyet
-kimliği ve ifadesi, deneyimi, eğitimi, sosyoekonomik durumu, uyruğu, dış görünüşü,
-ırkı, kastı, ten rengi, dini, cinsel kimliği ve yönelimi ne olursa olsun.
+Bu topluluğun üyeleri, katkıda bulunanları ve yöneticileri olarak; yaşı, vücut
+ölçüleri, görünür ya da görünmez bir engeli, etnik kökeni, cinsiyet özellikleri,
+cinsiyet kimliği ve ifadesi, deneyim düzeyi, eğitimi, sosyoekonomik durumu, uyruğu,
+dış görünüşü, ırkı, kastı, ten rengi, dini, cinsel kimliği ve yönelimi ne olursa
+olsun, herkesin bu topluluğa tacize uğramadan katılabilmesini sağlayacağımıza söz
+veriyoruz.
 
-Açık, herkesi kabul eden, farklılıklara yer veren ve sağlıklı bir topluluğa katkı
-sağlayacak şekilde davranacağımıza söz veriyoruz.
+Açık, kapsayıcı, farklılıklara değer veren ve sağlıklı bir topluluğun gelişmesine
+katkı sağlayacak şekilde davranacağımızı taahhüt ediyoruz.
 
 ## Beklediğimiz davranış
 
-Topluluğu iyi bir yer yapan davranışlara örnekler:
+Topluluğu iyi bir ortam hâline getiren davranışlara örnekler:
 
 * Başkalarına karşı anlayışlı ve nazik olmak
 * Farklı görüşlere, bakış açılarına ve deneyimlere saygı göstermek
 * Yapıcı eleştiri yapmak ve yapılan eleştiriyi olgunlukla karşılamak
 * Hatalarımızın sorumluluğunu almak, etkilenenlerden özür dilemek ve bu
   deneyimden ders çıkarmak
-* Sadece kendimiz için değil, topluluğun bütünü için en iyisini düşünmek
+* Yalnızca kendimiz için değil, topluluğun bütünü için en iyisini gözetmek
 
-Kabul etmediğimiz davranışlara örnekler:
+Kabul edilemez davranışlara örnekler:
 
 * Cinsel içerikli dil ya da görseller, her türlü cinsel ilgi ya da yakınlaşma
   girişimi
@@ -35,7 +36,7 @@ Kabul etmediğimiz davranışlara örnekler:
 * Açık ya da özel mesajla taciz
 * Başkalarının ev adresi ya da e-posta adresi gibi kişisel bilgilerini açık izinleri
   olmadan paylaşmak
-* İş ortamında makul olarak uygunsuz sayılabilecek diğer davranışlar
+* Profesyonel bir ortamda makul olarak uygunsuz kabul edilebilecek diğer davranışlar
 
 ## Uygulama sorumluluğu
 
@@ -49,19 +50,20 @@ hakkı ve sorumluluğu vardır. Uygun olduğunda bu kararların nedenini açıkl
 
 ## Kapsam
 
-Bu kurallar topluluğun tüm alanlarında geçerlidir. Bir kişi topluluğu herkese açık
-bir yerde resmî olarak temsil ettiğinde de geçerlidir. Temsil etmeye örnekler:
-resmî bir e-posta adresi kullanmak, resmî bir sosyal medya hesabından paylaşım
-yapmak, çevrim içi ya da yüz yüze bir etkinlikte görevli temsilci olarak bulunmak.
+Bu kurallar topluluğun bütün alanlarında geçerlidir. Bir kişi topluluğu herkese
+açık bir ortamda resmî olarak temsil ettiğinde de bu kurallara uymakla yükümlüdür.
+Resmî bir e-posta adresi kullanmak, resmî bir sosyal medya hesabından paylaşım
+yapmak ya da çevrim içi veya yüz yüze bir etkinlikte görevli temsilci olarak
+bulunmak, temsil örnekleridir.
 
 ## Bildirme
 
 Taciz, istismar ya da kabul edilemez başka bir davranışı, proje sahibinin GitHub
-profilindeki e-posta adresinden topluluk yöneticilerine bildirebilirsiniz. Her
-şikâyet hızlı ve adil biçimde incelenir.
+profilindeki e-posta adresi üzerinden topluluk yöneticilerine bildirebilirsiniz.
+Bütün şikâyetler hızlı ve adil bir şekilde incelenir.
 
-Tüm topluluk yöneticileri, bir olayı bildiren kişinin gizliliğine ve güvenliğine
-saygı göstermek zorundadır.
+Bütün topluluk yöneticileri, bir olayı bildiren kişinin gizliliğine ve
+güvenliğine saygı göstermekle yükümlüdür.
 
 ## Yaptırımlar
 
@@ -81,28 +83,29 @@ istenebilir.
 
 **Topluluğa etkisi**: Tek bir olayla ya da bir dizi davranışla yapılan ihlal.
 
-**Sonucu**: Davranış sürerse yaptırım uygulanacağını belirten bir uyarı. Belirli bir
-süre boyunca ilgili kişilerle, kuralları uygulayanlar dâhil, istenmeyen hiçbir
-etkileşim kurulmaz. Bu, topluluk alanlarının yanında sosyal medya gibi dış kanalları
-da kapsar. Bu şartlara uyulmazsa geçici ya da kalıcı uzaklaştırma gelebilir.
+**Sonucu**: Davranışın sürmesi hâlinde yaptırım uygulanacağını belirten bir uyarı.
+Belirli bir süre boyunca, kuralları uygulayanlar dahil olmak üzere ilgili kişilerle
+istenmeyen hiçbir etkileşim kurulamaz. Bu kısıtlama topluluk alanlarının yanı sıra
+sosyal medya gibi dış kanalları da kapsar. Bu şartlara uyulmaması geçici ya da
+kalıcı uzaklaştırmayla sonuçlanabilir.
 
 ### 3. Geçici uzaklaştırma
 
-**Topluluğa etkisi**: Topluluk kurallarının ciddi biçimde ihlali; süregelen uygunsuz
-davranış dâhil.
+**Topluluğa etkisi**: Süregelen uygunsuz davranış da dahil olmak üzere topluluk
+kurallarının ciddi biçimde ihlal edilmesi.
 
 **Sonucu**: Belirli bir süre boyunca toplulukla her türlü etkileşimden ve herkese
-açık iletişimden geçici uzaklaştırma. Bu süre içinde ilgili kişilerle, kuralları
-uygulayanlar dâhil, istenmeyen açık ya da özel hiçbir etkileşime izin verilmez. Bu
-şartlara uyulmazsa kalıcı uzaklaştırma gelebilir.
+açık iletişimden geçici olarak uzaklaştırma. Bu süre içinde, kuralları uygulayanlar
+dahil olmak üzere ilgili kişilerle istenmeyen hiçbir açık ya da özel etkileşime izin
+verilmez. Bu şartlara uyulmaması kalıcı uzaklaştırmayla sonuçlanabilir.
 
 ### 4. Kalıcı uzaklaştırma
 
-**Topluluğa etkisi**: Topluluk kurallarını ihlal etmeyi alışkanlık hâline getirmek;
-süregelen uygunsuz davranış, bir kişiyi taciz etmek ya da bir grup insana karşı
-saldırganlık veya aşağılama dâhil.
+**Topluluğa etkisi**: Süregelen uygunsuz davranış, bir kişiyi taciz etmek ya da bir
+gruba yönelik saldırganlık veya aşağılama dahil olmak üzere topluluk kurallarını
+ihlal etmeyi alışkanlık hâline getirmek.
 
-**Sonucu**: Topluluk içinde herkese açık her türlü etkileşimden kalıcı
+**Sonucu**: Topluluk içindeki herkese açık her türlü etkileşimden kalıcı olarak
 uzaklaştırma.
 
 ## Kaynak
@@ -115,5 +118,6 @@ basamaklarından](https://github.com/mozilla/diversity) esinlenmiştir.
 
 [homepage]: https://www.contributor-covenant.org
 
-Sık sorulan sorular için: https://www.contributor-covenant.org/faq. Diğer dillerdeki
-çeviriler: https://www.contributor-covenant.org/translations.
+Sık sorulan sorular için https://www.contributor-covenant.org/faq adresine, diğer
+dillerdeki çeviriler için https://www.contributor-covenant.org/translations adresine
+bakabilirsiniz.
