@@ -21,7 +21,7 @@ public sealed class SitemapXmlTests
     public void The_sitemap_index_declares_utf8()
     {
         string xml = SitemapJob.BuildSitemapIndexXml(
-            [("https://example.com/pages/sitemap.xml", new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc))]);
+            [("https://example.com/sitemap-pages.xml", new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc))]);
 
         xml.ShouldContain("encoding=\"utf-8\"");
         xml.ShouldNotContain("utf-16");
@@ -50,9 +50,9 @@ public sealed class SitemapXmlTests
     {
         // Guards against "fixing" the declaration by breaking the content.
         string xml = SitemapJob.BuildSitemapIndexXml(
-            [("https://example.com/pages/sitemap.xml", new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc))]);
+            [("https://example.com/sitemap-pages.xml", new DateTime(2026, 1, 2, 0, 0, 0, DateTimeKind.Utc))]);
 
-        xml.ShouldContain("<loc>https://example.com/pages/sitemap.xml</loc>");
+        xml.ShouldContain("<loc>https://example.com/sitemap-pages.xml</loc>");
         xml.ShouldContain("<lastmod>2026-01-02</lastmod>");
     }
 }

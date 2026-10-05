@@ -337,7 +337,7 @@
     <value>Sitemap coverage follows the default language's page tree</value>
   </data>
   <data name="KB_SitemapLanguageBody" xml:space="preserve">
-    <value>The sitemap lists every language version of a page as an entry of its own, each naming all the others. It is split into sections: each section under the default language's homepage (for example /articles) gets its own sitemap, and the translations of its pages go into the same one. Homepages, and pages that belong to no section, go into /main/sitemap.xml. Drafts, noindex pages and pages in unpublished languages are left out; a published page is listed even when its parent is a draft. The sitemap is rebuilt every two hours, and straight away when the default language changes.</value>
+    <value>The sitemap lists every language version of a page as an entry of its own, each naming all the others. It is split into sections: each section under the default language's homepage (for example /articles) gets its own sitemap, and the translations of its pages go into the same one. Homepages, and pages that belong to no section, go into /sitemap-main.xml. Drafts, noindex pages and pages in unpublished languages are left out; a published page is listed even when its parent is a draft. The sitemap is rebuilt every two hours, and straight away when the default language changes.</value>
   </data>
 	<data name="TopBar_MediaLibrary" xml:space="preserve">
     <value>Media Library</value>

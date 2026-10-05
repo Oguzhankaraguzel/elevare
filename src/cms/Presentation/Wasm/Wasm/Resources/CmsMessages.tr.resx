@@ -352,7 +352,7 @@
     <value>Site haritası ve diller</value>
   </data>
   <data name="KB_SitemapLanguageBody" xml:space="preserve">
-    <value>Site haritası her dildeki sayfaları ayrı ayrı listeler; arama motorlarına her çeviri kendi adresiyle bildirilir ve bir sayfanın bütün dillerdeki hâlleri birbirini gösterir. Harita bölümlere ayrılır: Varsayılan dildeki ana sayfanın altındaki her bölüm (örneğin /makaleler) kendi haritasını alır; o bölümdeki sayfaların çevirileri de aynı haritaya girer. Ana sayfalar ve hiçbir bölüme girmeyen sayfalar /main/sitemap.xml'de toplanır. Taslak sayfalar, arama motorlarından gizlenen (noindex) sayfalar ve henüz yayında olmayan dillerdeki sayfalar haritaya girmez. Üst sayfası taslak olsa bile, yayındaki bir sayfa listelenir. Harita iki saatte bir, varsayılan dil değiştiğinde ise hemen yenilenir.</value>
+    <value>Site haritası her dildeki sayfaları ayrı ayrı listeler; arama motorlarına her çeviri kendi adresiyle bildirilir ve bir sayfanın bütün dillerdeki hâlleri birbirini gösterir. Harita bölümlere ayrılır: Varsayılan dildeki ana sayfanın altındaki her bölüm (örneğin /makaleler) kendi haritasını alır; o bölümdeki sayfaların çevirileri de aynı haritaya girer. Ana sayfalar ve hiçbir bölüme girmeyen sayfalar /sitemap-main.xml'de toplanır. Taslak sayfalar, arama motorlarından gizlenen (noindex) sayfalar ve henüz yayında olmayan dillerdeki sayfalar haritaya girmez. Üst sayfası taslak olsa bile, yayındaki bir sayfa listelenir. Harita iki saatte bir, varsayılan dil değiştiğinde ise hemen yenilenir.</value>
   </data>
   <data name="TopBar_MediaLibrary" xml:space="preserve">
     <value>Medya Kütüphanesi</value>
