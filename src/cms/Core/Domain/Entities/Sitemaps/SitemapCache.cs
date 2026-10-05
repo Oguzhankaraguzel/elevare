@@ -8,7 +8,7 @@ namespace Domain.Entities.Sitemaps;
 ///
 /// Key naming convention — the Web app's SitemapController looks up these exact keys:
 ///   "index"  → /sitemap.xml        (the sitemap index listing sub-sitemaps)
-///   "{slug}" → /{slug}/sitemap.xml (the bare top-level slug, e.g. "blog")
+///   "{slug}" → /sitemap-{slug}.xml (the bare top-level slug, e.g. "blog")
 /// </summary>
 public class SitemapCache
 {
@@ -19,7 +19,7 @@ public class SitemapCache
     public required string CacheKey { get; set; }
 
     /// <summary>
-    /// The full URL path that serves this sitemap file (e.g., "/yazilim/sitemap.xml").
+    /// The full URL path that serves this sitemap file (e.g., "/sitemap-yazilim.xml").
     /// Used to build &lt;loc&gt; elements in the sitemap index.
     /// </summary>
     [MaxLength(1000)]

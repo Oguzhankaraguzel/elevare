@@ -30,10 +30,18 @@ public sealed class SitemapController(ISender sender) : BaseController
     // This used to ask for "pages/{slug}", which no writer ever produced, so every
     // sub-sitemap the index pointed at answered 404 and the index was a list of dead
     // links. Keep the two in step: SitemapJob.UpsertAsync is the other half.
-    [HttpGet("{slug}/sitemap.xml")]
+    // Served from the site root: a file under /{slug}/ may only list URLs below that
+    // path, and a section sitemap also holds the section page and its translations.
+    [HttpGet("sitemap-{slug}.xml")]
     [OutputCache(Duration = 600, Tags = [PageController.OutputCacheTag])]
-    public Task<IActionResult> Section(string slug, CancellationToken cancellationToken)
-        => ServeAsync(slug, cancellationToken);
+    public async Task<IActionResult> Section(string slug, CancellationToken cancellationToken)
+    {
+        // "index" is the sitemap index's own key, served only as /sitemap.xml.
+        if (string.Equals(slug, "index", StringComparison.OrdinalIgnoreCase))
+            throw NotFoundResource("The sitemap index is served at /sitemap.xml.");
+
+        return await ServeAsync(slug, cancellationToken);
+    }
 
     [HttpGet("robots.txt")]
     [OutputCache(Duration = 3600)]

@@ -61,7 +61,10 @@ public sealed class SitemapJob
         var subSitemapEntries = new List<(string url, DateTime lastMod)>();
         foreach ((string key, List<PageInfo> sitemapPages) in sitemaps)
         {
-            string sitemapUrl = $"/{key}/sitemap.xml";
+            // At the site root, not under the section's own path: the sitemap protocol
+            // only lets a file list URLs below its own directory, and a section sitemap
+            // holds the section page itself and its translations (/makaleler, /en/articles).
+            string sitemapUrl = $"/sitemap-{key}.xml";
             DateTime lastMod = sitemapPages.Max(LastModified);
             string xml = BuildUrlSetXml(baseUrl, sitemapPages, pages, defaultLangCode);
 
