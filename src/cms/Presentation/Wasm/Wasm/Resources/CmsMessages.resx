@@ -358,10 +358,10 @@
     <value>No roles assigned.</value>
   </data>
 	<data name="Login_PageTitle" xml:space="preserve">
-    <value>Login — Elevare CMS</value>
+    <value>Login</value>
   </data>
 	<data name="SetPassword_PageTitle" xml:space="preserve">
-    <value>Set Password — Elevare CMS</value>
+    <value>Set Password</value>
   </data>
 	<data name="SetPassword_Subtitle" xml:space="preserve">
     <value>Choose a password for your account.</value>
@@ -393,6 +393,9 @@
 	<data name="SetPassword_Mismatch" xml:space="preserve">
     <value>Passwords do not match.</value>
   </data>
+	<data name="Login_SubtitleForSite" xml:space="preserve">
+    <value>Sign in to the {0} admin panel</value>
+  </data>
 	<data name="Login_Subtitle" xml:space="preserve">
     <value>Sign in to the admin panel</value>
   </data>
@@ -412,7 +415,7 @@
     <value>Too many failed login attempts. Your account has been temporarily locked.</value>
   </data>
 	<data name="Users_PageTitle" xml:space="preserve">
-    <value>Users — Elevare CMS</value>
+    <value>Users</value>
   </data>
 	<data name="Users_Title" xml:space="preserve">
     <value>Users</value>
@@ -487,10 +490,10 @@
     <value>User deleted.</value>
   </data>
 	<data name="UserEdit_PageTitleCreate" xml:space="preserve">
-    <value>New User — Elevare CMS</value>
+    <value>New User</value>
   </data>
 	<data name="UserEdit_PageTitleEdit" xml:space="preserve">
-    <value>Edit User — Elevare CMS</value>
+    <value>Edit User</value>
   </data>
 	<data name="UserEdit_BreadcrumbUsers" xml:space="preserve">
     <value>Users</value>
@@ -595,7 +598,7 @@
     <value>Viewer</value>
   </data>
 	<data name="Dashboard_PageTitle" xml:space="preserve">
-    <value>Dashboard — Elevare CMS</value>
+    <value>Dashboard</value>
   </data>
 	<data name="Dashboard_Title" xml:space="preserve">
     <value>Dashboard</value>
@@ -607,7 +610,7 @@
     <value>An error occurred while loading data.</value>
   </data>
 	<data name="Languages_PageTitle" xml:space="preserve">
-    <value>Languages — Elevare CMS</value>
+    <value>Languages</value>
   </data>
 	<data name="Languages_Title" xml:space="preserve">
     <value>Languages</value>
@@ -2377,7 +2380,10 @@
 	<data name="Layout_Collapse" xml:space="preserve">
 	  <value>Collapse</value>
 	</data>
-	<data name="Layout_Expand" xml:space="preserve">
+	<data name="Layout_OpenSite" xml:space="preserve">
+    <value>Open the site in a new tab</value>
+  </data>
+  <data name="Layout_Expand" xml:space="preserve">
 	  <value>Expand</value>
 	</data>
 	<data name="Layout_PinSidebar" xml:space="preserve">

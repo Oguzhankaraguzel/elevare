@@ -1,7 +1,8 @@
 @page "/admin/settings"
 @layout CMSLayout
+@inject SiteIdentityState SiteIdentity
 
-<PageTitle>@L["Settings_PageTitle"]</PageTitle>
+<CmsPageTitle>@L["Settings_PageTitle"]</CmsPageTitle>
 
 <div class="page-header">
     <h1>@L["Settings_Title"]</h1>
@@ -657,6 +658,9 @@ else
             {
                 Toast.Success(L["Settings_Saved"]);
                 _settings = [.. _settings.Select(ApplyPendingValue)];
+                // The sidebar header and tab titles show the site's name, address
+                // and icon; without this they keep the old ones until a reload.
+                await SiteIdentity.RefreshAsync();
             }
         }
         finally { _saving = false; }

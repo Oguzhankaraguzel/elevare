@@ -100,6 +100,18 @@ a:hover{color:var(--cms-accent-hover)}
 .sidebar-logo .logo-icon img{width:100%;height:100%;object-fit:contain}
 .sidebar-logo .logo-text{font-size:16px;font-weight:700;color:var(--cms-text);white-space:nowrap;overflow:hidden}
 .cms-sidebar.collapsed .logo-text{display:none}
+/* Site identity: the site's name over its address, in the space "Elevare CMS"
+   used to take. Both truncate rather than wrap — the header has a fixed height. */
+.sidebar-site .logo-text{display:flex;flex-direction:column;min-width:0;line-height:1.25}
+.sidebar-site .site-name{font-size:15px;font-weight:700;color:var(--cms-text);text-decoration:none;overflow:hidden;text-overflow:ellipsis}
+.sidebar-site .site-host{font-size:12px;font-weight:500;color:var(--cms-text-muted);text-decoration:none;overflow:hidden;text-overflow:ellipsis}
+.sidebar-site .site-host i{font-size:10px;margin-left:2px}
+.sidebar-site .site-host:hover{color:var(--cms-accent)}
+.sidebar-site .logo-icon img{border-radius:6px}
+/* The product's own name and version, demoted to the foot of the sidebar. */
+.sidebar-product{display:flex;align-items:center;gap:8px;padding:8px 18px;font-size:11px;color:var(--cms-text-dim);border-top:1px solid var(--cms-border);flex-shrink:0;white-space:nowrap}
+.sidebar-product img{width:14px;height:14px;object-fit:contain;opacity:.7}
+.cms-sidebar.collapsed .sidebar-product{justify-content:center;padding:8px 0}
 .sidebar-nav{flex:1;overflow-y:auto;overflow-x:hidden;padding:12px 0}
 .nav-section-title{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--cms-text-dim);text-transform:uppercase;padding:16px 20px 6px;white-space:nowrap;overflow:hidden}
 .cms-sidebar.collapsed .nav-section-title{opacity:0;padding:16px 0 6px}
@@ -428,6 +440,7 @@ a:hover{color:var(--cms-accent-hover)}
     .cms-sidebar .nav-section-toggle{pointer-events:none}
     .cms-sidebar .nav-item{justify-content:center;padding:10px 0;margin:1px 8px}
     .cms-sidebar .sidebar-logo{padding:0 16px;justify-content:center}
+    .cms-sidebar .sidebar-product{justify-content:center;padding:8px 0}
     .cms-sidebar .sidebar-toggle{justify-content:center}
     .cms-sidebar .sidebar-toggle-pin{display:none}
     .form-row.cols-2,.form-row.cols-3{grid-template-columns:1fr}

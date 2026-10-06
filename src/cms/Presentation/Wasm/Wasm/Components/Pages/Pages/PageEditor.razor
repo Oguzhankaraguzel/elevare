@@ -12,7 +12,7 @@
    covers in-app navigation, where we can say what is actually at stake. *@
 <NavigationLock ConfirmExternalNavigation="IsDirty" OnBeforeInternalNavigation="ConfirmLeavingUnsaved" />
 
-<PageTitle>@(_title.HasValue() ? _title : L["PageEditor_NewPageTitle"])</PageTitle>
+<CmsPageTitle>@(_title.HasValue() ? _title : L["PageEditor_NewPageTitle"])</CmsPageTitle>
 
 @if (_loading)
 {

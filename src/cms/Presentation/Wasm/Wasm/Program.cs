@@ -191,6 +191,7 @@ builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBase)
 builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<LoadingService>();
 builder.Services.AddScoped<CmsLocalizer>();
+builder.Services.AddScoped<SiteIdentityState>();
 
 // ── Localization ──────────────────────────────────────────────────────────────
 builder.Services.AddLocalization();

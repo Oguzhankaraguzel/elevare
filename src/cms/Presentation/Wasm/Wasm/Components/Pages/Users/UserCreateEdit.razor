@@ -2,7 +2,7 @@
 @page "/users/edit/{Id:guid}"
 @layout CMSLayout
 
-<PageTitle>@(_isEdit? L["UserEdit_PageTitleEdit"] : L["UserEdit_PageTitleCreate"])</PageTitle>
+<CmsPageTitle>@(_isEdit? L["UserEdit_PageTitleEdit"] : L["UserEdit_PageTitleCreate"])</CmsPageTitle>
 
 <div class="cms-breadcrumb">
     <a href="/users"><i class="bi bi-people"></i> @L["UserEdit_BreadcrumbUsers"]</a>
