@@ -1,0 +1,34 @@
+@* The browser-tab title for a CMS page: the page's own title followed by the site
+   being edited ("Sayfalar · www.example.com"), so several open tabs — or two
+   sites' panels side by side — can be told apart. Until the site's address is
+   set, the suffix is Elevare's own name, as before. *@
+@inject SiteIdentityState SiteIdentity
+@implements IDisposable
+
+<PageTitle>@ChildContent · @_suffix</PageTitle>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private string _suffix = "Elevare CMS";
+
+    protected override async Task OnInitializedAsync()
+    {
+        SiteIdentity.OnChange += OnIdentityChanged;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        SiteIdentityResponse? identity = await SiteIdentity.GetAsync();
+        _suffix = identity is { IsConfigured: true } ? identity.Host! : "Elevare CMS";
+    }
+
+    private async Task OnIdentityChanged()
+    {
+        await LoadAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => SiteIdentity.OnChange -= OnIdentityChanged;
+}

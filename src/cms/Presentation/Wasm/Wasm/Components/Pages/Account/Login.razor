@@ -1,15 +1,28 @@
 @page "/login"
 @layout AuthLayout
 @attribute [AllowAnonymous]
+@inject SiteIdentityState SiteIdentity
 
-<PageTitle>@L["Login_PageTitle"]</PageTitle>
+<CmsPageTitle>@L["Login_PageTitle"]</CmsPageTitle>
 
 <div class="login-page">
     <div class="login-card">
+        @* Names the site whose panel this is, so a sign-in on the wrong one (a
+           local copy, another site) is noticed before the password goes in. *@
         <div class="login-logo">
-            <img class="login-logo__mark" src="img/elevare-mark.png" alt="Elevare" />
-            <h1>Elevare CMS</h1>
-            <p>@L["Login_Subtitle"]</p>
+            @if (_identity is { IsConfigured: true } site)
+            {
+                <img class="login-logo__mark" src="@(site.FaviconUrl ?? "img/elevare-mark.png")" alt=""
+                     onerror="this.onerror=null;this.src='img/elevare-mark.png'" />
+                <h1>@(site.SiteName ?? site.Host)</h1>
+                <p>@string.Format(L["Login_SubtitleForSite"], site.Host)</p>
+            }
+            else
+            {
+                <img class="login-logo__mark" src="img/elevare-mark.png" alt="Elevare" />
+                <h1>Elevare CMS</h1>
+                <p>@L["Login_Subtitle"]</p>
+            }
         </div>
 
         @if (_errorMessage is not null)
@@ -84,12 +97,15 @@
 @code {
     private string? _errorMessage;
     private string _returnUrl = "/";
+    private SiteIdentityResponse? _identity;
 
     [SupplyParameterFromQuery(Name = "error")]
     private string? Error { get; set; }
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     private string? ReturnUrl { get; set; }
+
+    protected override async Task OnInitializedAsync() => _identity = await SiteIdentity.GetAsync();
 
     protected override void OnParametersSet()
     {

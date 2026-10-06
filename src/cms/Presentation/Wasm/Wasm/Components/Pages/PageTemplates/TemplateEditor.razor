@@ -4,7 +4,7 @@
 @using Application.Features.Queries.Pages.GetListingPreview
 @inject IJSRuntime JS
 
-<PageTitle>@(_name.HasValue() ? _name : L["Templates_NewTemplateTitle"])</PageTitle>
+<CmsPageTitle>@(_name.HasValue() ? _name : L["Templates_NewTemplateTitle"])</CmsPageTitle>
 
 @if (_loading)
 {

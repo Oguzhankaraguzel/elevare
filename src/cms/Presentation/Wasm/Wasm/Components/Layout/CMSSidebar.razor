@@ -1,4 +1,5 @@
 ﻿@inject IJSRuntime JS
+@inject SiteIdentityState SiteIdentity
 @implements IDisposable
 
 @* Not IsFixed: the cascaded reference never changes, but IsFixed also tells the
@@ -7,10 +8,33 @@
 <CascadingValue Value="this">
 <div class="cms-sidebar @(_collapsed ? "collapsed" : "") @(!_pinned ? "sb-unpinned" : "")">
 
-    <a class="sidebar-logo" href="/" style="text-decoration:none;color:inherit">
-        <div class="logo-icon"><img src="img/elevare-mark.png" alt="Elevare" /></div>
-        <span class="logo-text">Elevare CMS</span>
-    </a>
+    @* The site being edited, not the product doing the editing: with more than one
+       site (or a local copy beside the live one) "Elevare CMS" said nothing about
+       which panel this is. Until the site's address is set, Elevare's own name and
+       mark stay — the missing setting is already flagged by the site-health icon. *@
+    @if (_identity is { IsConfigured: true } site)
+    {
+        <div class="sidebar-logo sidebar-site">
+            <a class="logo-icon" href="/" title="@(site.SiteName ?? site.Host)">
+                <img src="@(site.FaviconUrl ?? ElevareMark)" alt=""
+                     onerror="this.onerror=null;this.src='@ElevareMark'" />
+            </a>
+            <div class="logo-text">
+                <a class="site-name" href="/">@(site.SiteName ?? site.Host)</a>
+                <a class="site-host" href="@site.SiteUrl" target="_blank" rel="noopener"
+                   title="@L["Layout_OpenSite"]">
+                    @site.Host <i class="bi bi-box-arrow-up-right"></i>
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <a class="sidebar-logo" href="/" style="text-decoration:none;color:inherit">
+            <div class="logo-icon"><img src="@ElevareMark" alt="Elevare" /></div>
+            <span class="logo-text">Elevare CMS</span>
+        </a>
+    }
 
     <nav class="sidebar-nav">
         @* ── Ana Sayfa / Dashboard: no section header — these two are always visible
@@ -144,6 +168,11 @@
         <NavItem Href="/admin/knowledge-base" Icon="bi-journal-bookmark" Label="@L["Nav_KnowledgeBase"]" />
     </nav>
 
+    <div class="sidebar-product" title="Elevare @SiteIdentityState.ProductVersion">
+        <img src="@ElevareMark" alt="" />
+        <span class="logo-text">Elevare @SiteIdentityState.ProductVersion</span>
+    </div>
+
     <div class="sidebar-toggle">
         <button class="sidebar-toggle-btn" @onclick="ToggleCollapse"
                 title="@(_collapsed ? L["Layout_Expand"] : L["Layout_Collapse"])">
@@ -221,7 +250,22 @@
         return path.Trim('/');
     }
 
-    protected override void OnInitialized() => Nav.LocationChanged += OnLocationChanged;
+    private const string ElevareMark = "img/elevare-mark.png";
+
+    private SiteIdentityResponse? _identity;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        SiteIdentity.OnChange += OnIdentityChanged;
+        _identity = await SiteIdentity.GetAsync();
+    }
+
+    private async Task OnIdentityChanged()
+    {
+        _identity = await SiteIdentity.GetAsync();
+        await InvokeAsync(StateHasChanged);
+    }
 
     // A NavItem never re-renders on its own when the URL changes — without this the
     // menu keeps whatever highlight each entry last drew, so visiting three sections
@@ -229,7 +273,11 @@
     private void OnLocationChanged(object? sender, LocationChangedEventArgs e) =>
         InvokeAsync(StateHasChanged);
 
-    public void Dispose() => Nav.LocationChanged -= OnLocationChanged;
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        SiteIdentity.OnChange -= OnIdentityChanged;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

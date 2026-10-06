@@ -373,10 +373,10 @@
     <value>Atanmış rol yok.</value>
   </data>
   <data name="Login_PageTitle" xml:space="preserve">
-    <value>Giriş — Elevare CMS</value>
+    <value>Giriş</value>
   </data>
   <data name="SetPassword_PageTitle" xml:space="preserve">
-    <value>Şifre Belirle — Elevare CMS</value>
+    <value>Şifre Belirle</value>
   </data>
   <data name="SetPassword_Subtitle" xml:space="preserve">
     <value>Hesabınız için bir şifre belirleyin.</value>
@@ -408,6 +408,9 @@
   <data name="SetPassword_Mismatch" xml:space="preserve">
     <value>Şifreler eşleşmiyor.</value>
   </data>
+  <data name="Login_SubtitleForSite" xml:space="preserve">
+    <value>{0} yönetim paneline giriş yapın</value>
+  </data>
   <data name="Login_Subtitle" xml:space="preserve">
     <value>Yönetim paneline giriş yapın</value>
   </data>
@@ -427,7 +430,7 @@
     <value>Çok fazla başarısız giriş denemesi. Hesabınız geçici olarak kilitlendi.</value>
   </data>
   <data name="Users_PageTitle" xml:space="preserve">
-    <value>Kullanıcılar — Elevare CMS</value>
+    <value>Kullanıcılar</value>
   </data>
   <data name="Users_Title" xml:space="preserve">
     <value>Kullanıcılar</value>
@@ -502,10 +505,10 @@
     <value>Kullanıcı silindi.</value>
   </data>
   <data name="UserEdit_PageTitleCreate" xml:space="preserve">
-    <value>Yeni Kullanıcı — Elevare CMS</value>
+    <value>Yeni Kullanıcı</value>
   </data>
   <data name="UserEdit_PageTitleEdit" xml:space="preserve">
-    <value>Kullanıcı Düzenle — Elevare CMS</value>
+    <value>Kullanıcı Düzenle</value>
   </data>
   <data name="UserEdit_BreadcrumbUsers" xml:space="preserve">
     <value>Kullanıcılar</value>
@@ -610,13 +613,13 @@
     <value>İzleyici</value>
   </data>
   <data name="Dashboard_PageTitle" xml:space="preserve">
-    <value>Dashboard — Elevare CMS</value>
+    <value>Dashboard</value>
   </data>
   <data name="Dashboard_Title" xml:space="preserve">
     <value>Dashboard</value>
   </data>
   <data name="Languages_PageTitle" xml:space="preserve">
-    <value>Diller — Elevare CMS</value>
+    <value>Diller</value>
   </data>
   <data name="Languages_Title" xml:space="preserve">
     <value>Diller</value>
@@ -2376,6 +2379,9 @@
   </data>
   <data name="Layout_Collapse" xml:space="preserve">
     <value>Daralt</value>
+  </data>
+  <data name="Layout_OpenSite" xml:space="preserve">
+    <value>Siteyi yeni sekmede aç</value>
   </data>
   <data name="Layout_Expand" xml:space="preserve">
     <value>Genişlet</value>
