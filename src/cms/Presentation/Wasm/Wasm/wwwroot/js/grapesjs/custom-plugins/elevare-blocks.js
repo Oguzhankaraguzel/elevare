@@ -88,6 +88,41 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         model: { defaults: { tagName: 'button', droppable: true } }
     });
 
+    // The opt-in above only helps someone who knows about it; anyone else's
+    // <button> (tabs, menu toggles, icon buttons in custom code) still went
+    // through the forms plugin's own init, which keeps the content only when it
+    // is a single text node and otherwise replaces it with "Send" — a span, an
+    // icon or an aria-labelled empty button was wiped, silently and for good once
+    // the page was saved. Re-registering the same type keeps everything else the
+    // plugin defines and replaces only that init:
+    //   - nothing inside and no accessible name: a button fresh from the forms
+    //     blocks, which carry no content of their own — gets the default text;
+    //   - a single text node: editable through the "text" trait, as before;
+    //   - anything else: left exactly as it is, and the "text" trait goes,
+    //     since setting it would replace the whole content with plain text.
+    comps.addType('button', {
+        model: {
+            init() {
+                const children = this.components();
+                const only = children.length === 1 ? children.at(0) : null;
+                if (only && only.is('textnode')) {
+                    this.set('text', only.get('content'));
+                } else if (children.length === 0 && !hasAccessibleName(this)) {
+                    this.__onTextChange();
+                } else {
+                    this.removeTrait('text');
+                    return;
+                }
+                this.on('change:text', this.__onTextChange);
+            }
+        }
+    });
+
+    function hasAccessibleName(component) {
+        const attrs = component.getAttributes();
+        return ['aria-label', 'aria-labelledby', 'title'].some((name) => (attrs[name] || '').trim() !== '');
+    }
+
     // --------------------------------------------------
     // BLOCK NAME TRANSLATIONS
     // --------------------------------------------------
