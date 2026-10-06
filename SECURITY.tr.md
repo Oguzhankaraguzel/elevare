@@ -4,83 +4,96 @@
 
 ## Güvenlik açığı bildirme
 
-Lütfen herkese açık bir issue ile değil, gizli olarak bildirin. Açık bir issue,
-açığı herkese duyurmak demektir ve saldırganlara düzeltmeden önce ulaşır.
+Lütfen güvenlik açıklarını herkese açık bir issue ile değil, gizli olarak bildirin.
+Herkese açık bir issue, açığı kamuya duyurmak anlamına gelir ve açık düzeltilmeden
+önce saldırganların eline geçer.
 
-Bu depodaki GitHub [gizli güvenlik açığı bildirimi](https://github.com/Oguzhankaraguzel/elevare/security/advisories/new)
-özelliğini kullanın. Bu size açık değilse, proje sahibinin GitHub profilindeki
-e-posta adresine konu satırında `SECURITY` yazarak gönderin.
+Bunun için bu depodaki GitHub [gizli güvenlik açığı bildirimi](https://github.com/Oguzhankaraguzel/elevare/security/advisories/new)
+özelliğini kullanın. Bu özelliğe erişiminiz yoksa, proje sahibinin GitHub
+profilindeki e-posta adresine konu satırına `SECURITY` yazarak e-posta gönderin.
 
-Elinizde olduğu kadarıyla şunları eklemeniz işe yarar: bir saldırganın ne
-yapabildiği, hatayı yeniden oluşturma adımları, iki uygulamadan hangisinin
-etkilendiği ve denediğiniz sürüm ya da commit. Kavram kanıtı (proof of concept)
-yardımcı olur; çalışan bir saldırı kodu gerekmez.
+Bildiriminize, elinizdeki bilgiler ölçüsünde şunları eklemeniz faydalı olur: bir
+saldırganın bu açıkla neler yapabileceği, sorunu yeniden oluşturma adımları, iki
+uygulamadan hangisinin etkilendiği ve test ettiğiniz sürüm ya da commit. Bir kavram
+kanıtı (proof of concept) işimizi kolaylaştırır; çalışan bir saldırı kodu
+göndermeniz gerekmez.
 
-Bu kişisel bir proje, fonlanan bir proje değil. İlk cevabı saatler içinde değil
-birkaç gün içinde bekleyin; ödül programı da yok. Doğrulanan açıkların düzeltilmesi
-her şeyden önce gelir.
+Bu, herhangi bir fonla desteklenmeyen kişisel bir projedir. İlk yanıtı saatler
+içinde değil, birkaç gün içinde bekleyin; ödül programı da bulunmuyor. Bununla
+birlikte doğrulanan açıkların düzeltilmesi her zaman önceliklidir.
 
-Lütfen başkalarının Elevare kurulumlarına otomatik tarama araçları çalıştırmayın.
+Lütfen başkalarına ait Elevare kurulumlarında otomatik tarama araçları
+çalıştırmayın.
 
 ## Desteklenen sürümler
 
-Sadece `master` üzerindeki son sürüm desteklenir. Eski sürümlere geriye dönük
-güvenlik düzeltmesi yapılmaz.
+Yalnızca `master` dalındaki en son sürüm desteklenir. Eski sürümler için geriye
+dönük güvenlik düzeltmesi yayınlanmaz.
 
-## Elevare'nin kendi yaptıkları
+## Elevare'nin sağladığı korumalar
 
-Bir kurulumu değerlendirenler için, kutudan çıkan korumalar:
+Bir kurulumu değerlendirenler için, kurulumla birlikte hazır gelen korumalar:
 
-- **Yanıt başlıkları.** İki uygulamada da: `nosniff`, `Referrer-Policy`, kısıtlayıcı
-  bir `Permissions-Policy` ve sayfanın başka sitelere gömülmesine karşı
-  `X-Frame-Options` ile CSP `frame-ancestors`.
-- **Giriş.** Identity hesap kilitleme (5 hatalı deneme, 15 dakika) ve IP başına hız
-  sınırı (5 dakikada 20 deneme) ile korunur. İlki tek bir hesabın şifresini tahmin
-  etmeye, ikincisi tek bir şifreyi birçok hesapta denemeye karşıdır.
-- **Hız sınırları.** Sitenin yazma ve sorgu uç noktalarında: form gönderme, arama,
-  ziyaret istatistiği, tarayıcı hata bildirimleri.
-- **Yetkilendirme.** Sadece arayüzde değil, sunucuda MediatR pipeline'ında
-  (`IRequirePermission`) denetlenir. Bir butonu gizlemek, kullanıcı ile işlem
-  arasındaki tek engel asla değildir.
-- **Ham HTML ve script.** Sayfa içeriğinde bunları sadece `CustomCode.Author`
-  yetkisi olan roller kaydedebilir; geri kalan her şey temizlenir.
-- **Şifreler.** ASP.NET Core Identity ile hash'lenir. Gizli değerler ayarlardan
-  okunur ve hiçbiri çalışan bir varsayılanla gelmez; boşlarsa sistem başlamaz.
+- **Yanıt başlıkları.** İki uygulama da `nosniff`, `Referrer-Policy`, kısıtlayıcı
+  bir `Permissions-Policy` başlıklarını ve sayfanın başka sitelerin içine
+  gömülmesine (clickjacking) karşı `X-Frame-Options` ile CSP `frame-ancestors`
+  başlıklarını gönderir.
+- **Giriş.** Identity'nin hesap kilitleme özelliği (5 hatalı deneme sonrası 15
+  dakika) ve IP başına hız sınırı (5 dakikada 20 deneme) ile korunur. İlki tek bir
+  hesabın şifresini tahmin etmeye, ikincisi aynı şifreyi çok sayıda hesapta denemeye
+  (password spraying) karşı koruma sağlar.
+- **Hız sınırları.** Sitenin veri yazan ve sorgu yapan uç noktalarında uygulanır:
+  form gönderme, arama, ziyaret istatistikleri ve tarayıcı hata bildirimleri.
+- **Yetkilendirme.** Yalnızca arayüzde değil, sunucuda MediatR pipeline'ı içinde
+  (`IRequirePermission`) denetlenir. Kullanıcı ile bir işlem arasındaki tek engel
+  hiçbir zaman bir butonun gizlenmesi değildir.
+- **Ham HTML ve script.** Sayfa içeriğine bunları yalnızca `CustomCode.Author`
+  yetkisine sahip roller kaydedebilir; diğer bütün içerik temizlenir.
+- **Şifreler.** ASP.NET Core Identity ile hash'lenir. Gizli değerler
+  yapılandırmadan okunur ve hiçbiri kullanılabilir bir varsayılan değerle gelmez;
+  bu değerler boşsa sistem başlamaz.
 
 ## Bilinen eksikler
 
-Açıkça yazıyoruz, çünkü sadece güçlü yanlarını sayan bir güvenlik politikası işe
-yaramaz:
+Bunları açıkça belirtiyoruz, çünkü yalnızca güçlü yanları sıralayan bir güvenlik
+politikası kimsenin işine yaramaz:
 
 - **`script-src` Content-Security-Policy yok.** Site Kodları, yöneticinin kendi
-  sayfalarına analiz ve çerez onay script'leri eklemesi için var. İşe yarayacak
-  kadar sıkı bir script politikası bu özelliği bozardı. Doğru çözüm, yöneticinin
-  izin verdiği kaynakları kendisinin tanımlaması; bu henüz yapılmadı.
-- **Hangfire paneli** `Hangfire.Access` yetkisine bağlı. Yetki, giriş anındaki
-  kopyaya değil, rollerin güncel yetki önbelleğine göre denetlenir; yani geri alınan
-  bir yetki hemen geçerli olur. Panelin kendine ait ayrı bir şifresi yok.
-- **Yüklenen dosyaların** uzantısı, bildirilen içerik türüyle uyuşmalı. Denetim,
-  dosyayı sunan uç noktanın kullandığı aynı tabloyla yapılır. Bu uyum aranmasaydı
-  `evil.html` adlı bir dosya `image/png` olarak yüklenip CMS'in kendi adresinden
-  `text/html` olarak geri sunulabilirdi. Dosyalar **virüs taramasından geçmez.** SVG'yi
-  açmadan önce iyi düşünün: script taşıyabilen bir XML'dir ve doğrudan açıldığında
-  kendisi olarak çalışır.
-- **Çok kiracılı yapı hedef değil.** CMS erişimi olan herkes, rolünün izin verdiği
-  her site ayarına ulaşır; içerik sahipleri arasında bir ayırma sınırı yok.
+  sayfalarına analiz ve çerez onayı script'leri ekleyebilmesi için var. Gerçekten
+  koruma sağlayacak kadar sıkı bir script politikası bu özelliği bozardı. Doğru
+  çözüm, izin verilen kaynakları yöneticinin kendisinin tanımlamasıdır; bu henüz
+  geliştirilmedi.
+- **Hangfire paneli** `Hangfire.Access` yetkisiyle korunur. Yetki, giriş anında
+  alınan kopyaya göre değil, rol yetkilerinin güncel önbelleğine göre denetlenir;
+  yani geri alınan bir yetki hemen geçerli olur. Panelin ayrıca kendine ait bir
+  şifresi yoktur.
+- **Yüklenen dosyaların** uzantısı, bildirilen içerik türüyle uyumlu olmalıdır. Bu
+  kontrol, dosyaları sunan uç noktanın kullandığı tabloyla yapılır. Bu uyum
+  aranmasaydı `evil.html` adlı bir dosya `image/png` olarak yüklenip CMS'in kendi
+  adresinden `text/html` olarak sunulabilirdi. Dosyalar **virüs taramasından
+  geçirilmez.** SVG desteğini açmadan önce iyi düşünün: SVG, script içerebilen bir
+  XML dosyasıdır ve doğrudan açıldığında tarayıcıda kendi başına çalışır.
+- **Çok kiracılı (multi-tenant) bir yapı hedeflenmiyor.** CMS'e erişimi olan herkes,
+  rolünün izin verdiği bütün site ayarlarına ulaşabilir; içerik sahipleri arasında
+  bir ayrım sınırı yoktur.
 
-## Sizin güvenliğinizi etkileyen kurulum notları
+## Kurulumunuzun güvenliğini etkileyen notlar
 
-- Uygulamaları TLS (HTTPS) arkasına koyun. Geliştirme dışında HSTS açık ve bunu
-  varsayıyor.
-- Reverse proxy arkasındaysanız `RateLimiting:TrustForwardedForHeader` değerini
-  `true` yapın. **Ama sadece** proxy arkasındaysanız. Başlığı ezen bir proxy yoksa
-  `X-Forwarded-For` değerini saldırgan istediği gibi yazar; ona güvenmek hız
-  sınırını açık görünürken fiilen kapatır.
-- Canlıya çıkmadan önce `Cache:ClearSecret`, `Jwt:SecretKey` ve
-  `Preview:SigningKey` değerlerini test için ürettiklerinizden farklı değerlerle
-  değiştirin ve bunları sürüm kontrolünün dışında tutun.
-- Veritabanı kullanıcısının süper kullanıcı yetkisine ihtiyacı yok.
-  `docker-compose.yml` içindeki resmî `postgres` imajı, `POSTGRES_USER`'da adı geçen
-  kullanıcıyı (varsayılan `elevare`) otomatik olarak süper kullanıcı yapar. Yerel
-  geliştirmede pratik, ama gerçek bir kurulumda daha dar yetkili bir kullanıcı
-  oluşturup `ConnectionStrings:DefaultConnection`'ı ona bağlayın.
+Bu maddeler Elevare'nin değil, sizin kurulumunuzun güvenliğini ilgilendirir:
+
+- Uygulamaları TLS (HTTPS) arkasında çalıştırın. Geliştirme ortamı dışında HSTS
+  açıktır ve HTTPS kullanıldığını varsayar.
+- Reverse proxy arkasında çalışıyorsanız `RateLimiting:TrustForwardedForHeader`
+  değerini `true` yapın; **ancak yalnızca** proxy arkasındaysanız. Bu başlığın
+  değerini kendisi yazan bir proxy yoksa `X-Forwarded-For` başlığını saldırgan
+  istediği gibi doldurabilir. Bu başlığa güvenmek, hız sınırını açık gibi
+  gösterirken fiilen devre dışı bırakır.
+- Canlıya çıkmadan önce `Cache:ClearSecret`, `Jwt:SecretKey` ve `Preview:SigningKey`
+  değerlerini test için ürettiğiniz değerlerden farklı değerlerle değiştirin ve
+  bunları sürüm kontrolüne eklemeyin.
+- Veritabanı kullanıcısının süper kullanıcı (superuser) yetkisine ihtiyacı yoktur.
+  `docker-compose.yml` içindeki resmî `postgres` imajı, `POSTGRES_USER` ile
+  belirtilen kullanıcıyı (varsayılan olarak `elevare`) otomatik olarak süper
+  kullanıcı yapar. Bu, yerel geliştirmede pratiktir; ancak gerçek bir kurulumda daha
+  kısıtlı yetkilere sahip bir kullanıcı oluşturup
+  `ConnectionStrings:DefaultConnection` ayarını o kullanıcıya göre düzenleyin.

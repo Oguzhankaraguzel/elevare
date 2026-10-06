@@ -2,23 +2,24 @@
 
 [English](CONTRIBUTING.md) · **Türkçe**
 
-İlginiz için teşekkürler. Bu dosya Elevare'ye özgü şeyleri anlatıyor: bazılarını
-derleme hatası size zor yoldan öğretir, bazılarını ise hiçbir derleyici denetlemez.
+Projeyle ilgilendiğiniz için teşekkürler. Bu belge Elevare'ye özgü kuralları
+anlatıyor: bazılarını derleme hataları size er geç öğretir, bazılarını ise hiçbir
+derleyici denetlemez.
 
-Sistemin nasıl kurulduğu için [docs/ARCHITECTURE.tr.md](docs/ARCHITECTURE.tr.md)
-dosyasını okuyun.
+Sistemin genel yapısını öğrenmek için
+[docs/ARCHITECTURE.tr.md](docs/ARCHITECTURE.tr.md) dosyasını okuyun.
 
-## Çalıştırmak
+## Projeyi çalıştırma
 
-[README](README.tr.md) dosyasındaki iki yol da olur. Docker daha kısa ve Docker'ın
-kendisinden başka bir şey istemez. `dotnet run` için .NET 9 SDK ve erişebildiğiniz
-bir PostgreSQL gerekir.
+[README](README.tr.md) dosyasındaki yöntemlerin hepsi işinizi görür. Docker daha
+kısa yoldur ve Docker'dan başka bir şey gerektirmez. `dotnet run` için .NET 9 SDK ve
+erişebildiğiniz bir PostgreSQL sunucusu gerekir.
 
 Yerel ayarlar her uygulamanın yanındaki `appsettings.Development.json` dosyasında
-durur. Bu dosyalar git'e girmez; yanlarındaki `.example` dosyasını kopyalayıp kendi
-değerlerinizi yazın. Değişikliğiniz yeni bir ayar gerektiriyorsa onu `.example`
-dosyasına da ekleyin. Yoksa projeyi sonra indiren kişi o ayarın varlığından
-haberdar olmaz.
+tutulur. Bu dosyalar git'e eklenmez; yanlarındaki `.example` dosyasını kopyalayıp
+kendi değerlerinizi girin. Yaptığınız değişiklik yeni bir ayar gerektiriyorsa o
+ayarı `.example` dosyasına da ekleyin; aksi hâlde projeyi sonradan indiren kişi
+böyle bir ayarın varlığından haberdar olmaz.
 
 ```bash
 dotnet build Elevare.sln
@@ -28,85 +29,92 @@ dotnet build Elevare.sln
 dotnet test Elevare.sln
 ```
 
-Pull request açmadan önce ikisi de geçmeli. CI tam olarak bunları çalıştırır; ayrıca
-iki Docker imajını derler ve bilinen güvenlik açığı olan bağımlılıkları tarar.
+Pull request açmadan önce ikisinin de başarılı olması gerekir. CI tam olarak bu iki
+komutu çalıştırır; bunlara ek olarak iki Docker imajını derler ve bilinen güvenlik
+açığı bulunan bağımlılıkları tarar.
 
-## Derlemeyi düşürecek şeyler
+## Derlemeyi bozacak durumlar
 
-**Uyarılar hata sayılır.** `TreatWarningsAsErrors` açık; Sonar, .NET analiz
-kuralları ve IDE stil kuralları devrede. Projenin bilerek kapattığı kurallar kökteki
-`.editorconfig` dosyasında, nedenini anlatan bir yorumla birlikte kapatılmış. Bir
-kuralı satır içinde susturmak istiyorsanız önce kodun size bir şey söyleyip
-söylemediğini düşünün.
+**Uyarılar hata olarak kabul edilir.** `TreatWarningsAsErrors` açıktır; Sonar, .NET
+analiz kuralları ve IDE stil kuralları devrededir. Projede bilerek kapatılan
+kurallar, kök dizindeki `.editorconfig` dosyasında gerekçesini açıklayan bir yorumla
+birlikte kapatılmıştır. Bir kuralı satır içinde susturmak istediğinizde önce kodun
+size bir şey anlatmaya çalışıp çalışmadığını düşünün.
 
-**.NET 9 SDK ile derleyin.** Projeler `net9.0` hedefliyor. Daha yeni bir preview
-SDK, .NET 9 derleyicisinin reddedeceği bazı şeyleri sorunsuz derler (kullanılmayan
-`async`, bazı Razor yapıları). Hata da ancak CI'da ya da Docker derlemesinde ortaya
-çıkar. Bilgisayarınızda preview SDK varsa kontrol etmenin en hızlı yolu Docker
-derlemesi.
+**.NET 9 SDK ile derleyin.** Projeler `net9.0` hedefler. Daha yeni bir preview SDK,
+.NET 9 derleyicisinin reddedeceği bazı kodları sorunsuz derler (kullanılmayan
+`async` ifadeleri, bazı Razor yapıları gibi); hata da ancak CI'da ya da Docker
+derlemesinde ortaya çıkar. Bilgisayarınızda preview SDK kuruluysa kontrol etmenin
+en hızlı yolu Docker derlemesidir.
 
-**EF migration'ları üretildiği gibi commit'lenir.** Migration klasörünün kendi
-`.editorconfig` dosyası var ve EF'in ürettiği kod için stil kurallarını gevşetiyor;
-elle çevrilecek bir şey yok:
+**EF migration'ları üretildiği hâliyle commit'lenir.** Migration klasöründeki kendi
+`.editorconfig` dosyası, EF'in ürettiği kod için stil kurallarını gevşetir; bu
+yüzden elle düzeltmeniz gereken bir şey yoktur:
 
 ```bash
 dotnet ef migrations add YeniMigrationAdi --project src/cms/Infrastructure/Persistence --startup-project src/cms/Presentation/Wasm/Wasm
 ```
 
-Derleme yine de üretilmiş bir `new Guid("00000000-…")` varsayılanına takılırsa
-(S4581), onu `Guid.Empty` ile değiştirin. Modelin ifade edemediği bir şey gereken
-migration (bir eklenti, fonksiyonlu bir indeks) `migrationBuilder.Sql(...)` ile
-yazılır ve nedenini anlatan bir yorum taşır.
+Derleme yine de üretilmiş bir `new Guid("00000000-…")` varsayılan değerine takılırsa
+(S4581), bunu `Guid.Empty` ile değiştirin. Modelin ifade edemediği bir şey gerektiren
+migration'lar (bir PostgreSQL eklentisi, fonksiyon tabanlı bir index gibi)
+`migrationBuilder.Sql(...)` ile yazılır ve gerekçesini açıklayan bir yorum içerir.
 
 ## Derleyicinin denetlemediği kurallar
 
-**Handler'lar exception fırlatmaz, `Result` döner.** Başarısızlık
-`Result.Failure(SomethingErrors.Reason)` şeklinde döner; hata sabiti de anlattığı
-varlığın yanında durur. Çağrıldığı yerde yeni bir `Error` oluşturmayın: hata kodu
-aynı zamanda çeviri anahtarıdır ve yerinde uydurulmuş bir kodun mesajı olmaz.
+**Handler'lar exception fırlatmaz, `Result` döner.** Başarısız bir sonuç
+`Result.Failure(SomethingErrors.Reason)` şeklinde döndürülür; hata sabiti de ilgili
+olduğu varlığın yanında tanımlanır. Çağrıldığı yerde yeni bir `Error` oluşturmayın:
+hata kodu aynı zamanda çeviri anahtarıdır ve yerinde uydurulmuş bir kodun karşılığı
+olan bir mesaj bulunmaz.
 
-**Her hata kodunun iki dilde de mesajı olmalı.** Hem `ErrorMessages.resx` hem
-`ErrorMessages.tr.resx` dosyasına ekleyin. Unutursanız `ErrorMessageCoverageTests`
-derlemeyi düşürür. Çünkü yedek mesaj İngilizce açıklamadır ve onu görecek tek kişi,
-yeni hata yolunuza düşen Türk kullanıcıdır.
+**Her hata kodunun iki dilde de mesajı olmalıdır.** Mesajı hem `ErrorMessages.resx`
+*hem de* `ErrorMessages.tr.resx` dosyasına ekleyin. Unutursanız
+`ErrorMessageCoverageTests` derlemeyi başarısız kılar. Bunun sebebi, mesaj
+bulunamadığında İngilizce açıklamanın gösterilmesidir; bunu görecek tek kişi de
+yeni yazdığınız hata durumuyla karşılaşan Türkçe kullanıcıdır.
 
-Arayüz metinleri için de aynısı geçerli: `CmsMessages.resx` / `CmsMessages.tr.resx`.
+Arayüz metinleri için de aynı kural geçerlidir: `CmsMessages.resx` ve
+`CmsMessages.tr.resx`.
 
-**Kod ve yorumlar İngilizce, arayüz iki dilli.** Commit mesajları iki dilde de
-olabilir.
+**Kod ve yorumlar İngilizce yazılır, arayüz iki dillidir.** Commit mesajları iki
+dilden biriyle yazılabilir.
 
-**Yorumlar ne yapıldığını değil, neden yapıldığını anlatır.** Kodda epey yorum var,
-ama neredeyse hepsi kodun cevaplayamayacağı bir soruyu cevaplar: neden bu sıra,
-neden yanlış görünüp aslında doğru, geçen sefer ne bozulmuştu. Üstündeki satırı
-tekrar eden bir yorum incelemede sorulur.
+**Yorumlar kodun ne yaptığını değil, neden öyle yaptığını açıklar.** Kodda oldukça
+fazla yorum vardır, ama neredeyse hepsi kodun kendisinin cevaplayamayacağı bir
+soruyu cevaplar: neden bu sırayla yapılıyor, neden yanlış görünse de aslında doğru,
+daha önce neyin bozulduğu gibi. Üstündeki satırı tekrar eden bir yorum, kod
+incelemesinde sorgulanır.
 
 ## Testler
 
-Yeni bir davranış testiyle gelir. Testler `tests/cms` ve `tests/web` altında. EF'in
-in-memory sağlayıcısı üzerinde gerçek `DbContext` ile çalışırlar; yani bir handler
-testi elle yazılmış bir taklidi değil, gerçek eşlemeyi ve sorgu filtrelerini
-çalıştırır.
+Yeni bir davranış, testiyle birlikte gelmelidir. Testler `tests/cms` ve `tests/web`
+klasörlerindedir ve EF'in in-memory sağlayıcısı üzerinde gerçek `DbContext` ile
+çalışır. Böylece bir handler testi elle yazılmış bir sahte nesneyi değil, canlıda
+kullanılan gerçek eşlemeleri ve sorgu filtrelerini sınar.
 
-In-memory sağlayıcının yapamadığı iki şey var; ikisi de burada zor yoldan öğrenildi:
+In-memory sağlayıcının desteklemediği iki şey var; ikisi de bu projede tecrübeyle
+öğrenildi:
 
 - Unique index'leri ve filtreli index'leri yok sayar.
-- `ExecuteUpdate` / `ExecuteDelete` desteklemez. Test edilebilmesi gereken kod
-  bunun yerine change tracker üzerinden gitmeli.
+- `ExecuteUpdate` / `ExecuteDelete` desteklemez. Test edilebilir olması gereken kod
+  bunun yerine change tracker üzerinden çalışmalıdır.
 
-Testlere cümle gibi ad verin: `A_deleted_translation_can_be_created_again`. Nedeni
-açık değilse, testin hangi gerçek hatayı önlemek için yazıldığını bir yorumla
-söyleyin.
+Test adlarını cümle gibi yazın: `A_deleted_translation_can_be_created_again`. Testin
+neden yazıldığı açık değilse, hangi gerçek hatayı önlemek için yazıldığını bir
+yorumla belirtin.
 
 ## Pull request'ler
 
-Küçük ve tek konuya odaklı olan, büyük ve her şeyi kapsayandan iyidir. Neyi
-değiştirdiğinizi, neden değiştirdiğinizi ve nasıl doğruladığınızı yazın. "Derleme
-geçiyor" doğrulama sayılmaz; onu CI zaten yapıyor.
+Küçük ve tek bir konuya odaklanan pull request'ler, büyük ve her şeyi kapsayanlardan
+daha iyidir. Neyi değiştirdiğinizi, neden değiştirdiğinizi ve nasıl
+doğruladığınızı yazın. "Derleme başarılı" bir doğrulama sayılmaz, çünkü bunu CI
+zaten kontrol ediyor.
 
-Yapısal bir şey planlıyorsanız önce bir issue açın. Bir yaklaşım üzerinde
-anlaşamamak, bitmiş bir branch üzerinde anlaşamamaktan çok daha ucuzdur.
+Yapısal bir değişiklik planlıyorsanız önce bir issue açın. Bir yaklaşım üzerinde baştan
+anlaşmak, tamamlanmış bir branch üzerinde anlaşmazlığa düşmekten çok daha az zahmetlidir.
 
 ## Güvenlik
 
-Lütfen bir güvenlik açığı için herkese açık issue açmayın. Gizli bildirim yolu
-[SECURITY.tr.md](SECURITY.tr.md) dosyasında.
+Lütfen güvenlik açıkları için herkese açık bir issue açmayın. Gizli bildirim yolu
+[SECURITY.tr.md](SECURITY.tr.md) dosyasında anlatılıyor.
