@@ -74,11 +74,11 @@ else if (_profile is not null)
             <div class="profile-row">
                 <div class="form-group">
                     <label class="cms-label" for="pf-first">@L["Profile_FirstName"]</label>
-                    <input id="pf-first" class="cms-input" @bind="_firstName" @bind:event="oninput" maxlength="100" />
+                    <input id="pf-first" class="cms-input" @bind="_firstName" @bind:event="oninput" @onfocusout="() => _firstName = SpectraUtil.NameEdit.CorrectGivenNames(_firstName)" maxlength="100" />
                 </div>
                 <div class="form-group">
                     <label class="cms-label" for="pf-last">@L["Profile_LastName"]</label>
-                    <input id="pf-last" class="cms-input" @bind="_lastName" @bind:event="oninput" maxlength="100" />
+                    <input id="pf-last" class="cms-input" @bind="_lastName" @bind:event="oninput" @onfocusout="() => _lastName = SpectraUtil.NameEdit.CorrectSurnames(_lastName)" maxlength="100" />
                 </div>
             </div>
 

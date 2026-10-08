@@ -267,9 +267,6 @@
   <data name="Languages_LoadError" xml:space="preserve">
     <value>Veriler yüklenirken bir hata oluştu.</value>
   </data>
-<data name="Languages_Toast_SaveError" xml:space="preserve">
-    <value>'{0}' kaydedilirken bir hata oluştu: {1}</value>
-  </data>
   <data name="Languages_IsPublished" xml:space="preserve">
     <value>Yayınlandı</value>
   </data>
@@ -662,9 +659,6 @@
   </data>
   <data name="Languages_TwoLetterMoreInfo" xml:space="preserve">
     <value>Bilgi Bankası'nda daha fazla bilgi</value>
-  </data>
-  <data name="Languages_Toast_InlineSaved" xml:space="preserve">
-    <value>Değişiklikler kaydedildi.</value>
   </data>
   <data name="Media_UploadBtn" xml:space="preserve">
     <value>⬆ Yükle</value>
@@ -5710,5 +5704,101 @@
   </data>
   <data name="SeoAnalyzer_Check_SocialOkTitle" xml:space="preserve">
     <value>Paylaşım etiketleri tamam</value>
+  </data>
+  <data name="Languages_HideTitle" xml:space="preserve">
+    <value>Bu dil siteden kaldırılsın mı?</value>
+  </data>
+  <data name="Languages_HideBody" xml:space="preserve">
+    <value>{0} dilinde yayında {1} sayfa var. Kaydettiğinizde:</value>
+  </data>
+  <data name="Languages_HideEffectPages" xml:space="preserve">
+    <value>Ziyaretçiler ana sayfa dahil bu dildeki hiçbir sayfayı açamaz.</value>
+  </data>
+  <data name="Languages_HideEffectHreflang" xml:space="preserve">
+    <value>Diğer dillerdeki sayfalar bu sayfalara artık bağlantı vermez (hreflang).</value>
+  </data>
+  <data name="Languages_HideEffectSitemap" xml:space="preserve">
+    <value>Sayfalar site haritasından hemen çıkarılır.</value>
+  </data>
+  <data name="Languages_HideEffectSearch" xml:space="preserve">
+    <value>Arama motorları sayfaları zamanla sonuçlarından düşürür, başka sitelerdeki bağlantılar da çalışmaz olur.</value>
+  </data>
+  <data name="Languages_HideChoiceTitle" xml:space="preserve">
+    <value>Eski adresler ne yapsın?</value>
+  </data>
+  <data name="Languages_HideChoiceRedirect" xml:space="preserve">
+    <value>Ziyaretçiyi varsayılan dile yönlendir (geçici, 302)</value>
+  </data>
+  <data name="Languages_HideChoiceRedirectHint" xml:space="preserve">
+    <value>Her sayfa için Yönlendirmeler ekranına geçici bir kural eklenir. Kural ziyaretçiyi sayfanın varsayılan dildeki karşılığına, karşılığı yoksa ana sayfaya götürür. Kimse hata sayfasına düşmez, arama motorları da asıl adresleri unutmaz. Dil ileride geri açılacaksa bunu öneriyoruz.</value>
+  </data>
+  <data name="Languages_HideChoiceNotFound" xml:space="preserve">
+    <value>“Sayfa bulunamadı” göster (404)</value>
+  </data>
+  <data name="Languages_HideChoiceNotFoundHint" xml:space="preserve">
+    <value>Adresler tamamen ortadan kalkar ve arama motorları onları dizinden çıkarır. Kalıcı olarak vazgeçtiğiniz bir dil için uygundur.</value>
+  </data>
+  <data name="Languages_HideAcknowledge" xml:space="preserve">
+    <value>Bu dildeki sayfaların ziyaretçilere kapanacağını anlıyorum.</value>
+  </data>
+  <data name="Languages_HideConfirm" xml:space="preserve">
+    <value>Siteden kaldır</value>
+  </data>
+  <data name="Languages_RestoreTitle" xml:space="preserve">
+    <value>Dil yeniden yayına alınıyor</value>
+  </data>
+  <data name="Languages_RestoreBody" xml:space="preserve">
+    <value>{0} siteden kaldırılırken sayfaları için {1} geçici yönlendirme eklenmişti.</value>
+  </data>
+  <data name="Languages_RestoreRemoveHint" xml:space="preserve">
+    <value>Kaldırırsanız Yönlendirmeler ekranı derli toplu kalır. Dil kalıcı olarak geri geldiyse bunu öneriyoruz.</value>
+  </data>
+  <data name="Languages_RestoreKeepHint" xml:space="preserve">
+    <value>Bırakırsanız dil yayındayken hiçbir etkileri olmaz; dili tekrar kaldırırsanız da hazırda beklerler.</value>
+  </data>
+  <data name="Languages_RestoreKeep" xml:space="preserve">
+    <value>Yönlendirmeleri bırak</value>
+  </data>
+  <data name="Languages_RestoreRemove" xml:space="preserve">
+    <value>Yönlendirmeleri kaldır</value>
+  </data>
+  <data name="Languages_Toast_RedirectsCreated" xml:space="preserve">
+    <value>{0} geçici yönlendirme eklendi. Yönlendirmeler ekranında görebilirsiniz.</value>
+  </data>
+  <data name="Languages_Toast_RedirectsRemoved" xml:space="preserve">
+    <value>{0} geçici yönlendirme kaldırıldı.</value>
+  </data>
+  <data name="Redirects_Reason_LanguageUnpublished" xml:space="preserve">
+    <value>Dil siteden kaldırıldı (geçici, 302)</value>
+  </data>
+  <data name="HomeUnpublish_Title" xml:space="preserve">
+    <value>Ana sayfa yayından kaldırılsın mı?</value>
+  </data>
+  <data name="HomeUnpublish_Body" xml:space="preserve">
+    <value>Bu sayfa bir dilin ana sayfası. Yayından kaldırırsanız:</value>
+  </data>
+  <data name="HomeUnpublish_BodyDefault" xml:space="preserve">
+    <value>Bu sayfa sitenizin ana sayfası. Yayından kaldırırsanız:</value>
+  </data>
+  <data name="HomeUnpublish_EffectRoot" xml:space="preserve">
+    <value>O dilin ana adresi (örneğin /en) “sayfa bulunamadı” (404) verir.</value>
+  </data>
+  <data name="HomeUnpublish_EffectRootDefault" xml:space="preserve">
+    <value>Sitenizin kendi adresi (/) “sayfa bulunamadı” (404) verir. Siteyi açan herkes hata sayfası görür.</value>
+  </data>
+  <data name="HomeUnpublish_EffectLinks" xml:space="preserve">
+    <value>Dil seçici ve logo dahil bu adrese giden bütün bağlantılar hata sayfasına çıkar.</value>
+  </data>
+  <data name="HomeUnpublish_EffectSearch" xml:space="preserve">
+    <value>Arama motorları bu adresi sonuçlarından düşürebilir.</value>
+  </data>
+  <data name="HomeUnpublish_MaintenanceHint" xml:space="preserve">
+    <value>Siteyi bir süreliğine kapatmak istiyorsanız bakım modu (Site Ayarları → Sistem) çok daha güvenli bir yoldur.</value>
+  </data>
+  <data name="HomeUnpublish_Acknowledge" xml:space="preserve">
+    <value>Bu adresin 404 vereceğini anlıyorum.</value>
+  </data>
+  <data name="HomeUnpublish_Confirm" xml:space="preserve">
+    <value>Yine de kaldır</value>
   </data>
 </root>

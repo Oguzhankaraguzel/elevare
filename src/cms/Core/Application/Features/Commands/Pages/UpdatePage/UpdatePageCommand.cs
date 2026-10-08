@@ -15,6 +15,7 @@ namespace Application.Features.Commands.Pages.UpdatePage;
 /// <param name="ExpectedFingerprint">The page as the editor loaded it (see <see cref="PageFingerprint"/>);
 /// the save is refused when the page has changed since. Null skips the check.</param>
 /// <param name="Overwrite">Save over a change made since, after the author was told about it.</param>
+/// <param name="ConfirmHomePageUnpublish">Required to take a homepage off the site — see <see cref="HomePageUnpublish"/>.</param>
 public sealed record UpdatePageCommand(
     int Id,
     string Title,
@@ -29,7 +30,8 @@ public sealed record UpdatePageCommand(
     PageKind Kind = PageKind.Unspecified,
     List<int>? ExcludedSiteCodeSnippetIds = null,
     string? ExpectedFingerprint = null,
-    bool Overwrite = false) : ICommand, IRequirePermission
+    bool Overwrite = false,
+    bool ConfirmHomePageUnpublish = false) : ICommand, IRequirePermission
 {
     public static string RequiredPermission => PermissionKeys.PagesEdit;
 }

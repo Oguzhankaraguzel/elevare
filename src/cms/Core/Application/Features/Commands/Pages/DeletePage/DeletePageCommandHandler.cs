@@ -25,8 +25,8 @@ internal sealed class DeletePageCommandHandler(ICmsApplicationDbContext db)
             return Result.Failure(PageInfoErrors.CannotDeleteWithChildren);
 
         bool wasPublished = page.PageStatus == PageStatus.Published;
-        if (wasPublished && page.Slug == "home")
-            return Result.Failure(PageInfoErrors.CannotUnpublishHomePage);
+        if (await HomePageUnpublish.CheckAsync(db, page, wasPublished, request.ConfirmHomePageUnpublish, cancellationToken) is Error homeError)
+            return Result.Failure(homeError);
 
         string fullSlug = page.FullSlug;
 

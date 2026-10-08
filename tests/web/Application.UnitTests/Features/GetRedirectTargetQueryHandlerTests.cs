@@ -43,11 +43,11 @@ public sealed class GetRedirectTargetQueryHandlerTests
         using PublicReadDbContext db = await SeedAsync(s =>
             s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "eski-sayfa", NewPath = "/yeni-sayfa" }));
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "eski-sayfa"), CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBe("/yeni-sayfa");
+        result.Value.Url.ShouldBe("/yeni-sayfa");
     }
 
     [Fact]
@@ -56,11 +56,11 @@ public sealed class GetRedirectTargetQueryHandlerTests
         using PublicReadDbContext db = await SeedAsync(s =>
             s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "en/old-page", NewPath = "/en/new-page" }));
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("en", "old-page"), CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBe("/en/new-page");
+        result.Value.Url.ShouldBe("/en/new-page");
     }
 
     [Fact]
@@ -88,10 +88,10 @@ public sealed class GetRedirectTargetQueryHandlerTests
             });
         });
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "ilk-ad"), CancellationToken.None);
 
-        result.Value.ShouldBe("/ucuncu-ad");
+        result.Value.Url.ShouldBe("/ucuncu-ad");
     }
 
     [Fact]
@@ -117,10 +117,10 @@ public sealed class GetRedirectTargetQueryHandlerTests
             });
         });
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "ilk-ad"), CancellationToken.None);
 
-        result.Value.ShouldBe("/elle-verilen-hedef");
+        result.Value.Url.ShouldBe("/elle-verilen-hedef");
     }
 
     [Fact]
@@ -129,7 +129,7 @@ public sealed class GetRedirectTargetQueryHandlerTests
         using PublicReadDbContext db = await SeedAsync(s =>
             s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "ilk-ad", NewPath = null, SourcePageId = null }));
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "ilk-ad"), CancellationToken.None);
 
         result.IsFailure.ShouldBeTrue();
@@ -141,7 +141,7 @@ public sealed class GetRedirectTargetQueryHandlerTests
     {
         using PublicReadDbContext db = await SeedAsync(_ => { });
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "hic-var-olmayan"), CancellationToken.None);
 
         result.IsFailure.ShouldBeTrue();
@@ -159,11 +159,11 @@ public sealed class GetRedirectTargetQueryHandlerTests
             s.Redirects.Add(new PublicRedirect { Id = 2, OldPath = "zincir-b", NewPath = "/son-durak" });
         });
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "zincir-a"), CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBe("/son-durak");
+        result.Value.Url.ShouldBe("/son-durak");
     }
 
     [Fact]
@@ -177,7 +177,7 @@ public sealed class GetRedirectTargetQueryHandlerTests
             s.Redirects.Add(new PublicRedirect { Id = 2, OldPath = "dongu-y", NewPath = "/dongu-x" });
         });
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "dongu-x"), CancellationToken.None);
 
         result.IsFailure.ShouldBeTrue();
@@ -190,7 +190,7 @@ public sealed class GetRedirectTargetQueryHandlerTests
         using PublicReadDbContext db = await SeedAsync(s =>
             s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "kendine-donen", NewPath = "/kendine-donen" }));
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "kendine-donen"), CancellationToken.None);
 
         result.IsFailure.ShouldBeTrue();
@@ -206,10 +206,54 @@ public sealed class GetRedirectTargetQueryHandlerTests
             s.Redirects.Add(new PublicRedirect { Id = 2, OldPath = "kampanya", NewPath = "https://ornek.com/promo" });
         });
 
-        Result<string> result = await new GetRedirectTargetQueryHandler(db)
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
             .Handle(new GetRedirectTargetQuery("tr", "eski-kampanya"), CancellationToken.None);
 
         result.IsSuccess.ShouldBeTrue();
-        result.Value.ShouldBe("https://ornek.com/promo");
+        result.Value.Url.ShouldBe("https://ornek.com/promo");
+    }
+
+    [Fact]
+    public async Task An_ordinary_rule_is_permanent()
+    {
+        using PublicReadDbContext db = await SeedAsync(s =>
+            s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "eski-sayfa", NewPath = "/yeni-sayfa" }));
+
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
+            .Handle(new GetRedirectTargetQuery("tr", "eski-sayfa"), CancellationToken.None);
+
+        result.Value.IsPermanent.ShouldBeTrue();
+    }
+
+    [Fact]
+    public async Task A_temporary_rule_answers_302()
+    {
+        using PublicReadDbContext db = await SeedAsync(s =>
+            s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "en/about", NewPath = "/hakkimda", IsTemporary = true }));
+
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
+            .Handle(new GetRedirectTargetQuery("tr", "en/about"), CancellationToken.None);
+
+        result.Value.Url.ShouldBe("/hakkimda");
+        result.Value.IsPermanent.ShouldBeFalse();
+    }
+
+    // An old English slug (permanent, from a rename) now leads into an unpublished
+    // language whose pages redirect temporarily: the chain as a whole is not settled,
+    // so it must not be announced as a permanent move.
+    [Fact]
+    public async Task One_temporary_hop_makes_the_whole_chain_temporary()
+    {
+        using PublicReadDbContext db = await SeedAsync(s =>
+        {
+            s.Redirects.Add(new PublicRedirect { Id = 1, OldPath = "en/old-about", NewPath = "/en/about" });
+            s.Redirects.Add(new PublicRedirect { Id = 2, OldPath = "en/about", NewPath = "/hakkimda", IsTemporary = true });
+        });
+
+        Result<RedirectTarget> result = await new GetRedirectTargetQueryHandler(db)
+            .Handle(new GetRedirectTargetQuery("tr", "en/old-about"), CancellationToken.None);
+
+        result.Value.Url.ShouldBe("/hakkimda");
+        result.Value.IsPermanent.ShouldBeFalse();
     }
 }

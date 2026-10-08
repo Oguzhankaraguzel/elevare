@@ -15,7 +15,8 @@ namespace Application.Features.Commands.Pages.UpdatePageStatus;
 /// Published — null means no redirect. Only meaningful when moving away from Published.
 /// </param>
 #pragma warning disable CA1054
-public sealed record UpdatePageStatusCommand(int Id, PageStatus Status, string? RedirectTargetUrl = null) : ICommand, IRequirePermission
+/// <param name="ConfirmHomePageUnpublish">Required to take a homepage off the site — see <see cref="HomePageUnpublish"/>.</param>
+public sealed record UpdatePageStatusCommand(int Id, PageStatus Status, string? RedirectTargetUrl = null, bool ConfirmHomePageUnpublish = false) : ICommand, IRequirePermission
 {
     public static string RequiredPermission => PermissionKeys.PagesPublish;
 }

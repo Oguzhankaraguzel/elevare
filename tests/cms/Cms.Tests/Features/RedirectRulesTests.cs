@@ -224,6 +224,20 @@ public sealed class RedirectRulesTests
         item.Health.HasFlag(RedirectHealth.BrokenTarget).ShouldBeFalse();
     }
 
+    // The default language's homepage has the FullSlug "" — a real target the site
+    // answers as "/". Treated as "no target", every rule pointing home (a language
+    // taken off the site, a default-language switch) showed up as a 410.
+    [Fact]
+    public async Task A_rule_bound_to_the_default_homepage_is_reported_healthy()
+    {
+        PageInfo home = LivePage(1, "home");
+        home.FullSlug = "";
+        await SeedAsync([home],
+            [new Redirect { OldPath = "en", NewPath = "/", SourcePageId = 1, Reason = RedirectReason.LanguageUnpublished, IsTemporary = true }]);
+
+        (await ListAsync()).Single().Health.ShouldBe(RedirectHealth.None);
+    }
+
     [Fact]
     public async Task An_external_target_is_marked_external_and_never_called_broken()
     {

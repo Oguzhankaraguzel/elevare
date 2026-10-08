@@ -218,16 +218,16 @@
     private void GenerateUserName()
     {
         if (_model.FirstName.IsNullOrWhiteSpace() && _model.LastName.IsNullOrWhiteSpace()) return;
-        _model.UserName = SpectraUtil.NameEdit.CreateUserName(_model.FirstName + _model.LastName);
+        _model.UserName = SpectraUtil.NameEdit.CreateUserNameFrom(_model.FirstName, _model.LastName);
     }
 
     private void CorrectName()
     {
-        _model.FirstName = SpectraUtil.NameEdit.NameCorrection(_model.FirstName);
+        _model.FirstName = SpectraUtil.NameEdit.CorrectGivenNames(_model.FirstName);
     }
     private void CorrectSurname()
     {
-        _model.LastName = SpectraUtil.NameEdit.SirNameCorrection(_model.LastName);
+        _model.LastName = SpectraUtil.NameEdit.CorrectSurnames(_model.LastName);
     }
 
     }

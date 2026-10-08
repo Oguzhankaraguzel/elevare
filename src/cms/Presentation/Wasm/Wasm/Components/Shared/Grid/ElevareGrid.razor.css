@@ -763,9 +763,10 @@
     background: rgba(99, 102, 241, .06) !important;
 }
 
+/* The marker belongs to the row, so only its first cell carries it — on every
+   cell it drew a warning-coloured bar between each pair of columns. */
 .eg-data-row.eg-modified td {
     background: rgba(251, 191, 36, .06) !important;
-    border-left: 3px solid var(--cms-warning);
 }
 
 .eg-data-row.eg-modified td:first-child {

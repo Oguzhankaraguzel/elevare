@@ -19,9 +19,7 @@
              ShowImport="false"
              ShowRowNumbers
              EmptyText="@L["Languages_Empty"]"
-             PageSize="20"
-             AllowInlineEdit="true"
-             OnSaveChanges="OnGridSaveChanges">
+             PageSize="20">
     <ToolbarEnd>
         <button class="btn-cms btn-primary-cms" @onclick="OpenCreate">
             <i class="bi bi-plus-lg"></i> @L["Languages_NewLanguage"]
@@ -176,6 +174,89 @@
     </Footer>
 </CmsModal>
 
+@* ── Taking a language off the site ─────────────────────────────────────── *@
+@* Every page of the language stops answering, so the editor sees what that means
+   and chooses what its addresses should do instead — nothing happens on a stray
+   toggle-and-save. *@
+<CmsModal Title="@L["Languages_HideTitle"]" IsVisible="_showHideWarning" OnClose="CancelVisibilityChange" Size="md">
+    <Body>
+        <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:14px">
+            <i class="bi bi-exclamation-octagon-fill" style="font-size:30px;color:var(--cms-danger);flex-shrink:0"></i>
+            <div>
+                <p style="color:var(--cms-text);margin:0 0 6px;font-weight:600">
+                    @string.Format(L["Languages_HideBody"], _form.NameInNative, _impact?.PublishedPages ?? 0)
+                </p>
+                <ul style="font-size:13.5px;color:var(--cms-text-muted);margin:0;padding-left:18px;line-height:1.7">
+                    <li>@L["Languages_HideEffectPages"]</li>
+                    <li>@L["Languages_HideEffectHreflang"]</li>
+                    <li>@L["Languages_HideEffectSitemap"]</li>
+                    <li>@L["Languages_HideEffectSearch"]</li>
+                </ul>
+            </div>
+        </div>
+
+        <p class="cms-label" style="margin:16px 0 8px">@L["Languages_HideChoiceTitle"]</p>
+        <label class="lang-hide-choice @(_whenHidden == LanguageHiddenHandling.RedirectToDefaultLanguage ? "is-selected" : "")">
+            <input type="radio" name="lang-hide" checked="@(_whenHidden == LanguageHiddenHandling.RedirectToDefaultLanguage)"
+                   @onchange="() => _whenHidden = LanguageHiddenHandling.RedirectToDefaultLanguage" />
+            <span>
+                <strong>@L["Languages_HideChoiceRedirect"]</strong>
+                <small>@L["Languages_HideChoiceRedirectHint"]</small>
+            </span>
+        </label>
+        <label class="lang-hide-choice @(_whenHidden == LanguageHiddenHandling.NotFound ? "is-selected" : "")">
+            <input type="radio" name="lang-hide" checked="@(_whenHidden == LanguageHiddenHandling.NotFound)"
+                   @onchange="() => _whenHidden = LanguageHiddenHandling.NotFound" />
+            <span>
+                <strong>@L["Languages_HideChoiceNotFound"]</strong>
+                <small>@L["Languages_HideChoiceNotFoundHint"]</small>
+            </span>
+        </label>
+
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;cursor:pointer;font-size:13.5px;color:var(--cms-text)">
+            <input type="checkbox" @bind="_hideAcknowledged" style="margin-top:3px" />
+            <span>@L["Languages_HideAcknowledge"]</span>
+        </label>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CancelVisibilityChange">@L["Languages_CancelBtn"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="ConfirmHiding" disabled="@(_saving || !_hideAcknowledged)">
+            @if (_saving)
+            {
+                <i class="bi bi-arrow-clockwise spin"></i>
+            }
+            else
+            {
+                <i class="bi bi-eye-slash"></i>
+            }
+            @L["Languages_HideConfirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@* ── Putting a language back on the site ─────────────────────────────────── *@
+<CmsModal Title="@L["Languages_RestoreTitle"]" IsVisible="_showRestoreDialog" OnClose="CancelVisibilityChange" Size="md">
+    <Body>
+        <div style="display:flex;gap:14px;align-items:flex-start">
+            <i class="bi bi-signpost-split" style="font-size:28px;color:var(--cms-accent);flex-shrink:0"></i>
+            <div style="font-size:13.5px;color:var(--cms-text-muted);line-height:1.7">
+                <p style="color:var(--cms-text);margin:0 0 8px;font-weight:600">
+                    @string.Format(L["Languages_RestoreBody"], _form.NameInNative, _impact?.HiddenRedirects ?? 0)
+                </p>
+                <p style="margin:0 0 6px">@L["Languages_RestoreRemoveHint"]</p>
+                <p style="margin:0">@L["Languages_RestoreKeepHint"]</p>
+            </div>
+        </div>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="CancelVisibilityChange">@L["Languages_CancelBtn"]</button>
+        <button class="btn-cms btn-ghost" @onclick="() => ConfirmRestore(removeRedirects: false)" disabled="@_saving">@L["Languages_RestoreKeep"]</button>
+        <button class="btn-cms btn-primary-cms" @onclick="() => ConfirmRestore(removeRedirects: true)" disabled="@_saving">
+            <i class="bi bi-check2"></i> @L["Languages_RestoreRemove"]
+        </button>
+    </Footer>
+</CmsModal>
+
 @* ── Flag file picker ────────────────────────────────────────────────────── *@
 <CmsModal Title="@L["Languages_FilePicker"]" IsVisible="_showPicker" OnClose="() => _showPicker = false" Size="lg">
     <Body>
@@ -224,6 +305,17 @@
     private bool _originalIsDefault;
     private bool _showDefaultWarning;
 
+    // Visibility = active AND published, the only state in which visitors see the
+    // language. Leaving or entering it is what the two dialogs above are about.
+    private bool _originalVisible;
+    private LanguageVisibilityImpact? _impact;
+    private bool _showHideWarning;
+    private bool _hideAcknowledged;
+    private LanguageHiddenHandling _whenHidden = LanguageHiddenHandling.RedirectToDefaultLanguage;
+    private bool _showRestoreDialog;
+    private bool _confirmHiding;
+    private bool _removeHiddenRedirects;
+
     private bool _showDelete;
     private LanguageResponse? _deleteTarget;
     private bool _showPicker;
@@ -264,7 +356,6 @@
                 CellTemplate  = LangNameTemplate,
                 Sortable      = true,
                 Filterable    = true,
-                Editable      = true,
             },
             new GridColumnDef<LanguageResponse>
             {
@@ -287,7 +378,6 @@
                 Filterable    = false,
                 Align         = TextAlign.Center,
                 Width         = "80px",
-                Editable      = true,
             },
             new GridColumnDef<LanguageResponse>
             {
@@ -300,7 +390,6 @@
                 Filterable    = true,
                 Align         = TextAlign.Center,
                 Width         = "80px",
-                Editable      = true,
             },
             new GridColumnDef<LanguageResponse>
             {
@@ -312,7 +401,6 @@
                 Sortable      = true,
                 Filterable    = true,
                 Width         = "200px",
-                Editable      = true,
             },
             new GridColumnDef<LanguageResponse>
             {
@@ -324,7 +412,6 @@
                 Sortable      = true,
                 Filterable    = true,
                 Width         = "140px",
-                Editable      = true,
             },
         ];
 
@@ -497,6 +584,7 @@
     {
         _editId = lang.Id;
         _originalIsDefault = lang.IsDefault;
+        _originalVisible = lang.IsActive && lang.IsPublished;
         _form = new LanguageFormModel
         {
             NameInNative = lang.NameInNative,
@@ -556,13 +644,74 @@
             return;
         }
 
-        await PerformSaveAsync();
+        await ContinueWithVisibilityAsync();
     }
 
     private async Task ConfirmDefaultSwitch()
     {
         _showDefaultWarning = false;
+        await ContinueWithVisibilityAsync();
+    }
+
+    private async Task ContinueWithVisibilityAsync()
+    {
+        _confirmHiding = false;
+        _removeHiddenRedirects = false;
+        bool willBeVisible = _form.IsActive && _form.IsPublished;
+
+        // The default language owns the site's root address; the server refuses this
+        // too, but saying so here keeps the form open with the switch to undo.
+        if ((_form.IsDefault || _originalIsDefault) && !willBeVisible)
+        {
+            Toast.Error(L.Error(LanguageErrors.DefaultMustStayVisible));
+            return;
+        }
+
+        if (_editId is int id && _originalVisible != willBeVisible)
+        {
+            _impact = null;
+            (await Sender.Send(new GetLanguageVisibilityImpactQuery(id))).Match(
+                impact => _impact = impact,
+                error => Toast.Error(L.Error(error)));
+            if (_impact is null) return;
+
+            if (_originalVisible)
+            {
+                _hideAcknowledged = false;
+                _whenHidden = LanguageHiddenHandling.RedirectToDefaultLanguage;
+                _showHideWarning = true;
+                return;
+            }
+
+            if (_impact.HiddenRedirects > 0)
+            {
+                _showRestoreDialog = true;
+                return;
+            }
+        }
+
         await PerformSaveAsync();
+    }
+
+    private async Task ConfirmHiding()
+    {
+        if (!_hideAcknowledged) return;
+        _showHideWarning = false;
+        _confirmHiding = true;
+        await PerformSaveAsync();
+    }
+
+    private async Task ConfirmRestore(bool removeRedirects)
+    {
+        _showRestoreDialog = false;
+        _removeHiddenRedirects = removeRedirects;
+        await PerformSaveAsync();
+    }
+
+    private void CancelVisibilityChange()
+    {
+        _showHideWarning = false;
+        _showRestoreDialog = false;
     }
 
     private async Task PerformSaveAsync()
@@ -580,7 +729,10 @@
                                                               _form.IsRtl,
                                                               _form.IsPublished,
                                                               _form.DisplayOrder,
-                                                              _form.IsActive)
+                                                              _form.IsActive,
+                                                              _confirmHiding,
+                                                              _whenHidden,
+                                                              _removeHiddenRedirects)
                 )
                 : await Sender.Send(new CreateLanguageCommand(_form.NameInNative,
                                                               _form.NameInEnglish,
@@ -604,6 +756,10 @@
                     Toast.Success(string.Format(L["Languages_Toast_DefaultChanged"], result.Value.MovedAddresses, result.Value.UpdatedRecords));
                 else
                     Toast.Success(_editId.HasValue ? L["Languages_Toast_Updated"] : L["Languages_Toast_Created"]);
+                if (result.Value.RedirectsCreated > 0)
+                    Toast.Info(string.Format(L["Languages_Toast_RedirectsCreated"], result.Value.RedirectsCreated));
+                if (result.Value.RedirectsRemoved > 0)
+                    Toast.Info(string.Format(L["Languages_Toast_RedirectsRemoved"], result.Value.RedirectsRemoved));
                 CloseForm();
                 await LoadLanguages(forceReload: true);
             }
@@ -638,64 +794,4 @@
 
     // ── Helpers ────────────────────────────────────────────────────────────
     // GetCurrentUserIdAsync removed; command handlers now set user ids server-side.
-
-    // ── Inline edit save ───────────────────────────────────────────────────
-    private async Task OnGridSaveChanges(List<EditedRow<LanguageResponse>> edits)
-    {
-        _saving = true;
-        int errorCount = 0;
-        try
-        {
-            foreach (EditedRow<LanguageResponse> edit in edits)
-            {
-                LanguageResponse item = edit.Item;
-                string nameInNative = GetEditedString(edit.EditedValues, "NameInNative") ?? item.NameInNative;
-                int displayOrder    = GetEditedInt(edit.EditedValues, "DisplayOrder") ?? item.DisplayOrder;
-                bool isRtl          = GetEditedBool(edit.EditedValues, "IsRtl") ?? item.IsRtl;
-                bool isActive       = GetEditedBool(edit.EditedValues, "IsActive") ?? item.IsActive;
-                bool isPublished    = GetEditedBool(edit.EditedValues, "IsPublished") ?? item.IsPublished;
-
-                 (await Sender.Send(new UpdateLanguageCommand(item.Id,
-                                                                 nameInNative,
-                                                                 item.NameInEnglish,
-                                                                 item.TwoLetterCode,
-                                                                 item.FlagIconFileId,
-                                                                 item.IsDefault,
-                                                                 isRtl,
-                                                                 isPublished,
-                                                                 displayOrder,
-                                                                 isActive)
-                    ))
-                    .Match(
-                    () => { },
-                    error =>
-                    {
-                        Toast.Error(string.Format(L["Languages_Toast_SaveError"], item.NameInNative, L.Error(error)));
-                        errorCount++;
-                    }
-                );
-            }
-            if (errorCount == 0)
-                Toast.Success(L["Languages_Toast_InlineSaved"]);
-            await LoadLanguages();
-        }
-        finally { _saving = false; }
-    }
-
-    private static string? GetEditedString(IReadOnlyDictionary<string, object?> values, string key)
-        => values.TryGetValue(key, out object? v) ? v?.ToString() : null;
-
-    private static int? GetEditedInt(IReadOnlyDictionary<string, object?> values, string key)
-    {
-        if (!values.TryGetValue(key, out object? v)) return null;
-        if (v is int i) return i;
-        return int.TryParse(v?.ToString(), out int n) ? n : null;
-    }
-
-    private static bool? GetEditedBool(IReadOnlyDictionary<string, object?> values, string key)
-    {
-        if (!values.TryGetValue(key, out object? v)) return null;
-        if (v is bool b) return b;
-        return bool.TryParse(v?.ToString(), out bool b2) ? b2 : null;
-    }
 }

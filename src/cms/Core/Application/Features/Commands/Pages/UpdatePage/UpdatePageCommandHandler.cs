@@ -53,6 +53,10 @@ internal sealed class UpdatePageCommandHandler(ICmsApplicationDbContext db, IUse
         bool wasPublished = page.PageStatus == PageStatus.Published;
         string oldFullSlug = page.FullSlug;
 
+        bool leavingPublished = wasPublished && request.Status != PageStatus.Published;
+        if (await HomePageUnpublish.CheckAsync(db, page, leavingPublished, request.ConfirmHomePageUnpublish, cancellationToken) is Error homeError)
+            return Result.Failure(homeError);
+
         if (slug != page.Slug)
         {
             bool slugExists = await db.PageInfos

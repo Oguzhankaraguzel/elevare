@@ -1551,3 +1551,10 @@ small[style*="--cms-text-dim"] {
 .fp-more{display:flex;justify-content:center}
 /* The buttons stay in sight while the thumbnails scroll under them. */
 .fp-actions{position:sticky;bottom:-24px;margin:0 -24px -24px;padding:12px 24px;display:flex;justify-content:flex-end;gap:8px;background:var(--cms-card);border-top:1px solid var(--cms-border)}
+
+/* ── Languages: what an unpublished language's addresses should do ─────────── */
+.lang-hide-choice{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;margin-bottom:8px;border:1px solid var(--cms-border);border-radius:var(--radius-sm);cursor:pointer;transition:border-color var(--transition),background var(--transition)}
+.lang-hide-choice input{margin-top:3px}
+.lang-hide-choice strong{display:block;font-size:13.5px;color:var(--cms-text)}
+.lang-hide-choice small{display:block;font-size:12.5px;line-height:1.55;color:var(--cms-text-muted)}
+.lang-hide-choice.is-selected{border-color:var(--cms-accent);background:var(--cms-accent-light)}

@@ -87,10 +87,12 @@ public sealed class PageController(
             // Before giving up, check whether this path has a redirect rule (old slug
             // after a rename, or a deleted/archived page's replacement URL) — a 301
             // here is what keeps bookmarked/indexed links from dead-ending on a 404.
-            Result<string> redirect = await sender.Send(
+            Result<RedirectTarget> redirect = await sender.Send(
                 new GetRedirectTargetQuery(resolvedLanguageCode, resolvedSlug), cancellationToken);
             if (redirect.IsSuccess)
-                return RedirectPermanent(redirect.Value);
+                return redirect.Value.IsPermanent
+                    ? RedirectPermanent(redirect.Value.Url)
+                    : Redirect(redirect.Value.Url);
 
             // The query's error explains the real cause (no such page / exists but
             // Draft / inactive) — surface it so logs and the debugger tell the truth.

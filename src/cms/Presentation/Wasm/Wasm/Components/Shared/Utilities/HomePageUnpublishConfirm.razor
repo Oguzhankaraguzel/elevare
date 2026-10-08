@@ -1,0 +1,72 @@
+@* The second question before a homepage leaves Published (drafted, archived or
+   deleted). The server refuses the change until it is asked again with the
+   confirmation, so this is the only way through — see HomePageUnpublish. A
+   checkbox, not just a button: this takes a whole language (or the whole site)
+   off its root address, and a reflexive click should not be enough. *@
+
+<CmsModal Title="@L["HomeUnpublish_Title"]" IsVisible="IsVisible" OnClose="Cancel" Size="md">
+    <Body>
+        <div style="display:flex;gap:14px;align-items:flex-start">
+            <i class="bi bi-exclamation-octagon-fill" style="font-size:30px;color:var(--cms-danger);flex-shrink:0"></i>
+            <div>
+                <p style="color:var(--cms-text);margin:0 0 8px;font-weight:600">
+                    @(IsDefaultLanguage ? L["HomeUnpublish_BodyDefault"] : L["HomeUnpublish_Body"])
+                </p>
+                <ul style="font-size:13.5px;color:var(--cms-text-muted);margin:0;padding-left:18px;line-height:1.7">
+                    <li>@(IsDefaultLanguage ? L["HomeUnpublish_EffectRootDefault"] : L["HomeUnpublish_EffectRoot"])</li>
+                    <li>@L["HomeUnpublish_EffectLinks"]</li>
+                    <li>@L["HomeUnpublish_EffectSearch"]</li>
+                    @if (IsDefaultLanguage)
+                    {
+                        <li><strong>@L["HomeUnpublish_MaintenanceHint"]</strong></li>
+                    }
+                </ul>
+            </div>
+        </div>
+        <label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;cursor:pointer;font-size:13.5px;color:var(--cms-text)">
+            <input type="checkbox" @bind="_acknowledged" style="margin-top:3px" />
+            <span>@L["HomeUnpublish_Acknowledge"]</span>
+        </label>
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="Cancel">@L["Common_Cancel"]</button>
+        <button class="btn-cms btn-danger-cms" @onclick="Confirm" disabled="@(Busy || !_acknowledged)">
+            <i class="bi bi-exclamation-triangle"></i> @L["HomeUnpublish_Confirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public bool IsDefaultLanguage { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private bool _acknowledged;
+
+    /// <summary>Whether a refused command was refused only for want of this confirmation.</summary>
+    public static bool AsksFor(SharedKernel.Concrete.Error error, out bool isDefaultLanguage)
+    {
+        isDefaultLanguage = error.Code == PageInfoErrors.DefaultHomePageUnpublishNeedsConfirmation.Code;
+        return isDefaultLanguage || error.Code == PageInfoErrors.HomePageUnpublishNeedsConfirmation.Code;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible) _acknowledged = false;
+    }
+
+    private async Task Confirm()
+    {
+        if (!_acknowledged) return;
+        _acknowledged = false;
+        await OnConfirm.InvokeAsync();
+    }
+
+    private async Task Cancel()
+    {
+        _acknowledged = false;
+        await OnCancel.InvokeAsync();
+    }
+}

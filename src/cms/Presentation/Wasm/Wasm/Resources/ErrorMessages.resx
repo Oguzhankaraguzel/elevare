@@ -59,9 +59,6 @@
   <data name="PageInfo.CannotDeleteWithChildren" xml:space="preserve">
     <value>The page cannot be deleted because it has child pages.</value>
   </data>
-  <data name="PageInfo.CannotUnpublishHomePage" xml:space="preserve">
-    <value>The home page cannot be unpublished.</value>
-  </data>
   <!-- Redirect -->
   <data name="Redirect.NotFound" xml:space="preserve">
     <value>The redirect rule was not found.</value>
@@ -364,5 +361,17 @@
   </data>
   <data name="Page.StructuredDataInvalidJson" xml:space="preserve">
     <value>The structured data is not valid JSON. Published as it stands, no search engine can read any of it.</value>
+  </data>
+  <data name="PageInfo.HomePageUnpublishNeedsConfirmation" xml:space="preserve">
+    <value>This is a language's homepage. Taking it off the site makes that language's root address return 404.</value>
+  </data>
+  <data name="PageInfo.DefaultHomePageUnpublishNeedsConfirmation" xml:space="preserve">
+    <value>This is the site's homepage. Taking it off the site makes your site's own address return 404.</value>
+  </data>
+  <data name="Language.DefaultMustStayVisible" xml:space="preserve">
+    <value>The default language cannot be taken off the site or made inactive: the site's root address belongs to it. Make another language the default first, or turn on maintenance mode.</value>
+  </data>
+  <data name="Language.HidingNeedsConfirmation" xml:space="preserve">
+    <value>Taking a language off the site has to be confirmed, together with what its addresses should do.</value>
   </data>
 </root>

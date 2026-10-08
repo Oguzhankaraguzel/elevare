@@ -63,6 +63,7 @@
             <option value="@nameof(RedirectReason.SlugChanged)">@L["Redirects_Reason_SlugChanged"]</option>
             <option value="@nameof(RedirectReason.PageDeleted)">@L["Redirects_Reason_PageDeleted"]</option>
             <option value="@nameof(RedirectReason.PageArchived)">@L["Redirects_Reason_PageArchived"]</option>
+            <option value="@nameof(RedirectReason.LanguageUnpublished)">@L["Redirects_Reason_LanguageUnpublished"]</option>
         </select>
         @if (CanManage)
         {
@@ -432,6 +433,7 @@
         RedirectReason.SlugChanged => L["Redirects_Reason_SlugChanged"],
         RedirectReason.PageDeleted => L["Redirects_Reason_PageDeleted"],
         RedirectReason.PageArchived => L["Redirects_Reason_PageArchived"],
+        RedirectReason.LanguageUnpublished => L["Redirects_Reason_LanguageUnpublished"],
         _ => L["Redirects_Reason_Manual"],
     };
 

@@ -1183,6 +1183,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("boolean")
                     .HasDefaultValue(false);
 
+                b.Property<bool>("IsTemporary")
+                    .HasColumnType("boolean");
+
                 b.Property<string>("NewPath")
                     .HasMaxLength(2000)
                     .HasColumnType("character varying(2000)");

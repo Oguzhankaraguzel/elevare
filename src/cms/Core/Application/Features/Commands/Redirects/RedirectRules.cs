@@ -41,7 +41,8 @@ public static class RedirectRules
         // visitors could never reach it again, and nothing on the Pages screen would
         // explain why.
         bool shadowsLivePage = await db.PageInfos
-            .AnyAsync(p => p.FullSlug == oldPath && p.PageStatus == Domain.Entities.PageInfos.PageStatus.Published, cancellationToken);
+            .AnyAsync(p => p.FullSlug == oldPath && p.PageStatus == Domain.Entities.PageInfos.PageStatus.Published
+                && p.Language.IsActive && p.Language.IsPublished, cancellationToken);
         if (shadowsLivePage)
             return Result.Failure(RedirectErrors.ShadowsLivePage);
 

@@ -252,9 +252,6 @@
 	<data name="Languages_LoadError" xml:space="preserve">
     <value>An error occurred while loading data.</value>
   </data>
-<data name="Languages_Toast_SaveError" xml:space="preserve">
-    <value>'{0}' could not be saved: {1}</value>
-  </data>
 	<data name="Languages_IsPublished" xml:space="preserve">
     <value>Published</value>
   </data>
@@ -662,9 +659,6 @@
   </data>
 	<data name="Languages_TwoLetterMoreInfo" xml:space="preserve">
     <value>More info in the Knowledge Base</value>
-  </data>
-	<data name="Languages_Toast_InlineSaved" xml:space="preserve">
-    <value>Changes saved.</value>
   </data>
 	<data name="Media_UploadBtn" xml:space="preserve">
     <value>⬆ Upload</value>
@@ -5710,5 +5704,101 @@
 	</data>
   <data name="SeoAnalyzer_Check_SocialOkTitle" xml:space="preserve">
     <value>Share tags complete</value>
+  </data>
+  <data name="Languages_HideTitle" xml:space="preserve">
+    <value>Take this language off the site?</value>
+  </data>
+  <data name="Languages_HideBody" xml:space="preserve">
+    <value>{0} has {1} published page(s). When you save:</value>
+  </data>
+  <data name="Languages_HideEffectPages" xml:space="preserve">
+    <value>Visitors can no longer open any page in this language, the homepage included.</value>
+  </data>
+  <data name="Languages_HideEffectHreflang" xml:space="preserve">
+    <value>Pages in other languages stop linking to these pages (hreflang).</value>
+  </data>
+  <data name="Languages_HideEffectSitemap" xml:space="preserve">
+    <value>The pages are removed from the sitemap straight away.</value>
+  </data>
+  <data name="Languages_HideEffectSearch" xml:space="preserve">
+    <value>Search engines drop the pages from their results over time, and links other sites have to them stop working.</value>
+  </data>
+  <data name="Languages_HideChoiceTitle" xml:space="preserve">
+    <value>What should the old addresses do?</value>
+  </data>
+  <data name="Languages_HideChoiceRedirect" xml:space="preserve">
+    <value>Send visitors to the default language (temporary, 302)</value>
+  </data>
+  <data name="Languages_HideChoiceRedirectHint" xml:space="preserve">
+    <value>Each page gets a temporary rule on the Redirects screen pointing to its default-language version, or to the homepage when there is none. Nobody lands on an error page, and search engines keep the original addresses. Recommended if the language will come back.</value>
+  </data>
+  <data name="Languages_HideChoiceNotFound" xml:space="preserve">
+    <value>Show “page not found” (404)</value>
+  </data>
+  <data name="Languages_HideChoiceNotFoundHint" xml:space="preserve">
+    <value>The addresses simply stop existing. Search engines remove them from their index. Suits a language you are retiring for good.</value>
+  </data>
+  <data name="Languages_HideAcknowledge" xml:space="preserve">
+    <value>I understand that the pages of this language will become unreachable for visitors.</value>
+  </data>
+  <data name="Languages_HideConfirm" xml:space="preserve">
+    <value>Take off the site</value>
+  </data>
+  <data name="Languages_RestoreTitle" xml:space="preserve">
+    <value>Putting the language back on the site</value>
+  </data>
+  <data name="Languages_RestoreBody" xml:space="preserve">
+    <value>When {0} was taken off the site, {1} temporary redirect(s) were added for its pages.</value>
+  </data>
+  <data name="Languages_RestoreRemoveHint" xml:space="preserve">
+    <value>Remove them: the Redirects screen stays tidy. Recommended if the language is back for good.</value>
+  </data>
+  <data name="Languages_RestoreKeepHint" xml:space="preserve">
+    <value>Keep them: they do nothing while the language is live, and are ready again if you take it off a second time.</value>
+  </data>
+  <data name="Languages_RestoreKeep" xml:space="preserve">
+    <value>Keep the redirects</value>
+  </data>
+  <data name="Languages_RestoreRemove" xml:space="preserve">
+    <value>Remove the redirects</value>
+  </data>
+  <data name="Languages_Toast_RedirectsCreated" xml:space="preserve">
+    <value>{0} temporary redirect(s) added. You can find them on the Redirects screen.</value>
+  </data>
+  <data name="Languages_Toast_RedirectsRemoved" xml:space="preserve">
+    <value>{0} temporary redirect(s) removed.</value>
+  </data>
+  <data name="Redirects_Reason_LanguageUnpublished" xml:space="preserve">
+    <value>Language taken off the site (temporary, 302)</value>
+  </data>
+  <data name="HomeUnpublish_Title" xml:space="preserve">
+    <value>Take the homepage off the site?</value>
+  </data>
+  <data name="HomeUnpublish_Body" xml:space="preserve">
+    <value>This page is a language's homepage. If it leaves Published:</value>
+  </data>
+  <data name="HomeUnpublish_BodyDefault" xml:space="preserve">
+    <value>This page is your site's homepage. If it leaves Published:</value>
+  </data>
+  <data name="HomeUnpublish_EffectRoot" xml:space="preserve">
+    <value>The language's root address (for example /en) returns “page not found” (404).</value>
+  </data>
+  <data name="HomeUnpublish_EffectRootDefault" xml:space="preserve">
+    <value>Your site's own address (/) returns “page not found” (404). Anyone opening the site sees an error page.</value>
+  </data>
+  <data name="HomeUnpublish_EffectLinks" xml:space="preserve">
+    <value>Every link pointing to this address, including the language switcher and the logo, leads to that error page.</value>
+  </data>
+  <data name="HomeUnpublish_EffectSearch" xml:space="preserve">
+    <value>Search engines may drop the address from their results.</value>
+  </data>
+  <data name="HomeUnpublish_MaintenanceHint" xml:space="preserve">
+    <value>If you want to close the site for a while, maintenance mode (Site Settings → System) is the safer choice.</value>
+  </data>
+  <data name="HomeUnpublish_Acknowledge" xml:space="preserve">
+    <value>I understand that this address will return 404.</value>
+  </data>
+  <data name="HomeUnpublish_Confirm" xml:space="preserve">
+    <value>Take off the site anyway</value>
   </data>
 </root>

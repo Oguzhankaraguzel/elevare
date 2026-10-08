@@ -823,6 +823,9 @@ else
     }
 </style>
 
+<HomePageUnpublishConfirm IsVisible="_homeConfirmVisible" IsDefaultLanguage="_homeConfirmDefault" Busy="_saving"
+                          OnConfirm="ConfirmHomePageUnpublish" OnCancel="CancelHomePageUnpublish" />
+
 @code {
     private enum PageViewMode { Flat, Tree }
 
@@ -849,7 +852,7 @@ else
     private Dictionary<int, PageListItemResponse> _allById = [];
     // Bumped on every LoadPages() and used as part of each status <select>'s @key,
     // forcing Blazor to recreate the element (not just diff it) on reload. Needed
-    // because a rejected status change (e.g. CannotUnpublishHomePage) leaves the
+    // because a rejected status change (e.g. a homepage awaiting confirmation) leaves the
     // <select>'s native DOM value showing the picked-but-rejected option — a same-value
     // re-render wouldn't otherwise correct it since Blazor only diffs against its own
     // last-rendered value, not the possibly-externally-changed live DOM value.
@@ -1813,7 +1816,9 @@ else
         _showDelete = true;
     }
 
-    private async Task ConfirmDelete()
+    private async Task ConfirmDelete() => await ConfirmDelete(confirmHome: false);
+
+    private async Task ConfirmDelete(bool confirmHome)
     {
         if (_deleteTarget is null) return;
         _saving = true;
@@ -1821,8 +1826,14 @@ else
         {
             string? redirectUrl = _deleteRedirectUrl.IsNullOrWhiteSpace() ? null : _deleteRedirectUrl.Trim();
             bool ok = false;
-            (await Sender.Send(new DeletePageCommand(_deleteTarget.Id, redirectUrl)))
-                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+            (await Sender.Send(new DeletePageCommand(_deleteTarget.Id, redirectUrl, confirmHome)))
+                .Match(() => ok = true, error =>
+                {
+                    if (HomePageUnpublishConfirm.AsksFor(error, out bool isDefault))
+                        AskHomePageUnpublish(isDefault, () => ConfirmDelete(confirmHome: true));
+                    else
+                        Toast.Error(L.Error(error));
+                });
 
             if (ok)
             {
@@ -1868,24 +1879,59 @@ else
         _statusChangeTarget = null;
     }
 
-    private async Task ApplyStatusChange(int id, PageStatus status, string? redirectUrl)
+    private async Task ApplyStatusChange(int id, PageStatus status, string? redirectUrl, bool confirmHome = false)
     {
         _saving = true;
         try
         {
             bool ok = false;
-            (await Sender.Send(new UpdatePageStatusCommand(id, status, redirectUrl)))
-                .Match(() => ok = true, error => Toast.Error(L.Error(error)));
+            (await Sender.Send(new UpdatePageStatusCommand(id, status, redirectUrl, confirmHome)))
+                .Match(() => ok = true, error =>
+                {
+                    if (HomePageUnpublishConfirm.AsksFor(error, out bool isDefault))
+                        AskHomePageUnpublish(isDefault, () => ApplyStatusChange(id, status, redirectUrl, confirmHome: true));
+                    else
+                        Toast.Error(L.Error(error));
+                });
 
             if (ok)
                 Toast.Success(L["Pages_Toast_StatusSaved"]);
 
             // Reload even on failure: the <select> already shows whatever the user
             // picked (the browser updates it before @onchange fires) — without this,
-            // a rejected change (e.g. CannotUnpublishHomePage) would leave the dropdown
+            // a rejected change (e.g. a homepage awaiting confirmation) would leave the dropdown
             // visually showing the new status even though the page never changed.
             await LoadPages();
         }
         finally { _saving = false; }
+    }
+
+    // ── Taking a homepage off the site ─────────────────────────────────────
+    // The server asks for confirmation by refusing the first attempt; the action
+    // that was refused is kept so the confirmation can replay it with the flag.
+    private bool _homeConfirmVisible;
+    private bool _homeConfirmDefault;
+    private Func<Task>? _homeConfirmRetry;
+
+    private void AskHomePageUnpublish(bool isDefaultLanguage, Func<Task> retry)
+    {
+        _homeConfirmDefault = isDefaultLanguage;
+        _homeConfirmRetry = retry;
+        _homeConfirmVisible = true;
+    }
+
+    private async Task ConfirmHomePageUnpublish()
+    {
+        _homeConfirmVisible = false;
+        Func<Task>? retry = _homeConfirmRetry;
+        _homeConfirmRetry = null;
+        if (retry is not null)
+            await retry();
+    }
+
+    private void CancelHomePageUnpublish()
+    {
+        _homeConfirmVisible = false;
+        _homeConfirmRetry = null;
     }
 }
