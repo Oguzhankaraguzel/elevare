@@ -8,8 +8,16 @@ internal sealed class RecordingEmailService : IEmailService
 {
     public List<EmailMessage> Sent { get; } = [];
 
+    /// <summary>False plays a fresh install with no mail server: nothing is sent.</summary>
+    public bool Configured { get; set; } = true;
+
+    public Task<bool> IsConfiguredAsync(CancellationToken cancellationToken = default) => Task.FromResult(Configured);
+
     public Task<Result> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
+        if (!Configured)
+            return Task.FromResult(Result.Failure(Error.Failure("Email.NotConfigured", "No mail server.")));
+
         Sent.Add(message);
         return Task.FromResult(Result.Success());
     }

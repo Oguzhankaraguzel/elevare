@@ -53,6 +53,10 @@
         <p style="color:var(--cms-text-muted);font-size:13px">
             @string.Format(L["UserEdit_SetPasswordHint"], _setPasswordTarget?.FullName ?? "")
         </p>
+        <div class="pw-link-note">
+            <i class="bi bi-shield-lock"></i>
+            <span>@L["UserEdit_SetPasswordMustChange"]</span>
+        </div>
         <div class="form-group">
             <label class="cms-label">@L["UserEdit_SetPasswordNewLabel"]</label>
             <input class="cms-input" type="text" @bind="_newPassword" @bind:event="oninput" placeholder="@L["UserEdit_PasswordEmailNotice_ManualPlaceholder"]" />
@@ -65,6 +69,61 @@
             @if (_settingPassword) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-check2"></i> }
             @L["UserEdit_SetPasswordConfirm"]
         </button>
+    </Footer>
+</CmsModal>
+
+<!-- Password link modal -->
+<CmsModal Title="@L["PasswordLink_Title"]" IsVisible="_linkTarget is not null" OnClose="CloseLink" Size="md">
+    <Body>
+        @if (_linkTarget is { } target)
+        {
+            @if (_linkResult is { Url: { } url } result)
+            {
+                <PasswordLinkShare Url="@url" ExpiresAtUtc="result.ExpiresAtUtc" UserName="@target.FullName"
+                                   EmailFailed="_linkEmailRequested" />
+            }
+            else
+            {
+                <p style="margin:0 0 10px;font-size:13.5px;color:var(--cms-text)">
+                    @string.Format(target.HasPassword ? L["PasswordLink_AskReset"] : L["PasswordLink_AskSetup"], target.FullName)
+                </p>
+                @if (!_emailConfigured)
+                {
+                    <div class="pw-link-note is-warning">
+                        <i class="bi bi-envelope-slash"></i>
+                        <span>@L["PasswordLink_NoMail"]</span>
+                    </div>
+                }
+                <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--cms-text-muted);line-height:1.7">
+                    <li>@L["PasswordLink_Valid48h"]</li>
+                    <li>@L["PasswordLink_RetiresOld"]</li>
+                    @if (target.HasPassword)
+                    {
+                        <li>@L["PasswordLink_KeepsOldUntilUsed"]</li>
+                    }
+                </ul>
+            }
+        }
+    </Body>
+    <Footer>
+        @if (_linkResult is not null)
+        {
+            <button class="btn-cms btn-primary-cms" @onclick="CloseLink">@L["PasswordLink_Done"]</button>
+        }
+        else
+        {
+            <button class="btn-cms btn-ghost" @onclick="CloseLink">@L["Common_Cancel"]</button>
+            <button class="btn-cms btn-ghost" disabled="@_issuingLink" @onclick="() => IssueLink(sendByEmail: false)">
+                <i class="bi bi-link-45deg"></i> @L["PasswordLink_CreateCopy"]
+            </button>
+            @if (_emailConfigured)
+            {
+                <button class="btn-cms btn-primary-cms" disabled="@_issuingLink" @onclick="() => IssueLink(sendByEmail: true)">
+                    @if (_issuingLink) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-envelope-arrow-up"></i> }
+                    @L["PasswordLink_SendEmail"]
+                </button>
+            }
+        }
     </Footer>
 </CmsModal>
 
@@ -100,7 +159,13 @@
     private UserResponse? _setPasswordTarget;
     private string _newPassword = "";
     private bool _settingPassword;
-    private Guid? _resendingId;
+
+    // Password links — see IssuePasswordLinkCommand.
+    private UserResponse? _linkTarget;
+    private PasswordLinkResult? _linkResult;
+    private bool _linkEmailRequested;
+    private bool _issuingLink;
+    private bool _emailConfigured;
 
     private List<GridColumnDef<UserResponse>> _columns = [];
     private RenderFragment<UserResponse>? _actionTemplate;
@@ -114,6 +179,7 @@
         }
 
         BuildGridColumns();
+        (await Sender.Send(new GetEmailStatusQuery())).Match(configured => _emailConfigured = configured, _ => { });
         await LoadRoles();
         await LoadData();
     }
@@ -239,7 +305,13 @@
 
     private RenderFragment<UserResponse> PasswordStatusTemplate => u => __builder =>
     {
-        @if (u.HasPassword)
+        @if (u.MustChangePassword)
+        {
+            <span class="badge-cms badge-warning" title="@L["Users_PasswordTemporary_Hint"]">
+                <i class="bi bi-shield-exclamation" style="font-size:10px"></i> @L["Users_PasswordTemporary"]
+            </span>
+        }
+        else if (u.HasPassword)
         {
             <span class="badge-cms badge-success"><i class="bi bi-check-circle-fill" style="font-size:10px"></i> @L["Users_PasswordActive"]</span>
         }
@@ -250,7 +322,7 @@
         else if (u.PendingSetupExpiresAtUtc.Value > DateTime.UtcNow)
         {
             <span class="badge-cms badge-info" title="@u.PendingSetupExpiresAtUtc.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")">
-                @string.Format(L["Users_PasswordPending"], DaysLeft(u.PendingSetupExpiresAtUtc.Value))
+                @string.Format(L["Users_PasswordPending"], HoursLeft(u.PendingSetupExpiresAtUtc.Value))
             </span>
         }
         else
@@ -261,14 +333,15 @@
 
     private string PasswordStatusLabel(UserResponse u)
     {
+        if (u.MustChangePassword) return L["Users_PasswordTemporary"];
         if (u.HasPassword) return L["Users_PasswordActive"];
         if (u.PendingSetupExpiresAtUtc is null) return L["Users_PasswordNoLink"];
         if (u.PendingSetupExpiresAtUtc.Value > DateTime.UtcNow) return L["Users_PasswordPending"];
         return L["Users_PasswordExpired"];
     }
 
-    private static int DaysLeft(DateTime expiresAtUtc) =>
-        Math.Max(0, (int)Math.Ceiling((expiresAtUtc - DateTime.UtcNow).TotalDays));
+    private static int HoursLeft(DateTime expiresAtUtc) =>
+        Math.Max(0, (int)Math.Ceiling((expiresAtUtc - DateTime.UtcNow).TotalHours));
 
     private static RenderFragment<UserResponse> LastLoginTemplate => u => __builder =>
     {
@@ -285,13 +358,12 @@
     private RenderFragment<UserResponse> ActionButtons => u => __builder =>
     {
         <div style="display:flex;gap:6px;justify-content:flex-end">
-            @if (!u.HasPassword)
+            @if (CanResetPassword(u))
             {
                 <button class="btn-cms btn-ghost btn-sm-cms btn-icon"
-                        title="@L["Users_ResendSetupLink"]"
-                        disabled="@(_resendingId == u.Id)"
-                        @onclick="() => ResendSetupLink(u)">
-                    @if (_resendingId == u.Id) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-envelope-arrow-up"></i> }
+                        title="@L["Users_PasswordLink"]"
+                        @onclick="() => OpenLink(u)">
+                    <i class="bi bi-link-45deg"></i>
                 </button>
                 <button class="btn-cms btn-ghost btn-sm-cms btn-icon"
                         title="@L["Users_SetPasswordManually"]"
@@ -389,20 +461,54 @@
         finally { _settingPassword = false; }
     }
 
-    private async Task ResendSetupLink(UserResponse user)
+    // Mirrors PasswordResetGuard, so the buttons only appear where the server would
+    // say yes: an inactive account cannot use a link, and a SuperAdmin's password is
+    // another SuperAdmin's business.
+    private bool CanResetPassword(UserResponse u) =>
+        u.IsActive && (!u.Roles.Contains(Domain.Entities.Users.Roles.SuperAdmin)
+                       || UserContext.IsInRole(Domain.Entities.Users.Roles.SuperAdmin));
+
+    private void OpenLink(UserResponse user)
     {
-        _resendingId = user.Id;
+        _linkTarget = user;
+        _linkResult = null;
+        _linkEmailRequested = false;
+    }
+
+    private void CloseLink()
+    {
+        _linkTarget = null;
+        _linkResult = null;
+    }
+
+    private async Task IssueLink(bool sendByEmail)
+    {
+        if (_linkTarget is null) return;
+        _issuingLink = true;
         try
         {
-            Result<bool> r = await Sender.Send(new ResendPasswordSetupCommand(user.Id, Nav.BaseUri));
-            r.Match(
-                emailSent => Toast.Success(emailSent
-                    ? L["Users_ResendSetupLink_Success"]
-                    : L["Users_ResendSetupLink_EmailFailed"]),
-                error => Toast.Error(L.Error(error)));
+            Result<PasswordLinkResult> r = await Sender.Send(new IssuePasswordLinkCommand(_linkTarget.Id, Nav.BaseUri, sendByEmail));
+            if (r.IsFailure)
+            {
+                Toast.Error(L.Error(r.Error));
+                return;
+            }
+
+            if (r.Value.EmailSent)
+            {
+                Toast.Success(string.Format(L["PasswordLink_Toast_Sent"], _linkTarget.Email));
+                CloseLink();
+            }
+            else
+            {
+                // Stays open on the link itself: it exists only now, in this dialog.
+                _linkEmailRequested = sendByEmail;
+                _linkResult = r.Value;
+            }
+
             await LoadData();
         }
-        finally { _resendingId = null; }
+        finally { _issuingLink = false; }
     }
 
     // Mirrors UserCreateEdit.razor: built-in roles get a translated label, custom

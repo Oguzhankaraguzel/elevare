@@ -21,4 +21,6 @@ public sealed record UserResponse(
     /// is false and a link has been sent at least once. Past this moment (or null with
     /// HasPassword false and CreateDate long ago) the link needs a resend.
     /// </summary>
-    DateTime? PendingSetupExpiresAtUtc);
+    DateTime? PendingSetupExpiresAtUtc,
+    /// <summary>The password is one an administrator set; the user chooses their own at the next sign-in.</summary>
+    bool MustChangePassword);

@@ -423,6 +423,28 @@ at startup saying so. Fill the three values in and restart.
 **Log in with either the username or the email address** — both work, and the login
 field says so. The password is the one you configured.
 
+### Users, with or without a mail server
+
+A new user is created without a password and gets a one-time link, valid for 48
+hours, to choose their own. With a mail server configured the link is e-mailed;
+without one, the CMS says so on the form and shows the link once after saving, with a
+copy button, for you to pass on yourself. The **Users** list can create a new link for
+anyone at any time (the previous one stops working) or set a password directly. A
+password set by an administrator only gets the user as far as choosing their own: the
+next sign-in leads straight to that step, with no session until it is done.
+
+**Forgot password** on the sign-in screen mails a reset link valid for one hour, and
+answers the same way whether the account exists or not. Without a mail server it tells
+the user to ask an administrator. The link always points at `Cms:PublicUrl`
+(`CMS_PUBLIC_URL`), or failing that `Jwt:Issuer` — never at the address the request came
+in on, which anyone can fake.
+
+**Locked out with no mail server?** Set `Seed:SuperAdmin:ResetPassword` to `true`
+(`ADMIN_RESET_PASSWORD=true` with Docker) and restart: the SuperAdmin account gets
+`Seed:SuperAdmin:Password` back, and is unlocked and reactivated. Switch it off again
+straight away — while it is on, every start logs a warning, and a password changed in
+the meantime would be reset again.
+
 Two things about a brand-new install that are easy to mistake for breakage:
 
 - **The public site opens in maintenance mode.** `Advanced.MaintenanceModeEnabled`
@@ -744,6 +766,8 @@ becomes `Jwt__SecretKey`. That is what `docker-compose.yml` sets.
 | Key | Applies to | What it does |
 | --- | --- | --- |
 | `Seed:Editor:*` | CMS | Same shape as `Seed:SuperAdmin`, seeds a second account. |
+| `Seed:SuperAdmin:ResetPassword` | CMS | `true` puts the configured password back on the SuperAdmin account at startup — see [Users, with or without a mail server](#users-with-or-without-a-mail-server). Off by default; switch it off again after use. |
+| `Cms:PublicUrl` | CMS | The CMS's own address (for example `https://cms.example.com`), used for "forgot password" links. Falls back to `Jwt:Issuer`. With neither set to a real address, "forgot password" sends nothing. |
 | `DataProtection:KeyPath` | CMS | Directory for the key ring. Unset uses the framework default, which is fine outside containers. |
 | `Email:*` | both | SMTP host, port, credentials, sender. Without it the CMS cannot send form replies. Can also be set from the CMS's **Site Settings → Sırlar** screen instead (`SecretsManage` permission) — that value wins over this one when set; see [Integration secrets](#integration-secrets). |
 | `FileStorage:*` | both | Upload folder, 50 MB size cap, allowed MIME types. |
@@ -777,6 +801,20 @@ notifies the public site over the internal network (the same `Cache:ClearSecret`
 cache-clearing already uses) so it picks it up within a second or two as well; the CMS
 tells you if that notification fails (e.g. the site was unreachable) so you know to save
 again once it's back.
+
+No value on that screen is ever sent back to the browser — not the passwords, and not
+the host, user name or bucket either. Each field shows a label instead: **Saved here**,
+**From server config (.env)** or **Not set**, so a site configured entirely from `.env`
+no longer looks as if mail were not set up. Only choices (the SSL toggle, the storage
+provider) show what is in effect. Every save lists what is about to change and asks for
+confirmation; removing a value has to be acknowledged, and says whether the server's
+configuration takes over again.
+
+The table no longer ships with defaults (`Port=587`, `EnableSsl=true`,
+`Provider=Local`): a value there beats the environment, so those defaults used to win
+over, say, `SMTP_PORT=465`. On startup, rows that still hold exactly those seeded values
+and were never saved from the screen are emptied, handing the decision back to the
+server's configuration.
 
 ---
 

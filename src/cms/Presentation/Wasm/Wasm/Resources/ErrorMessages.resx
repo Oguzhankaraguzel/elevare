@@ -143,9 +143,6 @@
   <data name="PasswordSetup.InvalidOrExpiredToken" xml:space="preserve">
     <value>This link is invalid or has expired. Ask an administrator to send a new one.</value>
   </data>
-  <data name="PasswordSetup.AlreadyHasPassword" xml:space="preserve">
-    <value>This user already has a password set.</value>
-  </data>
   <data name="AppRole.CannotDeleteBuiltInRole" xml:space="preserve">
     <value>Built-in roles cannot be deleted.</value>
   </data>
@@ -373,5 +370,17 @@
   </data>
   <data name="Language.HidingNeedsConfirmation" xml:space="preserve">
     <value>Taking a language off the site has to be confirmed, together with what its addresses should do.</value>
+  </data>
+  <data name="PasswordSetup.UserInactive" xml:space="preserve">
+    <value>This account is inactive. Activate it first; a password link for an inactive account would not work.</value>
+  </data>
+  <data name="PasswordSetup.SuperAdminOnly" xml:space="preserve">
+    <value>Only a SuperAdmin can reset the password of a SuperAdmin account.</value>
+  </data>
+  <data name="PasswordSetup.SameAsTemporary" xml:space="preserve">
+    <value>Choose a password different from the one you were given.</value>
+  </data>
+  <data name="Email.NotConfigured" xml:space="preserve">
+    <value>No mail server is configured. Set one on the Secrets screen.</value>
   </data>
 </root>

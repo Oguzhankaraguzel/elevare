@@ -22,5 +22,12 @@ public class AppUser : IdentityUser<Guid>
     public DateTime? LastLoginDate { get; set; }
     public bool IsActive { get; set; } = true;
 
+    /// <summary>
+    /// Set when an administrator typed this user's password for them. The user has to
+    /// pick their own before they get a session — until then the password is one
+    /// somebody else knows. See LoginCommandHandler and SetPasswordCommandHandler.
+    /// </summary>
+    public bool MustChangePassword { get; set; }
+
     public string FullName => $"{FirstName} {LastName}".Trim();
 }

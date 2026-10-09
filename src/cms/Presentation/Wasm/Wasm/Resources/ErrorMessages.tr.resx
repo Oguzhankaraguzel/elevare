@@ -143,9 +143,6 @@
   <data name="PasswordSetup.InvalidOrExpiredToken" xml:space="preserve">
     <value>Bu bağlantı geçersiz veya süresi dolmuş. Bir yöneticiden yeni bir bağlantı göndermesini isteyin.</value>
   </data>
-  <data name="PasswordSetup.AlreadyHasPassword" xml:space="preserve">
-    <value>Bu kullanıcının zaten bir şifresi var.</value>
-  </data>
   <data name="AppRole.CannotDeleteBuiltInRole" xml:space="preserve">
     <value>Yerleşik roller silinemez.</value>
   </data>
@@ -373,5 +370,17 @@
   </data>
   <data name="Language.HidingNeedsConfirmation" xml:space="preserve">
     <value>Bir dili siteden kaldırmak için onay vermeniz ve adreslerinin ne yapacağını seçmeniz gerekiyor.</value>
+  </data>
+  <data name="PasswordSetup.UserInactive" xml:space="preserve">
+    <value>Bu hesap pasif. Önce hesabı aktif yapın; pasif bir hesabın şifre bağlantısı çalışmaz.</value>
+  </data>
+  <data name="PasswordSetup.SuperAdminOnly" xml:space="preserve">
+    <value>Bir süper yöneticinin şifresini yalnızca başka bir süper yönetici sıfırlayabilir.</value>
+  </data>
+  <data name="PasswordSetup.SameAsTemporary" xml:space="preserve">
+    <value>Size verilen şifreden farklı bir şifre seçin.</value>
+  </data>
+  <data name="Email.NotConfigured" xml:space="preserve">
+    <value>Bir mail sunucusu ayarlanmamış. Sırlar ekranından ayarlayabilirsiniz.</value>
   </data>
 </root>

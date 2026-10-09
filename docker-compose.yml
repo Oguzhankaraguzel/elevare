@@ -115,6 +115,12 @@ services:
       Seed__SuperAdmin__UserName: ${ADMIN_USERNAME:-superadmin}
       Seed__SuperAdmin__Email: ${ADMIN_EMAIL:?set ADMIN_EMAIL in .env}
       Seed__SuperAdmin__Password: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+      # The way back in when locked out with no mail server: true resets the account
+      # to ADMIN_PASSWORD at startup. Switch it off again after one restart.
+      Seed__SuperAdmin__ResetPassword: ${ADMIN_RESET_PASSWORD:-false}
+      # Where "forgot password" links point. Never taken from the request, whose Host
+      # header anyone can set; falls back to Jwt__Issuer when empty.
+      Cms__PublicUrl: ${CMS_PUBLIC_URL:-}
       # Optional, all of it — an empty SMTP_HOST just means outgoing mail (test
       # emails, form-reply sending) fails at send time rather than at startup.
       # Email.FromAddress/FromDisplayName can still be overridden per-site from

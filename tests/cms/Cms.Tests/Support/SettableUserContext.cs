@@ -9,5 +9,9 @@ internal sealed class SettableUserContext : IUserContext
     public bool IsAdminOrAbove => true;
     public bool CanAuthorCustomCode => true;
     public bool HasPermission(string permissionKey) => true;
-    public bool IsInRole(string roleName) => true;
+
+    /// <summary>Null (the default) belongs to every role; a set narrows it to those.</summary>
+    public HashSet<string>? Roles { get; set; }
+
+    public bool IsInRole(string roleName) => Roles is null || Roles.Contains(roleName);
 }

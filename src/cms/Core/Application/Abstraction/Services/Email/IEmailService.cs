@@ -8,6 +8,13 @@ namespace Application.Abstraction.Services.Email;
 /// </summary>
 public interface IEmailService
 {
+    /// <summary>
+    /// Whether a mail server and a sender address are configured at all. Says nothing
+    /// about whether a send would succeed — only that there is something to try, so a
+    /// screen can tell "mail is not set up" apart from "mail failed this time".
+    /// </summary>
+    Task<bool> IsConfiguredAsync(CancellationToken cancellationToken = default);
+
     /// <summary>Sends a single e-mail message.</summary>
     Task<Result> SendAsync(EmailMessage message, CancellationToken cancellationToken = default);
 

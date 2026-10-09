@@ -16,6 +16,9 @@ internal sealed class ChangeMyPasswordCommandHandler(
         if (user is null)
             return Result.Failure(AppUserErrors.NotFound);
 
+        // Saved with the new password by ChangePasswordAsync; left unsaved if it fails.
+        user.MustChangePassword = false;
+
         IdentityResult result = await userManager.ChangePasswordAsync(
             user, request.CurrentPassword, request.NewPassword);
 

@@ -26,6 +26,7 @@ internal sealed class CreateRedirectCommandHandler(ICmsApplicationDbContext db)
             // types one is that no page rename produced it.
             SourcePageId = null,
             Reason = RedirectReason.Manual,
+            IsTemporary = request.IsTemporary,
         };
 
         db.Redirects.Add(redirect);

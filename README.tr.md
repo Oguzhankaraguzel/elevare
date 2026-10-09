@@ -453,6 +453,31 @@ belirten bir hata kaydı yazar. Üç değeri girip uygulamayı yeniden başlatı
 **Giriş yaparken kullanıcı adını da e-posta adresini de kullanabilirsiniz**; giriş
 ekranında da bu belirtilir. Şifre, ayarlarda verdiğiniz şifredir.
 
+### Kullanıcılar: mail sunucusu olsa da olmasa da
+
+Yeni bir kullanıcı şifresiz oluşturulur ve kendi şifresini belirlemesi için 48 saat
+geçerli, tek kullanımlık bir bağlantı alır. Mail sunucusu ayarlıysa bağlantı
+e-postayla gider. Ayarlı değilse CMS bunu formda baştan söyler, kaydettikten sonra da
+bağlantıyı bir kopyalama butonuyla bir kez gösterir; kullanıcıya kendiniz iletirsiniz.
+**Kullanıcılar** listesinden istediğiniz zaman herhangi bir kullanıcı için yeni bağlantı
+oluşturabilir (eskisi geçersiz olur) ya da şifreyi doğrudan belirleyebilirsiniz.
+Yöneticinin belirlediği şifre, kullanıcıyı yalnızca kendi şifresini seçeceği adıma
+kadar götürür: bir sonraki girişte doğrudan o adıma yönlendirilir ve bu adım
+bitmeden oturum açılmaz.
+
+Giriş ekranındaki **Şifremi unuttum**, 1 saat geçerli bir sıfırlama bağlantısı
+gönderir. Hesap olsa da olmasa da aynı cevabı verir. Mail sunucusu yoksa kullanıcıya
+şifresini yöneticisine sıfırlatmasını söyler. Bağlantı her zaman `Cms:PublicUrl`
+(`CMS_PUBLIC_URL`) adresine, o yoksa `Jwt:Issuer` adresine gider. İsteğin geldiği adres
+hiçbir zaman kullanılmaz, çünkü o adresi herkes taklit edebilir.
+
+**Mail sunucusu yokken yönetici hesabına giremiyor musunuz?**
+`Seed:SuperAdmin:ResetPassword` değerini `true` yapın (Docker'da
+`ADMIN_RESET_PASSWORD=true`) ve uygulamayı yeniden başlatın. SuperAdmin hesabının
+şifresi `Seed:SuperAdmin:Password` değerine döner, hesabın kilidi açılır ve hesap
+aktif yapılır. İşiniz bitince ayarı hemen kapatın: açık kaldığı sürece her açılışta
+uyarı yazılır ve bu arada değiştirdiğiniz şifre bir sonraki açılışta yine sıfırlanır.
+
 Yeni bir kurulumda hata sanılabilecek ama bilerek yapılmış iki davranış var:
 
 - **Site bakım modunda açılır.** `Advanced.MaintenanceModeEnabled` başlangıçta
@@ -829,6 +854,8 @@ Ortam değişkenlerinde JSON yolundaki `:` yerine `__` yazılır: `Jwt:SecretKey
 | Anahtar | Uygulama | Ne işe yarar |
 | --- | --- | --- |
 | `Seed:Editor:*` | CMS | `Seed:SuperAdmin` ile aynı yapıdadır; ikinci bir hesap oluşturur. |
+| `Seed:SuperAdmin:ResetPassword` | CMS | `true` olursa açılışta SuperAdmin hesabının şifresi ayarlardaki şifreye döner. Bkz. [Kullanıcılar: mail sunucusu olsa da olmasa da](#kullanıcılar-mail-sunucusu-olsa-da-olmasa-da). Varsayılan olarak kapalıdır; kullandıktan sonra yeniden kapatın. |
+| `Cms:PublicUrl` | CMS | CMS'in kendi adresi (örneğin `https://cms.ornek.com`). "Şifremi unuttum" bağlantıları bu adresle kurulur. Verilmezse `Jwt:Issuer` kullanılır; ikisi de gerçek bir adres değilse "şifremi unuttum" e-posta göndermez. |
 | `DataProtection:KeyPath` | CMS | Şifreleme anahtarlarının tutulacağı klasör. Verilmezse framework'ün varsayılan konumu kullanılır; konteyner dışında bu bir sorun yaratmaz. |
 | `Email:*` | ikisi de | SMTP sunucusu, port, kullanıcı bilgileri ve gönderen adresi. Verilmezse CMS form yanıtlarına cevap gönderemez. CMS'te **Site Ayarları → Sırlar** ekranından da girilebilir (`SecretsManage` yetkisi gerekir); orada bir değer varsa bu ayarın yerine o kullanılır. Bkz. [Entegrasyon sırları](#entegrasyon-sırları). |
 | `FileStorage:*` | ikisi de | Yükleme klasörü, 50 MB boyut sınırı ve izin verilen dosya türleri. |
@@ -858,8 +885,20 @@ varsa veritabanındaki geçerli olur.
 
 Normal site ayarlarının aksine bu değerler hiçbir zaman düz metin olarak saklanmaz;
 CMS'in oturumlar için zaten kullandığı ASP.NET Data Protection anahtarlarıyla
-şifrelenir. Kaydedilen bir değer ekranda bir daha gösterilmez, yalnızca yenisiyle
-değiştirilebilir. Dosya ya da ortam değişkeniyle verilen ayarların aksine bu
+şifrelenir. Bu ekrandaki hiçbir değer tarayıcıya geri gönderilmez; yalnızca şifreler
+değil, sunucu adresi, kullanıcı adı ya da bucket da gösterilmez. Her alanın yanında
+bunun yerine bir etiket olur: **Burada kayıtlı**, **Sunucu ayarından (.env)** ya da
+**Girilmedi**. Böylece ayarları tamamen `.env`'den gelen bir site, mail ayarlanmamış
+gibi görünmez. Yalnızca seçimler (SSL anahtarı, depolama türü) geçerli değeriyle
+gösterilir. Değiştirmek için yeni değeri yazmanız yeterlidir. Her kayıtta neyin
+değişeceği listelenir ve onay istenir; bir değeri kaldırmak ayrıca onaylanır ve
+kaldırınca sunucu ayarına dönülüp dönülmeyeceği belirtilir.
+
+Tablo artık varsayılan değerlerle (`Port=587`, `EnableSsl=true`, `Provider=Local`)
+oluşturulmuyor: buradaki bir değer ortam değişkenine göre öncelikli olduğu için bu
+varsayılanlar, örneğin `SMTP_PORT=465` ayarını eziyordu. Açılışta, hâlâ tam olarak bu
+varsayılanları taşıyan ve ekrandan hiç kaydedilmemiş satırlar boşaltılır; karar
+yeniden sunucu ayarına bırakılır. Dosya ya da ortam değişkeniyle verilen ayarların aksine bu
 ekrandan girilen değer hemen geçerli olur ve yeniden başlatma gerektirmez; buna
 `ObjectStorage:Provider` ayarını yerel disk ile S3 arasında değiştirmek de dahildir.
 CAPTCHA gizli anahtarını kaydettiğinizde CMS iç ağ üzerinden siteyi bilgilendirir

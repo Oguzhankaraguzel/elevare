@@ -11,10 +11,14 @@ namespace Application.Features.Commands.Redirects.CreateRedirect;
 /// <param name="NewPath">
 /// Null or empty means 410 Gone: the page is deliberately retired with no successor.
 /// </param>
+/// <param name="IsTemporary">
+/// Answer 302 instead of 301. Permanent is the default because it is what a moved
+/// page needs; temporary suits a campaign link or a page that is coming back.
+/// </param>
 // NewPath is string rather than Uri on purpose: it is either a site-relative path
 // or an absolute external URL, and Uri cannot represent the first.
 #pragma warning disable CA1054
-public sealed record CreateRedirectCommand(string OldPath, string? NewPath)
+public sealed record CreateRedirectCommand(string OldPath, string? NewPath, bool IsTemporary = false)
 #pragma warning restore CA1054
     : ICommand<int>, IRequirePermission
 {

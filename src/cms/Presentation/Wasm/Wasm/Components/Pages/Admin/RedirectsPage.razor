@@ -87,9 +87,28 @@
             </div>
             <div class="form-group">
                 <label class="cms-label" for="rd-new">@L["Redirects_NewPath"]</label>
-                <input id="rd-new" class="cms-input" @bind="_formNewPath" placeholder="@L["Redirects_NewPathPlaceholder"]" />
+                <input id="rd-new" class="cms-input" @bind="_formNewPath" @bind:event="oninput" placeholder="@L["Redirects_NewPathPlaceholder"]" />
                 <small class="cms-hint">@L["Redirects_NewPath_Hint"]</small>
             </div>
+            @if (!string.IsNullOrWhiteSpace(_formNewPath))
+            {
+                @* No choice to make for a 410: there is nowhere to send the visitor. *@
+                <p class="cms-label" style="margin:4px 0 8px">@L["Redirects_Type"]</p>
+                <label class="lang-hide-choice @(!_formTemporary ? "is-selected" : "")">
+                    <input type="radio" name="rd-type" checked="@(!_formTemporary)" @onchange="() => _formTemporary = false" />
+                    <span>
+                        <strong>@L["Redirects_TypePermanent"]</strong>
+                        <small>@L["Redirects_TypePermanent_Hint"]</small>
+                    </span>
+                </label>
+                <label class="lang-hide-choice @(_formTemporary ? "is-selected" : "")">
+                    <input type="radio" name="rd-type" checked="@_formTemporary" @onchange="() => _formTemporary = true" />
+                    <span>
+                        <strong>@L["Redirects_TypeTemporary"]</strong>
+                        <small>@L["Redirects_TypeTemporary_Hint"]</small>
+                    </span>
+                </label>
+            }
             @if (_editId.HasValue && _editBoundToPage)
             {
                 @* Saying this before the click, not after: the rule currently follows a
@@ -217,6 +236,8 @@
         word-break: break-all;
     }
 
+    .rd-code { margin-left: 8px; }
+
     .rd-arrow { color: var(--cms-text-dim); margin: 0 6px; }
 
     .rd-notice {
@@ -246,6 +267,7 @@
     private bool _editBoundToPage;
     private string _formOldPath = "";
     private string _formNewPath = "";
+    private bool _formTemporary;
 
     private RedirectListItemResponse? _deleteTarget;
     private RenderFragment<RedirectListItemResponse>? _actionTemplate;
@@ -345,6 +367,10 @@
                 @if (item.ResolvedTarget is { } target)
                 {
                     <span>@target</span>
+                    <span class="badge-cms badge-neutral rd-code"
+                          title="@(item.IsTemporary ? L["Redirects_TypeTemporary"] : L["Redirects_TypePermanent"])">
+                        @(item.IsTemporary ? "302" : "301")
+                    </span>
                 }
                 else
                 {
@@ -443,6 +469,7 @@
         _editBoundToPage = false;
         _formOldPath = "";
         _formNewPath = "";
+        _formTemporary = false;
         _showForm = true;
     }
 
@@ -452,6 +479,7 @@
         _editBoundToPage = item.SourcePageId is not null;
         _formOldPath = item.OldPath;
         _formNewPath = item.NewPath ?? "";
+        _formTemporary = item.IsTemporary;
         _showForm = true;
     }
 
@@ -477,12 +505,12 @@
 
             if (_editId is int id)
             {
-                (await Sender.Send(new UpdateRedirectCommand(id, _formOldPath, newPath)))
+                (await Sender.Send(new UpdateRedirectCommand(id, _formOldPath, newPath, newPath is not null && _formTemporary)))
                     .Match(() => ok = true, error => Toast.Error(L.Error(error)));
             }
             else
             {
-                (await Sender.Send(new CreateRedirectCommand(_formOldPath, newPath)))
+                (await Sender.Send(new CreateRedirectCommand(_formOldPath, newPath, newPath is not null && _formTemporary)))
                     .Match(_ => ok = true, error => Toast.Error(L.Error(error)));
             }
 
@@ -557,7 +585,7 @@
 
     private async Task DownloadImportTemplate()
     {
-        string csv = $"{L["Redirects_ImportColOld"]};{L["Redirects_ImportColNew"]}\r\n/eski-sayfa;/yeni-sayfa\r\n/kaldirilan-urun;\r\n";
+        string csv = $"{L["Redirects_ImportColOld"]};{L["Redirects_ImportColNew"]};{L["Redirects_ImportColType"]}\r\n/eski-sayfa;/yeni-sayfa;301\r\n/kampanya;/indirimler;302\r\n/kaldirilan-urun;;\r\n";
         byte[] bom = [0xEF, 0xBB, 0xBF];
         byte[] content = [.. bom, .. System.Text.Encoding.UTF8.GetBytes(csv)];
         await JS.InvokeVoidAsync("cmsJs.downloadFile", "yonlendirme-sablonu.csv", "text/csv;charset=utf-8", content);
@@ -598,8 +626,12 @@
 
                 string? newPath = cols.Length > 1 && !string.IsNullOrWhiteSpace(cols[1]) ? cols[1].Trim() : null;
 
+                // Optional third column: only "302" makes a rule temporary, so an old
+                // two-column file keeps importing exactly as it always did.
+                bool temporary = newPath is not null && cols.Length > 2 && cols[2].Trim() == "302";
+
                 bool ok = false;
-                (await Sender.Send(new CreateRedirectCommand(oldPath, newPath)))
+                (await Sender.Send(new CreateRedirectCommand(oldPath, newPath, temporary)))
                     .Match(_ => ok = true, error => failed.Add(new ImportRowError(oldPath, L.Error(error))));
 
                 if (ok) created++;

@@ -34,6 +34,7 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
                     : r.SourcePage.FullSlug,
                 r.SourcePage == null ? null : r.SourcePage.SeoMeta.Title,
                 r.Reason,
+                r.IsTemporary,
                 r.CreateDate,
                 r.UpdateDate))
             .ToListAsync(cancellationToken);
@@ -123,6 +124,7 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
             row.SourcePageId,
             row.SourcePageTitle,
             row.Reason,
+            row.IsTemporary,
             health,
             chainLength,
             row.CreateDate,
@@ -199,6 +201,7 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
         string? LivePageSlug,
         string? SourcePageTitle,
         RedirectReason Reason,
+        bool IsTemporary,
         DateTime CreateDate,
         DateTime? UpdateDate);
 }

@@ -448,22 +448,13 @@
     <value>Not set</value>
   </data>
 	<data name="Users_PasswordPending" xml:space="preserve">
-    <value>Pending ({0}d left)</value>
+    <value>Pending ({0}h left)</value>
   </data>
 	<data name="Users_PasswordExpired" xml:space="preserve">
     <value>Link expired</value>
   </data>
-	<data name="Users_ResendSetupLink" xml:space="preserve">
-    <value>Resend setup e-mail</value>
-  </data>
 	<data name="Users_SetPasswordManually" xml:space="preserve">
     <value>Set password manually</value>
-  </data>
-	<data name="Users_ResendSetupLink_Success" xml:space="preserve">
-    <value>Setup link resent.</value>
-  </data>
-	<data name="Users_ResendSetupLink_EmailFailed" xml:space="preserve">
-    <value>A new link was created, but the e-mail could not be sent.</value>
   </data>
 	<data name="Users_ColRegDate" xml:space="preserve">
     <value>Registration Date</value>
@@ -514,13 +505,13 @@
     <value>Username</value>
   </data>
 	<data name="UserEdit_PasswordEmailNotice" xml:space="preserve">
-    <value>The new user will get an e-mail with a link to set their own password. The link stays valid for 7 days — if it expires before they use it, resend it (or set a password for them directly) from the Users list.</value>
+    <value>The new user will get an e-mail with a link to set their own password. The link stays valid for 48 hours. If it expires before they use it, create a new one (or set a password for them) from the Users list.</value>
   </data>
 	<data name="UserEdit_SetPasswordTitle" xml:space="preserve">
     <value>Set Password</value>
   </data>
 	<data name="UserEdit_SetPasswordHint" xml:space="preserve">
-    <value>Set a password for {0} directly. Make sure to share it with them yourself — it won't be shown again.</value>
+    <value>Set a password for {0} directly, and share it with them yourself — it won't be shown again.</value>
   </data>
 	<data name="UserEdit_SetPasswordNewLabel" xml:space="preserve">
     <value>New Password</value>
@@ -569,9 +560,6 @@
   </data>
 	<data name="UserEdit_Toast_Created" xml:space="preserve">
     <value>User created.</value>
-  </data>
-	<data name="UserEdit_Toast_CreatedEmailFailed" xml:space="preserve">
-    <value>User created, but the password-setup e-mail could not be sent. Resend it from the Users list.</value>
   </data>
 	<data name="UserEdit_Toast_NotFound" xml:space="preserve">
     <value>User not found.</value>
@@ -2087,7 +2075,7 @@
 	  <value>Secrets</value>
 	</data>
 	<data name="Secrets_Intro" xml:space="preserve">
-	  <value>Credentials for systems outside the CMS — SMTP, CAPTCHA and S3/CDN — are stored here, encrypted.</value>
+	  <value>Credentials and connection settings for systems outside the CMS (SMTP, CAPTCHA, S3/CDN). Nothing entered here is shown again: each field says only where its value comes from. Type a new value to replace one.</value>
 	</data>
 	<data name="Secrets_MoreInfo" xml:space="preserve">
 	  <value>More detail</value>
@@ -2109,9 +2097,6 @@
 	</data>
 	<data name="Secrets_UndoClear" xml:space="preserve">
 	  <value>Undo</value>
-	</data>
-	<data name="Secrets_ConfiguredPlaceholder" xml:space="preserve">
-	  <value>•••••••• (set — enter a new value to change it)</value>
 	</data>
 	<data name="Secrets_NotSetPlaceholder" xml:space="preserve">
 	  <value>Not set</value>
@@ -4185,7 +4170,7 @@
     <value>Why is this kept apart from the rest of Site Settings?</value>
   </data>
   <data name="KB_SecretsWhySeparateBody" xml:space="preserve">
-    <value>Every field on the regular Site Settings screen (site name, CDN base URL, the CAPTCHA site key) is already public or at least not sensitive — which is why nothing there is encrypted. Secrets are real credentials instead, kept in their own table and encrypted with the same key ring the CMS already uses to protect sessions. Once saved, a secret is never shown back in plain text — only whether it's set; changing one means typing a new value, and removing one means using the separate "Remove" link.</value>
+    <value>The other fields in Site Settings (site name, CDN address, CAPTCHA site key and so on) are public or harmless anyway, so they are not encrypted. Secrets are real credentials, kept in a separate place and encrypted. Once saved, no value on this tab is shown again — not even a host or user name; each field only says whether it is saved here, comes from the server's configuration, or is not set. To change one, type the new value; to remove one, use "Remove". Every save shows what is about to change and asks for confirmation.</value>
   </data>
   <data name="KB_SecretsWhoSubtitle" xml:space="preserve">
     <value>Who can see this tab?</value>
@@ -4197,7 +4182,7 @@
     <value>How does this relate to appsettings.json / .env?</value>
   </data>
   <data name="KB_SecretsFileBody" xml:space="preserve">
-    <value>Both work, and the database wins. Leave a field here empty (never entered) and the system keeps using whatever is in appsettings.json/.env — nothing breaks on an existing install. Enter and save a value here and it overrides the appsettings.json/.env equivalent from then on.</value>
+    <value>They work together: where both have a value, the one here wins. A field left empty here keeps using the value from appsettings.json or .env, and is labelled "From server config (.env)" so an empty field is not mistaken for a missing setting. Removing a value here goes back to the server's configuration.</value>
   </data>
   <data name="KB_SecretsRestartSubtitle" xml:space="preserve">
     <value>Does it take effect right away?</value>
@@ -5349,7 +5334,7 @@
     <value>Import from Excel</value>
   </data>
   <data name="Redirects_ImportIntro" xml:space="preserve">
-    <value>Save your spreadsheet as CSV (semicolon-separated) and upload it here — each row creates one redirect rule. The first column is the old path, the second is the new one; leave the new path empty to mark that path permanently gone (410).</value>
+    <value>Save your spreadsheet as CSV (semicolon-separated) and upload it here — each row creates one redirect rule. The first column is the old path, the second is the new one; leave the new path empty to mark that path permanently gone (410). The third column is optional: write 302 for a temporary redirect, anything else (or nothing) makes it permanent (301).</value>
   </data>
   <data name="Redirects_ImportMoreInfo" xml:space="preserve">
     <value>More detail</value>
@@ -5800,5 +5785,200 @@
   </data>
   <data name="HomeUnpublish_Confirm" xml:space="preserve">
     <value>Take off the site anyway</value>
+  </data>
+  <data name="Redirects_Type" xml:space="preserve">
+    <value>Redirect type</value>
+  </data>
+  <data name="Redirects_TypePermanent" xml:space="preserve">
+    <value>Permanent (301)</value>
+  </data>
+  <data name="Redirects_TypePermanent_Hint" xml:space="preserve">
+    <value>The page has moved for good. Search engines move the old address's ranking to the new one and forget the old address. Right for renamed or merged pages.</value>
+  </data>
+  <data name="Redirects_TypeTemporary" xml:space="preserve">
+    <value>Temporary (302)</value>
+  </data>
+  <data name="Redirects_TypeTemporary_Hint" xml:space="preserve">
+    <value>The old address will be used again. Search engines keep it in their index and do not pass its ranking on. Right for campaigns, seasonal pages or a page that is coming back.</value>
+  </data>
+  <data name="Redirects_ImportColType" xml:space="preserve">
+    <value>Type</value>
+  </data>
+  <data name="PasswordLink_Title" xml:space="preserve">
+    <value>Password link</value>
+  </data>
+  <data name="PasswordLink_CreatedTitle" xml:space="preserve">
+    <value>User created — pass on the password link</value>
+  </data>
+  <data name="PasswordLink_AskSetup" xml:space="preserve">
+    <value>{0} has not chosen a password yet. Create a new link for them to choose one with.</value>
+  </data>
+  <data name="PasswordLink_AskReset" xml:space="preserve">
+    <value>Create a link {0} can choose a new password with.</value>
+  </data>
+  <data name="PasswordLink_NoMail" xml:space="preserve">
+    <value>No mail server is configured, so the link cannot be e-mailed. Create it here and pass it on yourself, for example in a message.</value>
+  </data>
+  <data name="PasswordLink_Valid48h" xml:space="preserve">
+    <value>The link is valid for 48 hours and works once.</value>
+  </data>
+  <data name="PasswordLink_RetiresOld" xml:space="preserve">
+    <value>Any link this user still had stops working.</value>
+  </data>
+  <data name="PasswordLink_KeepsOldUntilUsed" xml:space="preserve">
+    <value>Their current password keeps working until the link is used.</value>
+  </data>
+  <data name="PasswordLink_CreateCopy" xml:space="preserve">
+    <value>Create link to copy</value>
+  </data>
+  <data name="PasswordLink_SendEmail" xml:space="preserve">
+    <value>Send by e-mail</value>
+  </data>
+  <data name="PasswordLink_Done" xml:space="preserve">
+    <value>Done</value>
+  </data>
+  <data name="PasswordLink_Toast_Sent" xml:space="preserve">
+    <value>The link was sent to {0}.</value>
+  </data>
+  <data name="PasswordLink_EmailFailed" xml:space="preserve">
+    <value>The e-mail could not be sent. Pass the link on yourself.</value>
+  </data>
+  <data name="PasswordLink_Intro" xml:space="preserve">
+    <value>Send this link to {0}. Opening it, they choose their own password.</value>
+  </data>
+  <data name="PasswordLink_Copy" xml:space="preserve">
+    <value>Copy</value>
+  </data>
+  <data name="PasswordLink_Copied" xml:space="preserve">
+    <value>Copied</value>
+  </data>
+  <data name="PasswordLink_CopyFailed" xml:space="preserve">
+    <value>Could not copy — select the link and copy it</value>
+  </data>
+  <data name="PasswordLink_Expires" xml:space="preserve">
+    <value>Valid until {0}, and only once.</value>
+  </data>
+  <data name="PasswordLink_OneTime" xml:space="preserve">
+    <value>This is the only time the link is shown. If it gets lost, create a new one from the Users list.</value>
+  </data>
+  <data name="PasswordLink_Private" xml:space="preserve">
+    <value>Anyone holding this link can set the account's password. Send it only to the user, privately.</value>
+  </data>
+  <data name="UserEdit_PasswordNoMailNotice" xml:space="preserve">
+    <value>No mail server is configured. After saving, you will get a password link (valid for 48 hours) to pass on to the user yourself.</value>
+  </data>
+  <data name="UserEdit_SetPasswordMustChange" xml:space="preserve">
+    <value>This password only works once: at their next sign-in, the user is asked to choose their own before reaching the panel.</value>
+  </data>
+  <data name="Users_PasswordLink" xml:space="preserve">
+    <value>Password link</value>
+  </data>
+  <data name="Users_PasswordTemporary" xml:space="preserve">
+    <value>Temporary password</value>
+  </data>
+  <data name="Users_PasswordTemporary_Hint" xml:space="preserve">
+    <value>Set by an administrator. The user chooses their own at the next sign-in.</value>
+  </data>
+  <data name="SetPassword_SubtitleChange" xml:space="preserve">
+    <value>Choose your own password.</value>
+  </data>
+  <data name="SetPassword_ChangeExplain" xml:space="preserve">
+    <value>Your password was set by an administrator. Choose your own to continue; you can then sign in with it.</value>
+  </data>
+  <data name="Login_ForgotPassword" xml:space="preserve">
+    <value>Forgot your password?</value>
+  </data>
+  <data name="Forgot_PageTitle" xml:space="preserve">
+    <value>Forgot password</value>
+  </data>
+  <data name="Forgot_Title" xml:space="preserve">
+    <value>Forgot your password?</value>
+  </data>
+  <data name="Forgot_Subtitle" xml:space="preserve">
+    <value>Enter your e-mail address or user name and we will send you a link to choose a new password.</value>
+  </data>
+  <data name="Forgot_SubmitBtn" xml:space="preserve">
+    <value>Send reset link</value>
+  </data>
+  <data name="Forgot_Sent" xml:space="preserve">
+    <value>If an account matches what you entered, a reset link is on its way to its e-mail address. The link is valid for 1 hour. Nothing arrived? Check your spam folder, or ask your administrator.</value>
+  </data>
+  <data name="Forgot_NoMail" xml:space="preserve">
+    <value>This panel cannot send e-mail, so your password cannot be reset from here. Ask your administrator to reset it for you.</value>
+  </data>
+  <data name="Forgot_BackToLogin" xml:space="preserve">
+    <value>Back to sign-in</value>
+  </data>
+  <data name="Secrets_Source_Saved" xml:space="preserve">
+    <value>Saved here</value>
+  </data>
+  <data name="Secrets_Source_Saved_Hint" xml:space="preserve">
+    <value>Entered on this screen. It takes precedence over the server's configuration.</value>
+  </data>
+  <data name="Secrets_Source_Server" xml:space="preserve">
+    <value>From server config (.env)</value>
+  </data>
+  <data name="Secrets_Source_Server_Hint" xml:space="preserve">
+    <value>Comes from the server's configuration (appsettings.json or an environment variable such as .env). It is in effect even though the field is empty.</value>
+  </data>
+  <data name="Secrets_Source_None" xml:space="preserve">
+    <value>Not set</value>
+  </data>
+  <data name="Secrets_SavedPlaceholder" xml:space="preserve">
+    <value>Saved, not shown. Type a new value to replace it.</value>
+  </data>
+  <data name="Secrets_ServerPlaceholder" xml:space="preserve">
+    <value>Comes from the server's configuration. A value typed here takes its place.</value>
+  </data>
+  <data name="Secrets_WillBeClearedToServer" xml:space="preserve">
+    <value>Removed on save; the server's configuration (.env) applies again.</value>
+  </data>
+  <data name="Secrets_EmailReady" xml:space="preserve">
+    <value>Mail sending is set up.</value>
+  </data>
+  <data name="Secrets_EmailNotReady" xml:space="preserve">
+    <value>Mail sending is not set up: no mail server or sender address is configured.</value>
+  </data>
+  <data name="Secrets_EmailFromServer" xml:space="preserve">
+    <value>Some or all of its settings come from the server's configuration (.env), which is why their fields are empty here.</value>
+  </data>
+  <data name="Secrets_NoChanges" xml:space="preserve">
+    <value>Nothing has changed.</value>
+  </data>
+  <data name="Secrets_ReviewTitle" xml:space="preserve">
+    <value>Save these changes?</value>
+  </data>
+  <data name="Secrets_ReviewIntro" xml:space="preserve">
+    <value>The following will change:</value>
+  </data>
+  <data name="Secrets_ReviewSet" xml:space="preserve">
+    <value>a value will be saved</value>
+  </data>
+  <data name="Secrets_ReviewReplace" xml:space="preserve">
+    <value>the saved value will be replaced</value>
+  </data>
+  <data name="Secrets_ReviewClear" xml:space="preserve">
+    <value>will be removed and left empty</value>
+  </data>
+  <data name="Secrets_ReviewClearToServer" xml:space="preserve">
+    <value>will be removed; the value in the server's configuration (.env) applies again</value>
+  </data>
+  <data name="Secrets_ReviewImmediate" xml:space="preserve">
+    <value>Changes take effect immediately, without a restart.</value>
+  </data>
+  <data name="Secrets_ReviewEmail" xml:space="preserve">
+    <value>Mail settings are changing: send a test mail afterwards from Site Settings → System. A wrong value is only noticed when a mail fails to arrive.</value>
+  </data>
+  <data name="Secrets_ReviewStorage" xml:space="preserve">
+    <value>Storage settings are changing: they decide where new uploads go from now on.</value>
+  </data>
+  <data name="Secrets_ReviewAcknowledge" xml:space="preserve">
+    <value>I understand that the removed values will no longer be used.</value>
+  </data>
+  <data name="Secrets_ReviewConfirm" xml:space="preserve">
+    <value>Save changes</value>
+  </data>
+  <data name="Settings_SenderFromServer" xml:space="preserve">
+    <value>Empty: {0} from the server's configuration is used</value>
   </data>
 </root>

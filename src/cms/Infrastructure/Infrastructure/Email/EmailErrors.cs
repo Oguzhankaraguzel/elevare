@@ -17,6 +17,11 @@ internal static class EmailErrors
     public static Error SendFailed(string reason) =>
         new("Email.SendFailed", $"Failed to send e-mail: {reason}", ErrorType.Problem);
 
+    public static readonly Error NotConfigured =
+        new("Email.NotConfigured",
+            "No mail server is configured. Set one on the Secrets screen, or Email:Host in configuration.",
+            ErrorType.Validation);
+
     /// <summary>
     /// No usable "From" address anywhere — neither the <c>Email.FromAddress</c> site
     /// setting nor <c>EmailOptions.FromAddress</c> in appsettings.json. Reported

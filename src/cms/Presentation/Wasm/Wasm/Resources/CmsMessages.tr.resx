@@ -463,22 +463,13 @@
     <value>Belirlenmedi</value>
   </data>
   <data name="Users_PasswordPending" xml:space="preserve">
-    <value>Bekliyor ({0} gün kaldı)</value>
+    <value>Bekliyor ({0} saat kaldı)</value>
   </data>
   <data name="Users_PasswordExpired" xml:space="preserve">
     <value>Bağlantı süresi doldu</value>
   </data>
-  <data name="Users_ResendSetupLink" xml:space="preserve">
-    <value>Kurulum e-postasını yeniden gönder</value>
-  </data>
   <data name="Users_SetPasswordManually" xml:space="preserve">
     <value>Şifreyi manuel belirle</value>
-  </data>
-  <data name="Users_ResendSetupLink_Success" xml:space="preserve">
-    <value>Bağlantı yeniden gönderildi.</value>
-  </data>
-  <data name="Users_ResendSetupLink_EmailFailed" xml:space="preserve">
-    <value>Yeni bir bağlantı oluşturuldu, ancak e-posta gönderilemedi.</value>
   </data>
   <data name="Users_ColRegDate" xml:space="preserve">
     <value>Kayıt Tarihi</value>
@@ -529,13 +520,13 @@
     <value>Kullanıcı Adı</value>
   </data>
   <data name="UserEdit_PasswordEmailNotice" xml:space="preserve">
-    <value>Yeni kullanıcıya, kendi şifresini belirleyeceği bir bağlantı içeren e-posta gönderilecek. Bağlantı 7 gün geçerlidir — süresi dolarsa Kullanıcılar listesinden yeniden gönderebilir ya da doğrudan bir şifre belirleyebilirsiniz.</value>
+    <value>Yeni kullanıcıya, kendi şifresini belirleyeceği bir bağlantı içeren e-posta gönderilecek. Bağlantı 48 saat geçerlidir. Süresi dolarsa Kullanıcılar listesinden yeni bir bağlantı oluşturabilir ya da şifreyi siz belirleyebilirsiniz.</value>
   </data>
   <data name="UserEdit_SetPasswordTitle" xml:space="preserve">
     <value>Şifre Belirle</value>
   </data>
   <data name="UserEdit_SetPasswordHint" xml:space="preserve">
-    <value>{0} için doğrudan bir şifre belirleyin. Şifreyi kendiniz iletmeyi unutmayın — bir daha gösterilmeyecek.</value>
+    <value>{0} için doğrudan bir şifre belirleyin ve kullanıcıya kendiniz iletin. Şifre bir daha gösterilmeyecek.</value>
   </data>
   <data name="UserEdit_SetPasswordNewLabel" xml:space="preserve">
     <value>Yeni Şifre</value>
@@ -584,9 +575,6 @@
   </data>
   <data name="UserEdit_Toast_Created" xml:space="preserve">
     <value>Kullanıcı oluşturuldu.</value>
-  </data>
-  <data name="UserEdit_Toast_CreatedEmailFailed" xml:space="preserve">
-    <value>Kullanıcı oluşturuldu, ancak şifre belirleme e-postası gönderilemedi. Kullanıcılar listesinden yeniden gönderin.</value>
   </data>
   <data name="UserEdit_Toast_NotFound" xml:space="preserve">
     <value>Kullanıcı bulunamadı.</value>
@@ -2087,7 +2075,7 @@
     <value>Sırlar</value>
   </data>
   <data name="Secrets_Intro" xml:space="preserve">
-    <value>SMTP, CAPTCHA ve S3/CDN gibi CMS dışı sistemlere ait kimlik bilgileri burada şifrelenmiş olarak saklanır.</value>
+    <value>CMS dışındaki sistemlerin (SMTP, CAPTCHA, S3/CDN) giriş ve bağlantı bilgileri. Buraya girilen hiçbir değer tekrar gösterilmez; her alan yalnızca değerinin nereden geldiğini söyler. Değiştirmek için yeni değeri yazın.</value>
   </data>
   <data name="Secrets_MoreInfo" xml:space="preserve">
     <value>Detaylı bilgi</value>
@@ -2109,9 +2097,6 @@
   </data>
   <data name="Secrets_UndoClear" xml:space="preserve">
     <value>Geri al</value>
-  </data>
-  <data name="Secrets_ConfiguredPlaceholder" xml:space="preserve">
-    <value>•••••••• (ayarlı — değiştirmek için yeni değer girin)</value>
   </data>
   <data name="Secrets_NotSetPlaceholder" xml:space="preserve">
     <value>Ayarlanmadı</value>
@@ -4185,7 +4170,7 @@
     <value>Neden diğer ayarlardan ayrı bir yerde?</value>
   </data>
   <data name="KB_SecretsWhySeparateBody" xml:space="preserve">
-    <value>Site Ayarları'ndaki diğer alanlar (site adı, CDN adresi, CAPTCHA site anahtarı gibi) zaten herkese açık ya da gizli olmayan bilgilerdir; bu yüzden şifrelenmez. Sırlar ise gerçek şifrelerdir ve ayrı bir yerde, şifrelenmiş olarak saklanır. Bir sırrı kaydettikten sonra ekranda açık hâlini bir daha göremezsiniz; yalnızca ayarlı olup olmadığını görürsünüz. Değiştirmek için yeni değeri yazın, kaldırmak için "Kaldır" bağlantısını kullanın.</value>
+    <value>Site Ayarları'ndaki diğer alanlar (site adı, CDN adresi, CAPTCHA site anahtarı gibi) zaten herkese açık ya da gizli olmayan bilgilerdir; bu yüzden şifrelenmez. Sırlar ise gerçek giriş bilgileridir ve ayrı bir yerde, şifrelenmiş olarak saklanır. Bu sekmede kaydedilen hiçbir değer, sunucu adresi ya da kullanıcı adı bile, ekranda bir daha gösterilmez. Her alan yalnızca değerin burada mı kayıtlı olduğunu, sunucu ayarından mı geldiğini ya da hiç girilmediğini söyler. Değiştirmek için yeni değeri yazın, kaldırmak için "Kaldır" bağlantısını kullanın. Her kayıtta neyin değişeceği gösterilir ve onayınız istenir.</value>
   </data>
   <data name="KB_SecretsWhoSubtitle" xml:space="preserve">
     <value>Bu sekmeyi kim görebilir?</value>
@@ -4197,7 +4182,7 @@
     <value>appsettings.json ve .env ile ilişkisi ne?</value>
   </data>
   <data name="KB_SecretsFileBody" xml:space="preserve">
-    <value>İkisi birlikte çalışır; ikisinde de değer varsa buradaki geçerli olur. Burada boş bırakılan bir alan için sistem appsettings.json ya da .env dosyasındaki değeri kullanmaya devam eder. Yani var olan bir kurulumda hiçbir şey bozulmaz.</value>
+    <value>İkisi birlikte çalışır; ikisinde de değer varsa buradaki geçerli olur. Burada boş bırakılan bir alan için sistem appsettings.json ya da .env dosyasındaki değeri kullanmaya devam eder. Bu alanlar "Sunucu ayarından (.env)" etiketiyle gösterilir; böylece boş bir alan, ayarlanmamış bir ayar sanılmaz. Buradaki bir değeri kaldırırsanız sunucu ayarındaki değere dönülür.</value>
   </data>
   <data name="KB_SecretsRestartSubtitle" xml:space="preserve">
     <value>Değişiklik hemen geçerli olur mu?</value>
@@ -5349,7 +5334,7 @@
     <value>Excel'den İçe Aktar</value>
   </data>
   <data name="Redirects_ImportIntro" xml:space="preserve">
-    <value>Excel dosyanızı CSV (noktalı virgülle ayrılmış) olarak kaydedip buradan yükleyin — her satır bir yönlendirme kuralı oluşturur. İlk sütun eski yol, ikinci sütun yeni yoldur; yeni yol boş bırakılırsa o yol kalıcı olarak kaldırılmış sayılır (410).</value>
+    <value>Excel dosyanızı CSV (noktalı virgülle ayrılmış) olarak kaydedip buradan yükleyin; her satır bir yönlendirme kuralı oluşturur. İlk sütun eski yol, ikinci sütun yeni yoldur. Yeni yol boş bırakılırsa o adres kalıcı olarak kaldırılmış sayılır (410). Üçüncü sütun isteğe bağlıdır: geçici yönlendirme için 302 yazın, boş bırakırsanız ya da başka bir şey yazarsanız kalıcı (301) olur.</value>
   </data>
   <data name="Redirects_ImportMoreInfo" xml:space="preserve">
     <value>Daha fazla bilgi</value>
@@ -5800,5 +5785,200 @@
   </data>
   <data name="HomeUnpublish_Confirm" xml:space="preserve">
     <value>Yine de kaldır</value>
+  </data>
+  <data name="Redirects_Type" xml:space="preserve">
+    <value>Yönlendirme türü</value>
+  </data>
+  <data name="Redirects_TypePermanent" xml:space="preserve">
+    <value>Kalıcı (301)</value>
+  </data>
+  <data name="Redirects_TypePermanent_Hint" xml:space="preserve">
+    <value>Sayfa kalıcı olarak taşındı. Arama motorları eski adresin sıralamasını yeni adrese aktarır ve eski adresi unutur. Adı değişen ya da birleştirilen sayfalar için doğru seçim budur.</value>
+  </data>
+  <data name="Redirects_TypeTemporary" xml:space="preserve">
+    <value>Geçici (302)</value>
+  </data>
+  <data name="Redirects_TypeTemporary_Hint" xml:space="preserve">
+    <value>Eski adres ileride yeniden kullanılacak. Arama motorları onu dizinde tutar, sıralamasını yeni adrese aktarmaz. Kampanyalar, sezonluk sayfalar ya da geri gelecek bir sayfa için uygundur.</value>
+  </data>
+  <data name="Redirects_ImportColType" xml:space="preserve">
+    <value>Tür</value>
+  </data>
+  <data name="PasswordLink_Title" xml:space="preserve">
+    <value>Şifre bağlantısı</value>
+  </data>
+  <data name="PasswordLink_CreatedTitle" xml:space="preserve">
+    <value>Kullanıcı oluşturuldu, şifre bağlantısını iletin</value>
+  </data>
+  <data name="PasswordLink_AskSetup" xml:space="preserve">
+    <value>{0} henüz bir şifre belirlemedi. Şifresini belirleyebileceği yeni bir bağlantı oluşturun.</value>
+  </data>
+  <data name="PasswordLink_AskReset" xml:space="preserve">
+    <value>{0} için yeni şifresini belirleyebileceği bir bağlantı oluşturun.</value>
+  </data>
+  <data name="PasswordLink_NoMail" xml:space="preserve">
+    <value>Mail sunucusu ayarlı olmadığı için bağlantı e-postayla gönderilemez. Buradan oluşturup kullanıcıya kendiniz iletin, örneğin bir mesajla.</value>
+  </data>
+  <data name="PasswordLink_Valid48h" xml:space="preserve">
+    <value>Bağlantı 48 saat geçerlidir ve yalnızca bir kez kullanılabilir.</value>
+  </data>
+  <data name="PasswordLink_RetiresOld" xml:space="preserve">
+    <value>Kullanıcının elindeki eski bağlantılar geçersiz olur.</value>
+  </data>
+  <data name="PasswordLink_KeepsOldUntilUsed" xml:space="preserve">
+    <value>Bağlantı kullanılana kadar mevcut şifresi çalışmaya devam eder.</value>
+  </data>
+  <data name="PasswordLink_CreateCopy" xml:space="preserve">
+    <value>Kopyalamak için oluştur</value>
+  </data>
+  <data name="PasswordLink_SendEmail" xml:space="preserve">
+    <value>E-postayla gönder</value>
+  </data>
+  <data name="PasswordLink_Done" xml:space="preserve">
+    <value>Tamam</value>
+  </data>
+  <data name="PasswordLink_Toast_Sent" xml:space="preserve">
+    <value>Bağlantı {0} adresine gönderildi.</value>
+  </data>
+  <data name="PasswordLink_EmailFailed" xml:space="preserve">
+    <value>E-posta gönderilemedi. Bağlantıyı kullanıcıya kendiniz iletin.</value>
+  </data>
+  <data name="PasswordLink_Intro" xml:space="preserve">
+    <value>Bu bağlantıyı {0} kişisine gönderin. Bağlantıyı açınca kendi şifresini belirler.</value>
+  </data>
+  <data name="PasswordLink_Copy" xml:space="preserve">
+    <value>Kopyala</value>
+  </data>
+  <data name="PasswordLink_Copied" xml:space="preserve">
+    <value>Kopyalandı</value>
+  </data>
+  <data name="PasswordLink_CopyFailed" xml:space="preserve">
+    <value>Kopyalanamadı, bağlantıyı seçip kendiniz kopyalayın</value>
+  </data>
+  <data name="PasswordLink_Expires" xml:space="preserve">
+    <value>{0} tarihine kadar geçerli ve tek kullanımlık.</value>
+  </data>
+  <data name="PasswordLink_OneTime" xml:space="preserve">
+    <value>Bağlantı yalnızca şimdi gösteriliyor. Kaybolursa Kullanıcılar listesinden yenisini oluşturabilirsiniz.</value>
+  </data>
+  <data name="PasswordLink_Private" xml:space="preserve">
+    <value>Bu bağlantıya sahip olan herkes hesabın şifresini belirleyebilir. Yalnızca kullanıcının kendisine, özelden gönderin.</value>
+  </data>
+  <data name="UserEdit_PasswordNoMailNotice" xml:space="preserve">
+    <value>Mail sunucusu ayarlı değil. Kaydettiğinizde, kullanıcıya kendiniz ileteceğiniz bir şifre bağlantısı alacaksınız. Bağlantı 48 saat geçerlidir.</value>
+  </data>
+  <data name="UserEdit_SetPasswordMustChange" xml:space="preserve">
+    <value>Bu şifre tek seferliktir: kullanıcı bir sonraki girişinde, panele geçmeden önce kendi şifresini belirlemek zorunda kalır.</value>
+  </data>
+  <data name="Users_PasswordLink" xml:space="preserve">
+    <value>Şifre bağlantısı</value>
+  </data>
+  <data name="Users_PasswordTemporary" xml:space="preserve">
+    <value>Geçici şifre</value>
+  </data>
+  <data name="Users_PasswordTemporary_Hint" xml:space="preserve">
+    <value>Şifreyi bir yönetici belirledi. Kullanıcı bir sonraki girişinde kendi şifresini seçecek.</value>
+  </data>
+  <data name="SetPassword_SubtitleChange" xml:space="preserve">
+    <value>Kendi şifrenizi belirleyin.</value>
+  </data>
+  <data name="SetPassword_ChangeExplain" xml:space="preserve">
+    <value>Şifrenizi bir yönetici belirledi. Devam etmek için kendi şifrenizi seçin, ardından yeni şifrenizle giriş yapabilirsiniz.</value>
+  </data>
+  <data name="Login_ForgotPassword" xml:space="preserve">
+    <value>Şifremi unuttum</value>
+  </data>
+  <data name="Forgot_PageTitle" xml:space="preserve">
+    <value>Şifremi unuttum</value>
+  </data>
+  <data name="Forgot_Title" xml:space="preserve">
+    <value>Şifrenizi mi unuttunuz?</value>
+  </data>
+  <data name="Forgot_Subtitle" xml:space="preserve">
+    <value>E-posta adresinizi ya da kullanıcı adınızı yazın, yeni şifrenizi belirleyebileceğiniz bir bağlantı gönderelim.</value>
+  </data>
+  <data name="Forgot_SubmitBtn" xml:space="preserve">
+    <value>Sıfırlama bağlantısı gönder</value>
+  </data>
+  <data name="Forgot_Sent" xml:space="preserve">
+    <value>Yazdığınız bilgilere uyan bir hesap varsa, e-posta adresine bir sıfırlama bağlantısı gönderildi. Bağlantı 1 saat geçerlidir. Gelmediyse istenmeyen e-posta klasörünüze bakın ya da yöneticinize başvurun.</value>
+  </data>
+  <data name="Forgot_NoMail" xml:space="preserve">
+    <value>Bu panel e-posta gönderemediği için şifrenizi buradan sıfırlayamazsınız. Şifrenizi yöneticinize sıfırlatın.</value>
+  </data>
+  <data name="Forgot_BackToLogin" xml:space="preserve">
+    <value>Girişe dön</value>
+  </data>
+  <data name="Secrets_Source_Saved" xml:space="preserve">
+    <value>Burada kayıtlı</value>
+  </data>
+  <data name="Secrets_Source_Saved_Hint" xml:space="preserve">
+    <value>Bu ekrandan girildi. Sunucu ayarındaki değere göre önceliklidir.</value>
+  </data>
+  <data name="Secrets_Source_Server" xml:space="preserve">
+    <value>Sunucu ayarından (.env)</value>
+  </data>
+  <data name="Secrets_Source_Server_Hint" xml:space="preserve">
+    <value>Değer sunucunun yapılandırmasından geliyor (appsettings.json ya da .env gibi bir ortam değişkeni). Alan boş görünse de bu değer kullanılıyor.</value>
+  </data>
+  <data name="Secrets_Source_None" xml:space="preserve">
+    <value>Girilmedi</value>
+  </data>
+  <data name="Secrets_SavedPlaceholder" xml:space="preserve">
+    <value>Kayıtlı, gösterilmiyor. Değiştirmek için yeni değeri yazın.</value>
+  </data>
+  <data name="Secrets_ServerPlaceholder" xml:space="preserve">
+    <value>Sunucu ayarından geliyor. Buraya yazacağınız değer onun yerine geçer.</value>
+  </data>
+  <data name="Secrets_WillBeClearedToServer" xml:space="preserve">
+    <value>Kaydedince silinecek; yeniden sunucu ayarındaki (.env) değer kullanılacak.</value>
+  </data>
+  <data name="Secrets_EmailReady" xml:space="preserve">
+    <value>Mail gönderimi ayarlı.</value>
+  </data>
+  <data name="Secrets_EmailNotReady" xml:space="preserve">
+    <value>Mail gönderimi ayarlı değil: mail sunucusu ya da gönderen adresi girilmemiş.</value>
+  </data>
+  <data name="Secrets_EmailFromServer" xml:space="preserve">
+    <value>Ayarlarının bir kısmı ya da tamamı sunucu ayarından (.env) geliyor; alanların burada boş görünmesi bu yüzden.</value>
+  </data>
+  <data name="Secrets_NoChanges" xml:space="preserve">
+    <value>Değişiklik yok.</value>
+  </data>
+  <data name="Secrets_ReviewTitle" xml:space="preserve">
+    <value>Değişiklikler kaydedilsin mi?</value>
+  </data>
+  <data name="Secrets_ReviewIntro" xml:space="preserve">
+    <value>Şunlar değişecek:</value>
+  </data>
+  <data name="Secrets_ReviewSet" xml:space="preserve">
+    <value>değer kaydedilecek</value>
+  </data>
+  <data name="Secrets_ReviewReplace" xml:space="preserve">
+    <value>kayıtlı değer değiştirilecek</value>
+  </data>
+  <data name="Secrets_ReviewClear" xml:space="preserve">
+    <value>silinecek ve boş kalacak</value>
+  </data>
+  <data name="Secrets_ReviewClearToServer" xml:space="preserve">
+    <value>silinecek; yeniden sunucu ayarındaki (.env) değer kullanılacak</value>
+  </data>
+  <data name="Secrets_ReviewImmediate" xml:space="preserve">
+    <value>Değişiklikler yeniden başlatma gerekmeden hemen geçerli olur.</value>
+  </data>
+  <data name="Secrets_ReviewEmail" xml:space="preserve">
+    <value>Mail ayarları değişiyor: kaydettikten sonra Site Ayarları → Sistem'den bir test maili gönderin. Yanlış bir değer ancak bir mail gitmediğinde fark edilir.</value>
+  </data>
+  <data name="Secrets_ReviewStorage" xml:space="preserve">
+    <value>Depolama ayarları değişiyor: yeni yüklemelerin nereye gideceğini bundan sonra bu ayarlar belirler.</value>
+  </data>
+  <data name="Secrets_ReviewAcknowledge" xml:space="preserve">
+    <value>Silinen değerlerin artık kullanılmayacağını anlıyorum.</value>
+  </data>
+  <data name="Secrets_ReviewConfirm" xml:space="preserve">
+    <value>Değişiklikleri kaydet</value>
+  </data>
+  <data name="Settings_SenderFromServer" xml:space="preserve">
+    <value>Boş: sunucu ayarındaki {0} kullanılıyor</value>
   </data>
 </root>

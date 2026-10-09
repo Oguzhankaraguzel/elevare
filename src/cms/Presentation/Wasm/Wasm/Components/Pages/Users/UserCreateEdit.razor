@@ -49,12 +49,24 @@
                     <ValidationMessage For="() => _model.UserName" style="color:var(--cms-danger);font-size:12px" />
                 </div>
 
-            @if (!_isEdit)
+            @if (!_isEdit && _emailConfigured is bool mailReady)
             {
-                <div class="cms-callout" style="margin-bottom:18px;padding:12px 14px;border:1px solid var(--cms-border);border-radius:6px;display:flex;gap:10px;align-items:flex-start">
-                    <i class="bi bi-envelope-check" style="color:var(--cms-accent);font-size:16px;margin-top:1px"></i>
-                    <small style="color:var(--cms-text-muted)">@L["UserEdit_PasswordEmailNotice"]</small>
-                </div>
+                @* Said before the save, not after: without a mail server the link is the
+                   administrator's to deliver, and they should know that going in. *@
+                @if (mailReady)
+                {
+                    <div class="cms-callout" style="margin-bottom:18px;padding:12px 14px;border:1px solid var(--cms-border);border-radius:6px;display:flex;gap:10px;align-items:flex-start">
+                        <i class="bi bi-envelope-check" style="color:var(--cms-accent);font-size:16px;margin-top:1px"></i>
+                        <small style="color:var(--cms-text-muted)">@L["UserEdit_PasswordEmailNotice"]</small>
+                    </div>
+                }
+                else
+                {
+                    <div class="pw-link-note is-warning" style="margin-bottom:18px">
+                        <i class="bi bi-envelope-slash"></i>
+                        <span>@L["UserEdit_PasswordNoMailNotice"]</span>
+                    </div>
+                }
             }
 
             <div class="form-group">
@@ -106,8 +118,28 @@
     </div>
 </div>
 
+<CmsModal Title="@L["PasswordLink_CreatedTitle"]" IsVisible="_createdLink is not null" OnClose="FinishCreate" Size="md">
+    <Body>
+        @if (_createdLink is { SetupUrl: { } url } created)
+        {
+            <PasswordLinkShare Url="@url" ExpiresAtUtc="created.LinkExpiresAtUtc"
+                               UserName="@($"{_model.FirstName} {_model.LastName}".Trim())"
+                               EmailFailed="_emailConfigured == true" />
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-primary-cms" @onclick="FinishCreate">@L["PasswordLink_Done"]</button>
+    </Footer>
+</CmsModal>
+
 @code {
     [Parameter] public Guid? Id { get; set; }
+
+    /// <summary>Null until known, so neither notice flashes up before the answer is in.</summary>
+    private bool? _emailConfigured;
+
+    /// <summary>A just-created account whose setup link was not mailed — shown once, then gone.</summary>
+    private CreateUserResult? _createdLink;
 
     private UserFormModel _model = new();
     /// <summary>Role the user had when the form loaded, to detect an actual change on save.</summary>
@@ -147,6 +179,9 @@
             Nav.NavigateTo("/", replace: true);
             return;
         }
+
+        if (!_isEdit)
+            (await Sender.Send(new GetEmailStatusQuery())).Match(configured => _emailConfigured = configured, _ => { });
 
         (await Sender.Send(new GetRolesQuery())).Match(
             list => _roles = list,
@@ -203,16 +238,24 @@
                 Result<CreateUserResult> r = await Sender.Send(cmd);
                 if (r.IsSuccess)
                 {
-                    if (r.Value.EmailSent)
-                        Toast.Success(L["UserEdit_Toast_Created"]);
+                    Toast.Success(L["UserEdit_Toast_Created"]);
+                    // No mail went out: the link is shown here, the only place it ever
+                    // exists in readable form, before leaving the page.
+                    if (r.Value.SetupUrl is not null)
+                        _createdLink = r.Value;
                     else
-                        Toast.Warning(L["UserEdit_Toast_CreatedEmailFailed"]);
-                    Nav.NavigateTo("/users");
+                        Nav.NavigateTo("/users");
                 }
                 else Toast.Error(L.Error(r.Error));
             }
         }
         finally { _saving = false; }
+    }
+
+    private void FinishCreate()
+    {
+        _createdLink = null;
+        Nav.NavigateTo("/users");
     }
 
     private void GenerateUserName()

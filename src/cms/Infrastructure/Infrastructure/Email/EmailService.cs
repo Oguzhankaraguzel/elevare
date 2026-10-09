@@ -52,6 +52,16 @@ internal sealed class EmailService : IEmailService
 
     // ── IEmailService ─────────────────────────────────────────────────────────
 
+    public async Task<bool> IsConfiguredAsync(CancellationToken cancellationToken = default)
+    {
+        EmailOptions options = _optionsMonitor.CurrentValue;
+        if (string.IsNullOrWhiteSpace(options.Host))
+            return false;
+
+        (string fromAddress, _) = await ResolveFromIdentityAsync(options, cancellationToken);
+        return !string.IsNullOrWhiteSpace(fromAddress);
+    }
+
     public async Task<Result> SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
@@ -115,6 +125,11 @@ internal sealed class EmailService : IEmailService
         // Sırlar save it could otherwise start on the old SMTP host and end on the
         // new one — one consistent snapshot per logical send is the correct unit.
         EmailOptions options = _optionsMonitor.CurrentValue;
+
+        // No host is a fresh install, not an outage: answered at once instead of
+        // after three retries against an SmtpClient that can only throw.
+        if (string.IsNullOrWhiteSpace(options.Host))
+            return Result.Failure(EmailErrors.NotConfigured);
 
         (string fromAddress, string fromDisplayName) = await ResolveFromIdentityAsync(options, cancellationToken);
 
