@@ -961,6 +961,9 @@ else
     }
 </style>
 
+<HomePageUnpublishConfirm IsVisible="_homeConfirmVisible" IsDefaultLanguage="_homeConfirmDefault" Busy="_saving"
+                          OnConfirm="ConfirmHomePageUnpublish" OnCancel="() => _homeConfirmVisible = false" />
+
 @code {
     [Parameter] public int Id { get; set; }
 
@@ -1019,6 +1022,12 @@ else
     private string? _fingerprint;
     private bool _showEditConflict;
     private bool _overwriteNext;
+
+    // A homepage saved away from Published is refused until confirmed — see
+    // HomePageUnpublishConfirm; the confirmation replays the save with this set.
+    private bool _confirmHomeNext;
+    private bool _homeConfirmVisible;
+    private bool _homeConfirmDefault;
     private bool _slugChangeConfirmed;
     private string _originalSlug = "";
     private PageStatus _originalStatus = PageStatus.Draft;
@@ -2055,13 +2064,20 @@ else
             bool ok = false;
             bool overwrite = _overwriteNext;
             _overwriteNext = false;
+            bool confirmHome = _confirmHomeNext;
+            _confirmHomeNext = false;
             (await Sender.Send(new UpdatePageCommand(
                     Id, _title.Trim(), _slug, _status, gjs.Html, gjs.Css, gjs.Data, seo, _parentPageId, _selectedTagIds, _kind,
-                    [.. _excludedSiteCodeIds], _fingerprint, overwrite)))
+                    [.. _excludedSiteCodeIds], _fingerprint, overwrite, confirmHome)))
                 .Match(() => ok = true, error =>
                 {
                     if (error.Code == PageInfoErrors.EditedElsewhere.Code)
                         _showEditConflict = true;
+                    else if (HomePageUnpublishConfirm.AsksFor(error, out bool isDefault))
+                    {
+                        _homeConfirmDefault = isDefault;
+                        _homeConfirmVisible = true;
+                    }
                     else
                         Toast.Error(L.Error(error));
                 });
@@ -2130,6 +2146,13 @@ else
         catch (Exception ex) { LoggerFactory.CreateLogger(GetType()).LogError(ex, "Unhandled error in {Component}.", GetType().Name); }
         if (current is not null)
             await ReloadEditorAsync(current);
+    }
+
+    private async Task ConfirmHomePageUnpublish()
+    {
+        _homeConfirmVisible = false;
+        _confirmHomeNext = true;
+        await SaveAll();
     }
 
     private async Task OverwriteAfterConflict()

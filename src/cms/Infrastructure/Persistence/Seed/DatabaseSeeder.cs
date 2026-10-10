@@ -460,6 +460,9 @@ public static class DatabaseSeeder
                 email: seed.SuperAdmin.Email,
                 password: seed.SuperAdmin.Password,
                 role: Roles.SuperAdmin);
+
+            if (seed.SuperAdmin.ResetPassword)
+                await RecoverSuperAdminAsync(userManager, seed.SuperAdmin, logger);
         }
         else if (!await userManager.Users.AnyAsync())
         {
@@ -481,6 +484,54 @@ public static class DatabaseSeeder
                 password: seed.Editor.Password,
                 role: Roles.Editor);
         }
+    }
+
+    /// <summary>
+    /// Puts the configured password back on the SuperAdmin account — see
+    /// <see cref="SeedUserOptions.ResetPassword"/>. Found by its fixed id first, then by
+    /// the configured address and name, since either may have been edited since.
+    /// </summary>
+    private static async Task RecoverSuperAdminAsync(
+        UserManager<AppUser> userManager, SeedUserOptions options, ILogger logger)
+    {
+        AppUser? user = await userManager.FindByIdAsync(SuperAdminId.ToString())
+            ?? await userManager.FindByEmailAsync(options.Email)
+            ?? await userManager.FindByNameAsync(options.UserName);
+
+        if (user is null)
+        {
+            logger.LogWarning("[Seed] Seed:SuperAdmin:ResetPassword is on, but no SuperAdmin account was found to reset.");
+            return;
+        }
+
+        if (await userManager.CheckPasswordAsync(user, options.Password)
+            && user.IsActive && !await userManager.IsLockedOutAsync(user))
+        {
+            logger.LogWarning(
+                "[Seed] Seed:SuperAdmin:ResetPassword is still on. The account already uses the configured "
+                + "password; switch the setting off, or every restart will reset a password changed since.");
+            return;
+        }
+
+        string resetToken = await userManager.GeneratePasswordResetTokenAsync(user);
+        IdentityResult result = await userManager.ResetPasswordAsync(user, resetToken, options.Password);
+        if (!result.Succeeded)
+        {
+            logger.LogError("[Seed] Could not reset the SuperAdmin password: {Errors}", FormatErrors(result));
+            return;
+        }
+
+        user.IsActive = true;
+        user.MustChangePassword = false;
+        await userManager.UpdateAsync(user);
+        await userManager.SetLockoutEndDateAsync(user, null);
+        await userManager.ResetAccessFailedCountAsync(user);
+        if (!await userManager.IsInRoleAsync(user, Roles.SuperAdmin))
+            await userManager.AddToRoleAsync(user, Roles.SuperAdmin);
+
+        logger.LogWarning(
+            "[Seed] The password of SuperAdmin '{UserName}' was reset to the configured one and the account "
+            + "unlocked. Switch Seed:SuperAdmin:ResetPassword off now.", user.UserName);
     }
 
     private static async Task EnsureUserAsync(
@@ -1107,8 +1158,13 @@ public static class DatabaseSeeder
         (string Key, string? Value, string DisplayName, string? Description, IntegrationSecretCategory Category, bool IsSecret, string DataType)[] catalog =
         [
             ("Email:Host", null, "Secrets_Field_EmailHost_Label", "Secrets_Field_EmailHost_Desc", IntegrationSecretCategory.Email, false, "string"),
-            ("Email:Port", "587", "Secrets_Field_EmailPort_Label", null, IntegrationSecretCategory.Email, false, "int"),
-            ("Email:EnableSsl", "true", "Secrets_Field_EmailEnableSsl_Label", null, IntegrationSecretCategory.Email, false, "bool"),
+            // No defaults in this catalogue: a row with a value overrides the server's own
+            // configuration, so a seeded "587" would silently beat SMTP_PORT=465 from
+            // the environment. Left empty, the options classes supply the same defaults
+            // (EmailOptions.Port/EnableSsl, ObjectStorageOptions.Provider) — and only
+            // when nothing else does.
+            ("Email:Port", null, "Secrets_Field_EmailPort_Label", null, IntegrationSecretCategory.Email, false, "int"),
+            ("Email:EnableSsl", null, "Secrets_Field_EmailEnableSsl_Label", null, IntegrationSecretCategory.Email, false, "bool"),
             ("Email:UserName", null, "Secrets_Field_EmailUserName_Label", null, IntegrationSecretCategory.Email, false, "string"),
             ("Email:Password", null, "Secrets_Field_EmailPassword_Label", "Secrets_Field_EmailPassword_Desc", IntegrationSecretCategory.Email, true, "string"),
 
@@ -1116,7 +1172,7 @@ public static class DatabaseSeeder
             // safe to expose, so they stay there). This is the one value that never was.
             ("Captcha:SecretKey", null, "Secrets_Field_CaptchaSecretKey_Label", "Secrets_Field_CaptchaSecretKey_Desc", IntegrationSecretCategory.Captcha, true, "string"),
 
-            ("ObjectStorage:Provider", "Local", "Secrets_Field_ObjectStorageProvider_Label", "Secrets_Field_ObjectStorageProvider_Desc", IntegrationSecretCategory.ObjectStorage, false, "storage-provider"),
+            ("ObjectStorage:Provider", null, "Secrets_Field_ObjectStorageProvider_Label", "Secrets_Field_ObjectStorageProvider_Desc", IntegrationSecretCategory.ObjectStorage, false, "storage-provider"),
             ("ObjectStorage:BucketName", null, "Secrets_Field_ObjectStorageBucketName_Label", null, IntegrationSecretCategory.ObjectStorage, false, "string"),
             ("ObjectStorage:Region", null, "Secrets_Field_ObjectStorageRegion_Label", null, IntegrationSecretCategory.ObjectStorage, false, "string"),
             ("ObjectStorage:AccessKey", null, "Secrets_Field_ObjectStorageAccessKey_Label", null, IntegrationSecretCategory.ObjectStorage, true, "string"),
@@ -1135,9 +1191,6 @@ public static class DatabaseSeeder
             {
                 CreateUserId = SuperAdminId,
                 Key          = c.Key,
-                // A plain default (Port=587) is seeded as-is; a secret's default would
-                // have to be encrypted to be readable later, and none of these fields
-                // has one, so this is never reached for IsSecret=true today.
                 Value        = c.Value,
                 DisplayName  = c.DisplayName,
                 Description  = c.Description,
@@ -1148,6 +1201,8 @@ public static class DatabaseSeeder
             })
             .ToList();
 
+        await ReleaseSeededSecretDefaultsAsync(context, logger, cancellationToken);
+
         if (toAdd.Count == 0)
             return;
 
@@ -1155,6 +1210,46 @@ public static class DatabaseSeeder
         await context.SaveChangesAsync(cancellationToken);
 
         logger.LogInformation("[Seed] {Count} integration secret(s) seeded.", toAdd.Count);
+    }
+
+    /// <summary>
+    /// Earlier versions seeded Port=587, EnableSsl=true and Provider=Local into the
+    /// table, and a value there beats the environment — so a deployment configured
+    /// with SMTP_PORT=465 or an S3 provider quietly ran on the seeded defaults
+    /// instead. Rows nobody has ever saved from the screen (no UpdateUserId) and that
+    /// still hold exactly that default are emptied, which hands the decision back to
+    /// the server's configuration. A value someone did save is left alone.
+    /// </summary>
+    private static async Task ReleaseSeededSecretDefaultsAsync(
+        ApplicationDbContext context, ILogger logger, CancellationToken cancellationToken)
+    {
+        (string Key, string Value)[] seededDefaults =
+        [
+            ("Email:Port", "587"),
+            ("Email:EnableSsl", "true"),
+            ("ObjectStorage:Provider", "Local"),
+        ];
+
+        string[] keys = [.. seededDefaults.Select(d => d.Key)];
+        List<IntegrationSecret> rows = await context.IntegrationSecrets
+            .Where(s => keys.Contains(s.Key) && s.UpdateUserId == null && s.Value != null)
+            .ToListAsync(cancellationToken);
+
+        int released = 0;
+        foreach (IntegrationSecret row in rows)
+        {
+            if (seededDefaults.Any(d => d.Key == row.Key && d.Value == row.Value))
+            {
+                row.Value = null;
+                released++;
+            }
+        }
+
+        if (released == 0)
+            return;
+
+        await context.SaveChangesAsync(cancellationToken);
+        logger.LogInformation("[Seed] {Count} seeded integration default(s) released to the server configuration.", released);
     }
 
     /// <summary>

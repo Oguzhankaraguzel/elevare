@@ -1087,17 +1087,13 @@ public partial class ElevareGrid<TItem> : ComponentBase, IDisposable
     private bool IsEditing(TItem item) => _editingRows.Contains(item);
     private bool IsRowModified(TItem item) => _pendingEdits.ContainsKey(item);
 
+    // Opening a row for editing changes nothing yet: it counts as a pending change
+    // only once a value actually differs (see SetEditValue). Recording every opened
+    // row made "2 changes" appear for rows nobody had touched.
     private void StartRowEdit(TItem item)
     {
         if (!AllowInlineEdit) return;
         _editingRows.Add(item);
-        if (!_pendingEdits.ContainsKey(item))
-        {
-            Dictionary<string, object?> values = new();
-            foreach (GridColumnDef<TItem> col in _columns.Where(c => c.Editable))
-                values[col.PropertyName] = col.ValueAccessor(item);
-            _pendingEdits[item] = values;
-        }
     }
 
     private void FinishRowEdit(TItem item)
@@ -1113,10 +1109,22 @@ public partial class ElevareGrid<TItem> : ComponentBase, IDisposable
 
     private void SetEditValue(TItem item, string propertyName, object? value)
     {
+        object? original = _columns.Find(c => c.PropertyName == propertyName)?.ValueAccessor(item);
+        bool unchanged = Equals(original, value)
+            || string.Equals(original?.ToString(), value?.ToString(), StringComparison.Ordinal);
+
         if (!_pendingEdits.TryGetValue(item, out Dictionary<string, object?>? values))
         {
+            if (unchanged) return;
             values = new Dictionary<string, object?>();
             _pendingEdits[item] = values;
+        }
+
+        if (unchanged)
+        {
+            values.Remove(propertyName);
+            if (values.Count == 0) _pendingEdits.Remove(item);
+            return;
         }
         values[propertyName] = value;
     }

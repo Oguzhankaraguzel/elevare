@@ -13,6 +13,9 @@ public static class PublicPageErrors
     public static Error Inactive(string fullSlug) =>
         Error.NotFound("Page.Inactive", $"Page '{fullSlug}' exists and is Published, but it is marked inactive.");
 
+    public static Error LanguageNotServed(string fullSlug, string languageCode) =>
+        Error.NotFound("Page.LanguageNotServed", $"Page '{fullSlug}' is Published, but it is not a page of the publicly visible language '{languageCode}' (its language is unpublished or inactive in the CMS, or the address belongs to another language).");
+
     public static Error PreviewNotFound(int pageId) =>
         Error.NotFound("Page.PreviewNotFound", $"No page exists with id '{pageId}'.");
 }

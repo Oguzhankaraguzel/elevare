@@ -26,6 +26,7 @@ internal sealed class UpdateRedirectCommandHandler(ICmsApplicationDbContext db)
 
         redirect.OldPath = oldPath;
         redirect.NewPath = newPath;
+        redirect.IsTemporary = request.IsTemporary;
 
         // Editing by hand detaches the rule from the page that spawned it: the target
         // is now whatever the editor typed, so following the page would silently

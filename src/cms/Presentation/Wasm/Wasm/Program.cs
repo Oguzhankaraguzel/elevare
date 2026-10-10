@@ -88,6 +88,11 @@ if (!string.IsNullOrWhiteSpace(keyPath))
 // <ObjectStorageOptions> consumer without a restart.
 await LoadIntegrationSecretOverridesAsync(builder, keyPath);
 
+// Lets the Secrets and Site Settings screens say where a value comes from — the
+// database or the server's own configuration (.env) — instead of showing a field
+// empty while the setting is in fact in effect.
+builder.Services.AddSingleton<IConfigurationInspector, ConfigurationInspector>();
+
 static async Task LoadIntegrationSecretOverridesAsync(WebApplicationBuilder builder, string? keyPath)
 {
     string? connectionString = builder.Configuration.GetConnectionString("DefaultConnection");

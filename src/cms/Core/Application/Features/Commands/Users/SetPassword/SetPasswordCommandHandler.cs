@@ -28,6 +28,15 @@ internal sealed class SetPasswordCommandHandler(
         if (user is null || !user.IsActive)
             return Result.Failure(PasswordSetupErrors.InvalidOrExpiredToken);
 
+        // Arriving here from a sign-in with an administrator's password: keeping that
+        // password would leave it one somebody else knows, which is the whole reason
+        // for the detour.
+        if (user.MustChangePassword && await userManager.CheckPasswordAsync(user, request.NewPassword))
+            return Result.Failure(PasswordSetupErrors.SameAsTemporary);
+
+        // Saved by the password call below, together with the password itself.
+        user.MustChangePassword = false;
+
         // AddPasswordAsync only succeeds when the account has none yet (the normal
         // case for a fresh invite). If a SuperAdmin already set one manually — or the
         // user is re-using an older, still-valid e-mail after already finishing setup
@@ -41,6 +50,8 @@ internal sealed class SetPasswordCommandHandler(
             return Result.Failure(PasswordSetupErrors.SetFailed(result.Describe()));
         }
 
+        // Every other link the user had goes too: the question they answered is settled.
+        await PasswordLinks.RetireAsync(db, user.Id, now, cancellationToken);
         tokenRow.ConsumedAtUtc = now;
         await db.SaveChangesAsync(cancellationToken);
 

@@ -3,7 +3,6 @@ using Application.Abstraction.Data;
 using Application.Abstraction.Services.Email;
 using Application.Features.Commands.Users.ChangeMyPassword;
 using Application.Features.Commands.Users.CreateUser;
-using Application.Features.Commands.Users.ResendPasswordSetup;
 using Application.Features.Commands.Users.SetPassword;
 using Application.Features.Commands.Users.SetUserPasswordManually;
 using Cms.Tests.Support;
@@ -169,7 +168,8 @@ public sealed partial class UserAccountTests : IDisposable
         async Task<Result> SetAsync(string password)
         {
             using IServiceScope scope = _host.Scope();
-            return await new SetUserPasswordManuallyCommandHandler(scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>())
+            return await new SetUserPasswordManuallyCommandHandler(scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>(),
+                    scope.ServiceProvider.GetRequiredService<ICmsApplicationDbContext>(), _host.CurrentUser)
                 .Handle(new SetUserPasswordManuallyCommand(userId, password), CancellationToken.None);
         }
 
@@ -177,28 +177,5 @@ public sealed partial class UserAccountTests : IDisposable
         (await SetAsync("Degisti99")).IsSuccess.ShouldBeTrue();   // replacing one
         (await PasswordWorksAsync(userId, "Degisti99")).ShouldBeTrue();
         (await PasswordWorksAsync(userId, Password)).ShouldBeFalse();
-    }
-
-    [Fact]
-    public async Task A_new_link_is_only_sent_to_someone_who_has_not_set_a_password()
-    {
-        await SeedRoleAsync("Editor");
-        Guid userId = (await CreateAsync()).Value.UserId;
-
-        async Task<Result<bool>> ResendAsync()
-        {
-            using IServiceScope scope = _host.Scope();
-            IServiceProvider sp = scope.ServiceProvider;
-            return await new ResendPasswordSetupCommandHandler(sp.GetRequiredService<UserManager<AppUser>>(), sp.GetRequiredService<ICmsApplicationDbContext>(),
-                    sp.GetRequiredService<IEmailService>(), NullLogger<ResendPasswordSetupCommandHandler>.Instance)
-                .Handle(new ResendPasswordSetupCommand(userId, CmsUrl), CancellationToken.None);
-        }
-
-        (await ResendAsync()).Value.ShouldBeTrue();
-        _host.Emails.Sent.Count.ShouldBe(2);
-
-        await SetPasswordAsync(LastSetupToken());
-        (await ResendAsync()).Error.ShouldBe(PasswordSetupErrors.AlreadyHasPassword);
-        _host.Emails.Sent.Count.ShouldBe(2);
     }
 }

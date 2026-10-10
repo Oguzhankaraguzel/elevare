@@ -59,9 +59,6 @@
   <data name="PageInfo.CannotDeleteWithChildren" xml:space="preserve">
     <value>Sayfanın alt sayfaları oldu�Yu için silinemez.</value>
   </data>
-  <data name="PageInfo.CannotUnpublishHomePage" xml:space="preserve">
-    <value>Ana sayfa yayından kaldırılamaz.</value>
-  </data>
   <!-- Redirect -->
   <data name="Redirect.NotFound" xml:space="preserve">
     <value>Yönlendirme kuralı bulunamadı.</value>
@@ -145,9 +142,6 @@
   </data>
   <data name="PasswordSetup.InvalidOrExpiredToken" xml:space="preserve">
     <value>Bu bağlantı geçersiz veya süresi dolmuş. Bir yöneticiden yeni bir bağlantı göndermesini isteyin.</value>
-  </data>
-  <data name="PasswordSetup.AlreadyHasPassword" xml:space="preserve">
-    <value>Bu kullanıcının zaten bir şifresi var.</value>
   </data>
   <data name="AppRole.CannotDeleteBuiltInRole" xml:space="preserve">
     <value>Yerleşik roller silinemez.</value>
@@ -364,5 +358,29 @@
   </data>
   <data name="Page.StructuredDataInvalidJson" xml:space="preserve">
     <value>Yapısal veri geçerli bir JSON değil. Bu haliyle yayınlanırsa arama motorları hiçbirini okuyamaz.</value>
+  </data>
+  <data name="PageInfo.HomePageUnpublishNeedsConfirmation" xml:space="preserve">
+    <value>Bu sayfa bir dilin ana sayfası. Yayından kaldırırsanız o dilin ana adresi 404 verir.</value>
+  </data>
+  <data name="PageInfo.DefaultHomePageUnpublishNeedsConfirmation" xml:space="preserve">
+    <value>Bu sayfa sitenin ana sayfası. Yayından kaldırırsanız sitenizin kendi adresi 404 verir.</value>
+  </data>
+  <data name="Language.DefaultMustStayVisible" xml:space="preserve">
+    <value>Varsayılan dil siteden kaldırılamaz ya da pasif yapılamaz, çünkü sitenin ana adresi bu dile ait. Önce başka bir dili varsayılan yapın ya da bakım modunu açın.</value>
+  </data>
+  <data name="Language.HidingNeedsConfirmation" xml:space="preserve">
+    <value>Bir dili siteden kaldırmak için onay vermeniz ve adreslerinin ne yapacağını seçmeniz gerekiyor.</value>
+  </data>
+  <data name="PasswordSetup.UserInactive" xml:space="preserve">
+    <value>Bu hesap pasif. Önce hesabı aktif yapın; pasif bir hesabın şifre bağlantısı çalışmaz.</value>
+  </data>
+  <data name="PasswordSetup.SuperAdminOnly" xml:space="preserve">
+    <value>Bir süper yöneticinin şifresini yalnızca başka bir süper yönetici sıfırlayabilir.</value>
+  </data>
+  <data name="PasswordSetup.SameAsTemporary" xml:space="preserve">
+    <value>Size verilen şifreden farklı bir şifre seçin.</value>
+  </data>
+  <data name="Email.NotConfigured" xml:space="preserve">
+    <value>Bir mail sunucusu ayarlanmamış. Sırlar ekranından ayarlayabilirsiniz.</value>
   </data>
 </root>

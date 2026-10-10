@@ -82,84 +82,93 @@
         }
 
         @* ── Etkileşim ── *@
-        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecEngagement)">
-            <span>@L["Nav_Engagement"]</span>
-            <i class="bi @(IsCollapsed(SecEngagement) ? "bi-chevron-right" : "bi-chevron-down")"></i>
-        </button>
-        @if (!IsCollapsed(SecEngagement) && UserContext.HasPermission(PermissionKeys.FormsViewSubmissions))
+        @if (ShowEngagement)
         {
-            @* Exact, otherwise /forms also lights up while on its reply-templates child. *@
-            <NavItem Href="/forms" Icon="bi-ui-checks" Label="@L["Nav_Forms"]" Exact="true" />
-            <NavItem Href="/forms/reply-templates" Icon="bi-chat-left-text" Label="@L["Nav_ReplyTemplates"]" />
+            <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecEngagement)">
+                <span>@L["Nav_Engagement"]</span>
+                <i class="bi @(IsCollapsed(SecEngagement) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+            </button>
+            @if (!IsCollapsed(SecEngagement))
+            {
+                @* Exact, otherwise /forms also lights up while on its reply-templates child. *@
+                <NavItem Href="/forms" Icon="bi-ui-checks" Label="@L["Nav_Forms"]" Exact="true" />
+                <NavItem Href="/forms/reply-templates" Icon="bi-chat-left-text" Label="@L["Nav_ReplyTemplates"]" />
+            }
         }
 
         @* ── Yönetim ── *@
-        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecManagement)">
-            <span>@L["Nav_Management"]</span>
-            <i class="bi @(IsCollapsed(SecManagement) ? "bi-chevron-right" : "bi-chevron-down")"></i>
-        </button>
-        @if (!IsCollapsed(SecManagement))
+        @if (ShowManagement)
         {
-            @if (UserContext.HasPermission(PermissionKeys.UsersManage))
+            <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecManagement)">
+                <span>@L["Nav_Management"]</span>
+                <i class="bi @(IsCollapsed(SecManagement) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+            </button>
+            @if (!IsCollapsed(SecManagement))
             {
-                <NavItem Href="/users" Icon="bi-people" Label="@L["Nav_Users"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.RolesManage))
-            {
-                <NavItem Href="/admin/roles" Icon="bi-shield-lock" Label="@L["Nav_Roles"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.WorkflowsManage))
-            {
-                <NavItem Href="/admin/workflows" Icon="bi-signpost-split" Label="@L["Nav_Workflows"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.ApprovalsDecide))
-            {
-                <NavItem Href="/admin/approvals" Icon="bi-check2-square" Label="@L["Nav_Approvals"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.LanguagesManage))
-            {
-                <NavItem Href="/languages" Icon="bi-translate" Label="@L["Nav_Languages"]" />
+                @if (UserContext.HasPermission(PermissionKeys.UsersManage))
+                {
+                    <NavItem Href="/users" Icon="bi-people" Label="@L["Nav_Users"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.RolesManage))
+                {
+                    <NavItem Href="/admin/roles" Icon="bi-shield-lock" Label="@L["Nav_Roles"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.WorkflowsManage))
+                {
+                    <NavItem Href="/admin/workflows" Icon="bi-signpost-split" Label="@L["Nav_Workflows"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.ApprovalsDecide))
+                {
+                    <NavItem Href="/admin/approvals" Icon="bi-check2-square" Label="@L["Nav_Approvals"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.LanguagesManage))
+                {
+                    <NavItem Href="/languages" Icon="bi-translate" Label="@L["Nav_Languages"]" />
+                }
             }
         }
 
         @* ── Sistem ── *@
-        <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecSystem)">
-            <span>@L["Nav_System"]</span>
-            <i class="bi @(IsCollapsed(SecSystem) ? "bi-chevron-right" : "bi-chevron-down")"></i>
-        </button>
-        @if (!IsCollapsed(SecSystem))
+        @if (ShowSystem)
         {
-            @if (UserContext.HasPermission(PermissionKeys.SiteSettingsManage))
+            <button class="nav-section-title nav-section-toggle" @onclick="() => ToggleSection(SecSystem)">
+                <span>@L["Nav_System"]</span>
+                <i class="bi @(IsCollapsed(SecSystem) ? "bi-chevron-right" : "bi-chevron-down")"></i>
+            </button>
+            @if (!IsCollapsed(SecSystem))
             {
-                <NavItem Href="/admin/settings" Icon="bi-gear" Label="@L["Nav_Settings"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.CustomCodeAuthor))
-            {
-                <NavItem Href="/admin/site-code" Icon="bi-code-slash" Label="@L["Nav_SiteCode"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.TrashView))
-            {
-                <NavItem Href="/admin/trash" Icon="bi-trash3" Label="@L["Nav_Trash"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.LogsView))
-            {
-                <NavItem Href="/admin/logs" Icon="bi-journal-text" Label="@L["Nav_Logs"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.AuthLogsView))
-            {
-                <NavItem Href="/admin/auth-logs" Icon="bi-shield-lock" Label="@L["Nav_AuthLogs"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.HangfireAccess))
-            {
-                <NavItem Href="/admin/jobs/dashboard" Target="_blank" Icon="bi-clock-history" Label="@L["Nav_JobDashboard"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.CacheManage))
-            {
-                <NavItem Href="/admin/cache" Icon="bi-lightning-charge" Label="@L["Nav_Cache"]" />
-            }
-            @if (UserContext.HasPermission(PermissionKeys.BackupCreate))
-            {
-                <NavItem Href="/admin/backups" Icon="bi-database-down" Label="@L["Nav_Backups"]" />
+                @if (UserContext.HasPermission(PermissionKeys.SiteSettingsManage))
+                {
+                    <NavItem Href="/admin/settings" Icon="bi-gear" Label="@L["Nav_Settings"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.CustomCodeAuthor))
+                {
+                    <NavItem Href="/admin/site-code" Icon="bi-code-slash" Label="@L["Nav_SiteCode"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.TrashView))
+                {
+                    <NavItem Href="/admin/trash" Icon="bi-trash3" Label="@L["Nav_Trash"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.LogsView))
+                {
+                    <NavItem Href="/admin/logs" Icon="bi-journal-text" Label="@L["Nav_Logs"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.AuthLogsView))
+                {
+                    <NavItem Href="/admin/auth-logs" Icon="bi-shield-lock" Label="@L["Nav_AuthLogs"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.HangfireAccess))
+                {
+                    <NavItem Href="/admin/jobs/dashboard" Target="_blank" Icon="bi-clock-history" Label="@L["Nav_JobDashboard"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.CacheManage))
+                {
+                    <NavItem Href="/admin/cache" Icon="bi-lightning-charge" Label="@L["Nav_Cache"]" />
+                }
+                @if (UserContext.HasPermission(PermissionKeys.BackupCreate))
+                {
+                    <NavItem Href="/admin/backups" Icon="bi-database-down" Label="@L["Nav_Backups"]" />
+                }
             }
         }
 
@@ -192,6 +201,28 @@
     private const string SecEngagement = "engagement";
     private const string SecManagement = "management";
     private const string SecSystem = "system";
+
+    // A section title with nothing under it is a dead end: a role without any of
+    // its permissions (an Author has none of System's) used to see three empty
+    // headers. Each one is drawn only when at least one of its entries would be.
+    private bool ShowEngagement => UserContext.HasPermission(PermissionKeys.FormsViewSubmissions);
+
+    private bool ShowManagement =>
+        UserContext.HasPermission(PermissionKeys.UsersManage)
+        || UserContext.HasPermission(PermissionKeys.RolesManage)
+        || UserContext.HasPermission(PermissionKeys.WorkflowsManage)
+        || UserContext.HasPermission(PermissionKeys.ApprovalsDecide)
+        || UserContext.HasPermission(PermissionKeys.LanguagesManage);
+
+    private bool ShowSystem =>
+        UserContext.HasPermission(PermissionKeys.SiteSettingsManage)
+        || UserContext.HasPermission(PermissionKeys.CustomCodeAuthor)
+        || UserContext.HasPermission(PermissionKeys.TrashView)
+        || UserContext.HasPermission(PermissionKeys.LogsView)
+        || UserContext.HasPermission(PermissionKeys.AuthLogsView)
+        || UserContext.HasPermission(PermissionKeys.HangfireAccess)
+        || UserContext.HasPermission(PermissionKeys.CacheManage)
+        || UserContext.HasPermission(PermissionKeys.BackupCreate);
 
     private bool _collapsed;
     private bool _pinned = true;

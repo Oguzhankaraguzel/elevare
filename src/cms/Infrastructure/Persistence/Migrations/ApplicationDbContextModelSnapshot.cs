@@ -1183,6 +1183,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .HasColumnType("boolean")
                     .HasDefaultValue(false);
 
+                b.Property<bool>("IsTemporary")
+                    .HasColumnType("boolean");
+
                 b.Property<string>("NewPath")
                     .HasMaxLength(2000)
                     .HasColumnType("character varying(2000)");
@@ -2072,6 +2075,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
 
                 b.Property<DateTimeOffset?>("LockoutEnd")
                     .HasColumnType("timestamp with time zone");
+
+                b.Property<bool>("MustChangePassword")
+                    .HasColumnType("boolean");
 
                 b.Property<string>("NormalizedEmail")
                     .HasMaxLength(256)

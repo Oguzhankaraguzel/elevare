@@ -216,4 +216,53 @@ public sealed class GetPublicPageBySlugQueryHandlerTests
         alt.FullSlug.ShouldBe("hakkimizda");
         alt.IsDefaultLanguage.ShouldBeTrue();
     }
+
+    private void UnpublishEnglish()
+    {
+        using PublicReadDbContext db = TestDbFactory.Create(_options);
+        // The read context does not track what it loads, so the change is attached explicitly.
+        PublicLanguage english = db.Languages.Single(l => l.Id == 2);
+        english.IsPublished = false;
+        db.Update(english);
+        db.SaveChanges();
+    }
+
+    // With English unpublished the language route no longer matches "/en/about", so
+    // the request falls through to the default-language fallback as the slug
+    // "en/about" — which is the English page's own FullSlug. Matching on FullSlug
+    // alone kept serving every page of the unpublished language.
+    [Theory]
+    [InlineData("tr", "en/about")]
+    [InlineData("tr", "en")]
+    [InlineData("en", "about")]
+    [InlineData("en", "")]
+    public async Task A_page_of_an_unpublished_language_is_not_served(string languageCode, string slug)
+    {
+        UnpublishEnglish();
+
+        Result<PublicPageResponse> result = await HandleAsync(languageCode, slug);
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("Page.LanguageNotServed");
+    }
+
+    [Fact]
+    public async Task The_default_language_fallback_never_serves_another_languages_page()
+    {
+        Result<PublicPageResponse> result = await HandleAsync("tr", "en/about");
+
+        result.IsFailure.ShouldBeTrue();
+        result.Error.Code.ShouldBe("Page.LanguageNotServed");
+    }
+
+    [Fact]
+    public async Task Hreflang_alternates_leave_out_an_unpublished_language()
+    {
+        UnpublishEnglish();
+
+        Result<PublicPageResponse> result = await HandleAsync("tr", "hakkimizda");
+
+        result.IsSuccess.ShouldBeTrue();
+        result.Value.Alternates.ShouldBeEmpty();
+    }
 }

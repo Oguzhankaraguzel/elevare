@@ -1,5 +1,7 @@
 ﻿using SharedKernel.Abstraction.Messaging;
+using Application.Abstraction.Data;
 using Application.Abstraction.Services;
+using Application.Features.Commands.Users;
 using Application.Abstraction.Services.Authentication;
 using Domain.Entities.Logs;
 using Domain.Entities.Permissions;
@@ -15,13 +17,16 @@ internal sealed class LoginCommandHandler : ICommandHandler<LoginCommand, LoginR
     private readonly RoleManager<AppRole> _roleManager;
     private readonly ITokenProvider _tokenProvider;
     private readonly IAuthEventLogger _authEventLogger;
+    private readonly ICmsApplicationDbContext _db;
 
     public LoginCommandHandler(
         UserManager<AppUser> userManager,
         RoleManager<AppRole> roleManager,
         ITokenProvider tokenProvider,
-        IAuthEventLogger authEventLogger)
+        IAuthEventLogger authEventLogger,
+        ICmsApplicationDbContext db)
     {
+        _db = db;
         _userManager = userManager;
         _roleManager = roleManager;
         _tokenProvider = tokenProvider;
@@ -94,6 +99,24 @@ internal sealed class LoginCommandHandler : ICommandHandler<LoginCommand, LoginR
         await _userManager.UpdateAsync(user);
 
         IList<string> roles = await _userManager.GetRolesAsync(user);
+
+        // The password was right, but it is one an administrator typed. No session
+        // yet: a short-lived link to choose their own first, which is all this
+        // password was ever meant to buy.
+        if (user.MustChangePassword)
+        {
+            (string changeToken, DateTime changeExpires) = await PasswordLinks.IssueAsync(
+                _db, user.Id, PasswordLinks.ForcedChange, cancellationToken);
+            return Result.Success(new LoginResponse(
+                UserId: user.Id,
+                Email: user.Email!,
+                FullName: user.FullName,
+                AvatarUrl: user.AvatarUrl,
+                Roles: roles.ToList().AsReadOnly(),
+                Token: string.Empty,
+                ExpiresAt: changeExpires,
+                PasswordChangeToken: changeToken));
+        }
 
         HashSet<string> permissions = [];
         foreach (string roleName in roles)

@@ -34,6 +34,7 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
                     : r.SourcePage.FullSlug,
                 r.SourcePage == null ? null : r.SourcePage.SeoMeta.Title,
                 r.Reason,
+                r.IsTemporary,
                 r.CreateDate,
                 r.UpdateDate))
             .ToListAsync(cancellationToken);
@@ -43,7 +44,10 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
         // useful thing this screen can say.
         HashSet<string> livePaths = [.. await db.PageInfos
             .AsNoTracking()
-            .Where(p => p.PageStatus == PageStatus.Published)
+            // A page of a language that is off the site answers 404 like any other
+            // missing page — which is exactly what its own temporary redirect is for.
+            .Where(p => p.PageStatus == PageStatus.Published && p.IsActive
+                && p.Language.IsActive && p.Language.IsPublished)
             .Select(p => p.FullSlug)
             .ToListAsync(cancellationToken)];
 
@@ -83,7 +87,10 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
         RedirectHealth health = RedirectHealth.None;
         int chainLength = 0;
 
-        if (string.IsNullOrWhiteSpace(target))
+        // Only a missing target is "Gone". An empty one is the default language's
+        // homepage — its FullSlug is "" — and the public site resolves it as "/";
+        // reading it as Gone flagged every rule pointing home as a 410.
+        if (target is null)
         {
             health |= RedirectHealth.Gone;
         }
@@ -117,6 +124,7 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
             row.SourcePageId,
             row.SourcePageTitle,
             row.Reason,
+            row.IsTemporary,
             health,
             chainLength,
             row.CreateDate,
@@ -193,6 +201,7 @@ internal sealed class GetRedirectsQueryHandler(ICmsApplicationDbContext db)
         string? LivePageSlug,
         string? SourcePageTitle,
         RedirectReason Reason,
+        bool IsTemporary,
         DateTime CreateDate,
         DateTime? UpdateDate);
 }

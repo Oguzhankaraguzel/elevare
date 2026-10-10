@@ -45,7 +45,7 @@ public sealed class PublicSchemaContractTests
         ["SiteCodeSnippets"] = ["Id", "Name", "Placement", "Content", "IsEnabled", "SortOrder", "IsDeleted"],
         ["Languages"] = ["Id", "TwoLetterCode", "NameInNative", "IsDefault", "IsActive", "IsPublished", "IsDeleted"],
         ["SitemapCaches"] = ["Id", "CacheKey", "XmlContent"],
-        ["Redirects"] = ["Id", "OldPath", "NewPath", "SourcePageId", "IsDeleted"],
+        ["Redirects"] = ["Id", "OldPath", "NewPath", "SourcePageId", "IsTemporary", "IsDeleted"],
         ["Tags"] = ["Id", "Name", "Slug", "IsDeleted"],
         ["PageInfoTags"] = ["PageInfoId", "TagId"],
         ["PageInfoSiteCodeExclusions"] = ["PageInfoId", "SiteCodeSnippetId"],

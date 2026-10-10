@@ -10,7 +10,8 @@ namespace Application.Features.Commands.Pages.DeletePage;
 /// when the page being deleted was Published.
 /// </param>
 #pragma warning disable CA1054
-public sealed record DeletePageCommand(int Id, string? RedirectTargetUrl = null) : ICommand, IRequirePermission
+/// <param name="ConfirmHomePageUnpublish">Required to delete a published homepage — see <see cref="HomePageUnpublish"/>.</param>
+public sealed record DeletePageCommand(int Id, string? RedirectTargetUrl = null, bool ConfirmHomePageUnpublish = false) : ICommand, IRequirePermission
 {
     public static string RequiredPermission => PermissionKeys.PagesDelete;
 }

@@ -51,7 +51,10 @@
             </div>
 
             <div class="form-group">
-                <label class="cms-label">@L["Login_PasswordLabel"]</label>
+                <div style="display:flex;justify-content:space-between;align-items:baseline">
+                    <label class="cms-label">@L["Login_PasswordLabel"]</label>
+                    <a href="/account/forgot-password" style="font-size:12.5px">@L["Login_ForgotPassword"]</a>
+                </div>
                 <div style="position:relative">
                     <i class="bi bi-lock" style="position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--cms-text-dim)"></i>
                     <input name="password" type="password" required

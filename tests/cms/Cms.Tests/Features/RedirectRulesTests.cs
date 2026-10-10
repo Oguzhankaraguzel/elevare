@@ -1,6 +1,7 @@
 ﻿using Application.Abstraction.Services.Authentication;
 using Application.Features.Commands.Redirects;
 using Application.Features.Commands.Redirects.CreateRedirect;
+using Application.Features.Commands.Redirects.UpdateRedirect;
 using Application.Features.Queries.Redirects.GetRedirects;
 using Domain.Entities.Languages;
 using Domain.Entities.PageContents;
@@ -78,6 +79,42 @@ public sealed class RedirectRulesTests
         Result<List<RedirectListItemResponse>> result = await new GetRedirectsQueryHandler(db)
             .Handle(new GetRedirectsQuery(), CancellationToken.None);
         return result.Value;
+    }
+
+    // ── Redirect type ─────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_hand_written_rule_keeps_the_chosen_type(bool temporary)
+    {
+        await SeedAsync([LivePage(1, "yeni")], []);
+
+        Result<int> created;
+        using (ApplicationDbContext db = CreateDb())
+        {
+            created = await new CreateRedirectCommandHandler(db)
+                .Handle(new CreateRedirectCommand("eski", "/yeni", temporary), CancellationToken.None);
+        }
+
+        created.IsSuccess.ShouldBeTrue();
+        (await ListAsync()).Single().IsTemporary.ShouldBe(temporary);
+    }
+
+    [Fact]
+    public async Task Editing_a_rule_can_change_its_type()
+    {
+        await SeedAsync([LivePage(1, "yeni")], [new Redirect { Id = 7, OldPath = "eski", NewPath = "/yeni" }]);
+
+        using (ApplicationDbContext db = CreateDb())
+        {
+            Result result = await new UpdateRedirectCommandHandler(db)
+                .Handle(new UpdateRedirectCommand(7, "eski", "/yeni", IsTemporary: true), CancellationToken.None);
+            result.IsSuccess.ShouldBeTrue();
+            await db.SaveChangesAsync(CancellationToken.None);
+        }
+
+        (await ListAsync()).Single().IsTemporary.ShouldBeTrue();
     }
 
     // ── Save-time rules ───────────────────────────────────────────────────
@@ -222,6 +259,20 @@ public sealed class RedirectRulesTests
 
         item.Health.ShouldBe(RedirectHealth.Gone);
         item.Health.HasFlag(RedirectHealth.BrokenTarget).ShouldBeFalse();
+    }
+
+    // The default language's homepage has the FullSlug "" — a real target the site
+    // answers as "/". Treated as "no target", every rule pointing home (a language
+    // taken off the site, a default-language switch) showed up as a 410.
+    [Fact]
+    public async Task A_rule_bound_to_the_default_homepage_is_reported_healthy()
+    {
+        PageInfo home = LivePage(1, "home");
+        home.FullSlug = "";
+        await SeedAsync([home],
+            [new Redirect { OldPath = "en", NewPath = "/", SourcePageId = 1, Reason = RedirectReason.LanguageUnpublished, IsTemporary = true }]);
+
+        (await ListAsync()).Single().Health.ShouldBe(RedirectHealth.None);
     }
 
     [Fact]

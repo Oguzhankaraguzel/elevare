@@ -18,6 +18,18 @@ internal sealed record UpdateLanguageCommandHandler(ICmsApplicationDbContext Db,
             return Result.Failure<LanguageSaveResult>(LanguageErrors.NotFound);
 
         bool becomingDefault = request.IsDefault && !lang.IsDefault;
+        bool wasVisible = lang.IsActive && lang.IsPublished;
+        bool willBeVisible = request.IsActive && request.IsPublished;
+
+        // The default language owns the site's root address: off the site, every
+        // unprefixed URL would move to some other language. Not something a warning
+        // can make safe, so it is refused outright.
+        if ((lang.IsDefault || request.IsDefault) && !willBeVisible)
+            return Result.Failure<LanguageSaveResult>(LanguageErrors.DefaultMustStayVisible);
+
+        bool hiding = wasVisible && !willBeVisible;
+        if (hiding && !request.ConfirmHiding)
+            return Result.Failure<LanguageSaveResult>(LanguageErrors.HidingNeedsConfirmation);
 
         if (becomingDefault)
         {
@@ -53,6 +65,21 @@ internal sealed record UpdateLanguageCommandHandler(ICmsApplicationDbContext Db,
         if (becomingDefault)
             return Result.Success(await DefaultLanguageSwitch.ApplyAsync(Db, Sitemaps, request.TwoLetterCode, cancellationToken));
 
-        return Result.Success(LanguageSaveResult.Unchanged);
+        int created = hiding && request.WhenHidden == LanguageHiddenHandling.RedirectToDefaultLanguage
+            ? await LanguageVisibilityRedirects.CreateAsync(Db, lang, cancellationToken)
+            : 0;
+        int removed = !wasVisible && willBeVisible && request.RemoveHiddenRedirects
+            ? await LanguageVisibilityRedirects.RemoveAsync(Db, lang.TwoLetterCode, cancellationToken)
+            : 0;
+
+        // The sitemap lists every visible language's pages and their hreflang
+        // alternates; left to the two-hourly job, an unpublished language's URLs
+        // would keep being submitted to search engines in the meantime.
+        if (wasVisible != willBeVisible)
+            Sitemaps.RequestRegeneration();
+
+        return Result.Success(created == 0 && removed == 0
+            ? LanguageSaveResult.Unchanged
+            : LanguageSaveResult.Unchanged with { RedirectsCreated = created, RedirectsRemoved = removed });
     }
 }

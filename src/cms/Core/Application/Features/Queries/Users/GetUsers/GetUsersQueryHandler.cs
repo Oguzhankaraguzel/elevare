@@ -87,7 +87,8 @@ internal sealed record GetUsersQueryHandler(UserManager<AppUser> UserManager, IC
                 LastLoginDate: user.LastLoginDate,
                 Roles: roles.ToList().AsReadOnly(),
                 HasPassword: hasPassword,
-                PendingSetupExpiresAtUtc: pendingExpiry));
+                PendingSetupExpiresAtUtc: pendingExpiry,
+                MustChangePassword: user.MustChangePassword));
         }
 
         return Result.Success(PagedResult<UserResponse>.Create(responses, totalCount, request.Page, request.PageSize));

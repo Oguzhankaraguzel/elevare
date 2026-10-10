@@ -5,6 +5,7 @@ using MediatR;
 using SharedKernel.Concrete;
 using Application.Abstraction.Services;
 using Application.Features.Auth.Login;
+using Application.Features.Commands.Users.RequestPasswordReset;
 using Domain.Entities.Logs;
 using Wasm.RateLimiting;
 
@@ -36,6 +37,11 @@ public static class AuthEndpoints
                 return Results.Redirect($"/login?error={reason}");
             }
 
+            // An administrator typed this password: no session until the user picks
+            // their own. The one-time link goes in the URL like a mailed one would.
+            if (r.Value.PasswordChangeToken is { } changeToken)
+                return Results.Redirect($"/account/set-password?token={Uri.EscapeDataString(changeToken)}&mode=change");
+
             // Store token in session
             try
             {
@@ -52,6 +58,30 @@ public static class AuthEndpoints
 
             string redirect = !string.IsNullOrWhiteSpace(returnUrl) ? Uri.UnescapeDataString(returnUrl) : "/";
             return Results.Redirect(redirect);
+        }).DisableAntiforgery().AllowAnonymous().RequireRateLimiting(CmsRateLimitingRegistration.LoginPolicy);
+
+        // A real form post, not a Blazor call, for the same reason as sign-in: the
+        // rate limiter only sees HTTP requests. The answer is the same whatever
+        // happened, so the page cannot be used to find out which addresses exist.
+        app.MapPost("/account/forgot-password/send", async (
+            HttpContext httpContext,
+            ISender sender,
+            IConfiguration configuration,
+            ILoggerFactory loggerFactory,
+            [FromForm] string identifier) =>
+        {
+            if (CmsPublicUrl(configuration, httpContext.Request) is { } cmsUrl)
+            {
+                await sender.Send(new RequestPasswordResetCommand(identifier ?? "", cmsUrl));
+            }
+            else
+            {
+                loggerFactory.CreateLogger(typeof(AuthEndpoints)).LogWarning(
+                    "A password reset was requested, but the CMS's own address is not configured, so no link "
+                    + "could be built. Set Cms:PublicUrl (CMS_PUBLIC_URL).");
+            }
+
+            return Results.Redirect("/account/forgot-password?sent=1");
         }).DisableAntiforgery().AllowAnonymous().RequireRateLimiting(CmsRateLimitingRegistration.LoginPolicy);
 
         app.MapPost("/account/logout", async (HttpContext httpContext, IAuthEventLogger authEventLogger) =>
@@ -74,5 +104,29 @@ public static class AuthEndpoints
         app.MapGet("/account/logout", () => Results.Redirect("/login"));
 
         return app;
+    }
+
+    /// <summary>
+    /// The address a reset link points at. Taken from configuration, never from the
+    /// request: the Host header is the sender's to choose, and a link built from it
+    /// would let anyone mail a real user a "reset" link to a server of their own.
+    /// Cms:PublicUrl, else the JWT issuer, which a deployment usually sets to the
+    /// CMS's address. A localhost address is only good for a request that itself
+    /// came to localhost — the issuer's default would otherwise mail production users
+    /// a link to their own machine.
+    /// </summary>
+    private static string? CmsPublicUrl(IConfiguration configuration, HttpRequest request)
+    {
+        bool localRequest = request.Host.Host is "localhost" or "127.0.0.1" or "[::1]";
+
+        foreach (string? candidate in new[] { configuration["Cms:PublicUrl"], configuration["Jwt:Issuer"] })
+        {
+            if (Uri.TryCreate(candidate, UriKind.Absolute, out Uri? uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+                && (!uri.IsLoopback || localRequest))
+                return uri.GetLeftPart(UriPartial.Authority);
+        }
+
+        return null;
     }
 }

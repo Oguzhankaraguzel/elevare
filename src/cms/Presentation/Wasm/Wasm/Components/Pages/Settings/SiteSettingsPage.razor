@@ -49,25 +49,45 @@ else
                 <div style="font-size:12px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--cms-text-muted);margin:18px 0 10px">
                     @SecretCategoryLabel(category)
                 </div>
+                @if (category == IntegrationSecretCategory.Email && _emailConfigured is bool mailReady)
+                {
+                    @* The answer to "is mail set up?" in one line, before the fields —
+                       which, with the settings coming from .env, all look empty. *@
+                    <div class="pw-link-note @(mailReady ? "" : "is-warning")">
+                        <i class="bi @(mailReady ? "bi-envelope-check" : "bi-envelope-slash")"></i>
+                        <span>
+                            @(mailReady ? L["Secrets_EmailReady"] : L["Secrets_EmailNotReady"])
+                            @if (_secrets.Any(x => x.Category == IntegrationSecretCategory.Email && x.Source == IntegrationSecretSource.Server))
+                            {
+                                @(" " + L["Secrets_EmailFromServer"])
+                            }
+                        </span>
+                    </div>
+                }
                 @foreach (IntegrationSecretResponse secret in _secrets.Where(s => s.Category == category))
                 {
+                    bool clearing = _secretsToClear.Contains(secret.Key);
                     <div class="form-group" style="margin-bottom:18px">
-                        <label class="cms-label">@L[secret.DisplayName]</label>
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                            <label class="cms-label" style="margin:0">@L[secret.DisplayName]</label>
+                            @SecretSourceBadge(secret)
+                        </div>
                         @RenderSecretField(secret)
                         @if (secret.Description.HasValue())
                         {
                             <small style="color:var(--cms-text-muted);font-size:12px;display:block;margin-top:4px">@L[secret.Description!]</small>
                         }
-                        @if (secret.IsSecret && secret.IsSet && !_secretsToClear.Contains(secret.Key))
+                        @if (secret.IsSet && !clearing)
                         {
                             <button type="button" class="btn-cms btn-ghost btn-sm-cms" style="margin-top:6px;padding:2px 8px;font-size:11.5px" @onclick="() => _secretsToClear.Add(secret.Key)">
                                 <i class="bi bi-x-circle"></i> @L["Secrets_ClearBtn"]
                             </button>
                         }
-                        @if (_secretsToClear.Contains(secret.Key))
+                        @if (clearing)
                         {
                             <div style="margin-top:6px;font-size:11.5px;color:var(--cms-warning)">
-                                <i class="bi bi-exclamation-triangle"></i> @L["Secrets_WillBeCleared"]
+                                <i class="bi bi-exclamation-triangle"></i>
+                                @(secret.HasServerValue ? L["Secrets_WillBeClearedToServer"] : L["Secrets_WillBeCleared"])
                                 <button type="button" class="btn-cms btn-ghost btn-sm-cms" style="padding:2px 8px;font-size:11.5px" @onclick="() => _secretsToClear.Remove(secret.Key)">
                                     @L["Secrets_UndoClear"]
                                 </button>
@@ -78,7 +98,7 @@ else
             }
 
             <div style="display:flex;justify-content:flex-end;margin-top:8px">
-                <button class="btn-cms btn-primary-cms" @onclick="SaveSecrets" disabled="@_savingSecrets">
+                <button class="btn-cms btn-primary-cms" @onclick="ReviewSecrets" disabled="@_savingSecrets">
                     @if (_savingSecrets)
                     {
                         <i class="bi bi-arrow-clockwise spin"></i>
@@ -241,6 +261,57 @@ else
     }
 }
 
+@* Credentials are the one thing on this screen whose mistakes do not show in the
+   CMS: a wrong SMTP password is a reset mail that never arrives. So a save says what
+   it is about to change, and a removal has to be acknowledged. *@
+<CmsModal Title="@L["Secrets_ReviewTitle"]" IsVisible="_secretReview is not null" OnClose="() => _secretReview = null" Size="md">
+    <Body>
+        @if (_secretReview is { } review)
+        {
+            <p style="margin:0 0 10px;font-size:13.5px;color:var(--cms-text)">@L["Secrets_ReviewIntro"]</p>
+            <ul style="margin:0 0 14px;padding-left:18px;font-size:13.5px;line-height:1.8">
+                @foreach (IntegrationSecretResponse item in review.Updates)
+                {
+                    <li><strong>@L[item.DisplayName]</strong> — @(item.IsSet ? L["Secrets_ReviewReplace"] : L["Secrets_ReviewSet"])</li>
+                }
+                @foreach (IntegrationSecretResponse item in review.Clears)
+                {
+                    <li style="color:var(--cms-warning)">
+                        <strong>@L[item.DisplayName]</strong> — @(item.HasServerValue ? L["Secrets_ReviewClearToServer"] : L["Secrets_ReviewClear"])
+                    </li>
+                }
+            </ul>
+            <ul style="margin:0;padding-left:18px;font-size:12.5px;color:var(--cms-text-muted);line-height:1.7">
+                <li>@L["Secrets_ReviewImmediate"]</li>
+                @if (review.TouchesEmail)
+                {
+                    <li>@L["Secrets_ReviewEmail"]</li>
+                }
+                @if (review.TouchesStorage)
+                {
+                    <li>@L["Secrets_ReviewStorage"]</li>
+                }
+            </ul>
+            @if (review.Clears.Count > 0)
+            {
+                <label style="display:flex;gap:10px;align-items:flex-start;margin-top:16px;cursor:pointer;font-size:13.5px;color:var(--cms-text)">
+                    <input type="checkbox" @bind="_secretReviewAcknowledged" style="margin-top:3px" />
+                    <span>@L["Secrets_ReviewAcknowledge"]</span>
+                </label>
+            }
+        }
+    </Body>
+    <Footer>
+        <button class="btn-cms btn-ghost" @onclick="() => _secretReview = null">@L["Common_Cancel"]</button>
+        <button class="btn-cms @(_secretReview?.Clears.Count > 0 ? "btn-danger-cms" : "btn-primary-cms")"
+                disabled="@(_savingSecrets || (_secretReview?.Clears.Count > 0 && !_secretReviewAcknowledged))"
+                @onclick="SaveSecrets">
+            @if (_savingSecrets) { <i class="bi bi-arrow-clockwise spin"></i> } else { <i class="bi bi-shield-check"></i> }
+            @L["Secrets_ReviewConfirm"]
+        </button>
+    </Footer>
+</CmsModal>
+
 @code {
     private List<SiteSettingResponse> _settings = [];
     private readonly Dictionary<string, string?> _values = [];
@@ -257,6 +328,17 @@ else
     private readonly Dictionary<string, string?> _secretValues = [];
     private readonly HashSet<string> _secretsToClear = [];
     private bool _savingSecrets;
+    private bool? _emailConfigured;
+
+    private sealed record SecretReview(
+        List<IntegrationSecretResponse> Updates, List<IntegrationSecretResponse> Clears, bool TouchesEmail, bool TouchesStorage);
+
+    private SecretReview? _secretReview;
+    private bool _secretReviewAcknowledged;
+
+    // What mail goes out from while Email.FromAddress/FromDisplayName are empty — see
+    // GetEmailSenderFallbackQuery.
+    private EmailSenderFallbackResponse? _senderFallback;
 
     protected override async Task OnInitializedAsync()
     {
@@ -296,7 +378,8 @@ else
             // Send-to-self is the right default: the configured sender is the one
             // address the operator is certain to be able to check, and a test that
             // arrives there proves the whole path end to end.
-            _testEmailTo = GetValue("Email.FromAddress");
+            (await Sender.Send(new GetEmailSenderFallbackQuery())).Match(f => _senderFallback = f, _ => { });
+            _testEmailTo = GetValue("Email.FromAddress") ?? _senderFallback?.FromAddress;
 
             if (_canManageSecrets)
                 await LoadSecrets();
@@ -313,6 +396,7 @@ else
             (await Sender.Send(new GetIntegrationSecretsQuery())).Match(
                 items => _secrets = items,
                 error => Toast.Error(L.Error(error)));
+            (await Sender.Send(new GetEmailStatusQuery())).Match(ready => _emailConfigured = ready, _ => { });
         }
         catch (Exception ex)
         {
@@ -321,13 +405,13 @@ else
         }
         finally
         {
-            // A secret field is never pre-filled with what was typed last time,
-            // including right after saving it — clearing its entry here is what
-            // makes the field revert to the "configured" placeholder instead of
-            // still showing what was just typed. A plain field is the opposite:
-            // pre-filled with its real value so an unrelated save doesn't blank it.
+            // No field is ever pre-filled — the server does not send what is in it —
+            // so an empty field means "leave as it is", and only what is typed is
+            // saved. A choice (toggle, list) is the exception: it shows what is in
+            // effect, and counts as changed only when it differs from that.
+            _secretValues.Clear();
             foreach (IntegrationSecretResponse s in _secrets)
-                _secretValues[s.Key] = s.IsSecret ? null : s.Value;
+                _secretValues[s.Key] = s.IsChoice ? s.Value : null;
         }
     }
 
@@ -376,22 +460,67 @@ else
                 break;
 
             default:
-                if (secret.IsSecret)
-                {
-                    <input type="password" class="cms-input" autocomplete="new-password" disabled="@cleared"
-                           placeholder="@(secret.IsSet ? L["Secrets_ConfiguredPlaceholder"] : L["Secrets_NotSetPlaceholder"])"
-                           value="@GetSecretValue(secret.Key)"
-                           @onchange="e => SetSecretStringValue(secret.Key, e)" />
-                }
-                else
-                {
-                    <input class="cms-input" disabled="@cleared" value="@GetSecretValue(secret.Key)" @onchange="e => SetSecretStringValue(secret.Key, e)" />
-                }
+                <input type="@(secret.IsSecret ? "password" : "text")" class="cms-input" autocomplete="off" disabled="@cleared"
+                       placeholder="@SecretPlaceholder(secret)"
+                       value="@GetSecretValue(secret.Key)"
+                       @onchange="e => SetSecretStringValue(secret.Key, e)" />
                 break;
         }
     };
 
     private string? GetSecretValue(string key) => _secretValues.TryGetValue(key, out string? v) ? v : null;
+
+    private string SecretPlaceholder(IntegrationSecretResponse secret) => secret.Source switch
+    {
+        IntegrationSecretSource.Saved => L["Secrets_SavedPlaceholder"],
+        IntegrationSecretSource.Server => L["Secrets_ServerPlaceholder"],
+        _ => L["Secrets_NotSetPlaceholder"],
+    };
+
+    private RenderFragment SecretSourceBadge(IntegrationSecretResponse secret) => __builder =>
+    {
+        switch (secret.Source)
+        {
+            case IntegrationSecretSource.Saved:
+                <span class="badge-cms badge-success" title="@L["Secrets_Source_Saved_Hint"]">
+                    <i class="bi bi-check-circle-fill" style="font-size:10px"></i> @L["Secrets_Source_Saved"]
+                </span>
+                break;
+            case IntegrationSecretSource.Server:
+                <span class="badge-cms badge-info" title="@L["Secrets_Source_Server_Hint"]">
+                    <i class="bi bi-hdd-stack" style="font-size:10px"></i> @L["Secrets_Source_Server"]
+                </span>
+                break;
+            default:
+                <span class="badge-cms badge-neutral">@L["Secrets_Source_None"]</span>
+                break;
+        }
+    };
+
+    /// <summary>A choice counts when it differs from what is in effect; anything else when something was typed.</summary>
+    private bool IsSecretChanged(IntegrationSecretResponse secret)
+    {
+        string? pending = GetSecretValue(secret.Key);
+        return secret.IsChoice ? pending != secret.Value : !string.IsNullOrEmpty(pending);
+    }
+
+    private void ReviewSecrets()
+    {
+        List<IntegrationSecretResponse> clears = [.. _secrets.Where(s => _secretsToClear.Contains(s.Key))];
+        List<IntegrationSecretResponse> updates = [.. _secrets.Where(s => !_secretsToClear.Contains(s.Key) && IsSecretChanged(s))];
+
+        if (clears.Count == 0 && updates.Count == 0)
+        {
+            Toast.Info(L["Secrets_NoChanges"]);
+            return;
+        }
+
+        List<IntegrationSecretResponse> all = [.. updates, .. clears];
+        _secretReviewAcknowledged = false;
+        _secretReview = new SecretReview(updates, clears,
+            TouchesEmail: all.Any(s => s.Category == IntegrationSecretCategory.Email),
+            TouchesStorage: all.Any(s => s.Category == IntegrationSecretCategory.ObjectStorage));
+    }
 
     private void SetSecretBoolValue(string key, ChangeEventArgs e) => _secretValues[key] = (bool)e.Value! ? "true" : "false";
 
@@ -399,6 +528,10 @@ else
 
     private async Task SaveSecrets()
     {
+        if (_secretReview is null || (_secretReview.Clears.Count > 0 && !_secretReviewAcknowledged))
+            return;
+
+        _secretReview = null;
         _savingSecrets = true;
         try
         {
@@ -412,13 +545,8 @@ else
                     continue;
                 }
 
+                if (!IsSecretChanged(secret)) continue;
                 string? pending = GetSecretValue(secret.Key);
-
-                // Secrets never arrive pre-filled (nothing to diff against), so typing
-                // anything at all counts as a change; a plain field only counts if it
-                // differs from what was loaded.
-                bool shouldSend = secret.IsSecret ? !string.IsNullOrEmpty(pending) : pending != secret.Value;
-                if (!shouldSend) continue;
 
                 (await Sender.Send(new UpdateIntegrationSecretCommand(secret.Key, pending ?? "", UserContext.UserId)))
                     .Match(() => { }, error => { Toast.Error($"{L[secret.DisplayName]}: {L.Error(error)}"); errorCount++; });
@@ -467,10 +595,26 @@ else
                 break;
 
             default:
-                <input class="cms-input" value="@GetValue(setting.Key)" @onchange="e => SetStringValue(setting.Key, e)" />
+                <input class="cms-input" value="@GetValue(setting.Key)" placeholder="@SenderFallbackPlaceholder(setting.Key)"
+                       @onchange="e => SetStringValue(setting.Key, e)" />
                 break;
         }
     };
+
+    /// <summary>
+    /// Empty sender fields are not "no sender": mail goes out from the server's
+    /// configuration. Saying which keeps an empty field from reading as broken.
+    /// </summary>
+    private string? SenderFallbackPlaceholder(string key)
+    {
+        string? fallback = key switch
+        {
+            "Email.FromAddress" => _senderFallback?.FromAddress,
+            "Email.FromDisplayName" => _senderFallback?.FromDisplayName,
+            _ => null,
+        };
+        return fallback is null ? null : string.Format(L["Settings_SenderFromServer"], fallback);
+    }
 
     private string? GetValue(string key) => _values.TryGetValue(key, out string? v) ? v : null;
 

@@ -28,5 +28,13 @@ public class Redirect : BaseEntity
 
     public RedirectReason Reason { get; set; }
 
+    /// <summary>
+    /// Answer with 302 instead of 301. Only a rule that stands in for something
+    /// expected to come back is temporary — a language taken off the site points its
+    /// pages at the default language until it is published again — so search engines
+    /// keep the original address rather than replacing it with the target.
+    /// </summary>
+    public bool IsTemporary { get; set; }
+
     public virtual PageInfo? SourcePage { get; set; }
 }

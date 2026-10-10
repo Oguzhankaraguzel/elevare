@@ -25,8 +25,8 @@ internal sealed class UpdatePageStatusCommandHandler(ICmsApplicationDbContext db
             return Result.Failure(PageInfoErrors.NotFound);
 
         bool leavingPublished = page.PageStatus == PageStatus.Published && request.Status != PageStatus.Published;
-        if (leavingPublished && page.Slug == "home")
-            return Result.Failure(PageInfoErrors.CannotUnpublishHomePage);
+        if (await HomePageUnpublish.CheckAsync(db, page, leavingPublished, request.ConfirmHomePageUnpublish, cancellationToken) is Error homeError)
+            return Result.Failure(homeError);
 
         // This quick action never touches GjsHtml, but it must still not let a page
         // report Published while its last save is stuck in Preview* awaiting review

@@ -34,9 +34,9 @@ internal sealed class CreateUserCommandHandler(
         };
 
         // No password overload: the account is created with PasswordHash left null,
-        // and the user sets their own via the e-mailed link below. They simply can't
-        // sign in until they do — there is no admin-visible plaintext password to
-        // mishandle in the meantime.
+        // and the user sets their own via the link below, mailed or handed over. They
+        // simply can't sign in until they do — there is no admin-visible plaintext
+        // password to mishandle in the meantime.
         IdentityResult result = await userManager.CreateAsync(user);
         if (!result.Succeeded)
         {
@@ -46,9 +46,13 @@ internal sealed class CreateUserCommandHandler(
         if (!string.IsNullOrWhiteSpace(request.Role))
             await userManager.AddToRoleAsync(user, request.Role);
 
-        bool emailSent = await PasswordSetupLinkMailer.SendAsync(
-            db, emailService, logger, user, request.CmsBaseUrl, cancellationToken);
+        (string token, DateTime expires) = await PasswordLinks.IssueAsync(
+            db, user.Id, PasswordLinks.IssuedByAdministrator, cancellationToken);
+        string url = PasswordLinks.BuildUrl(request.CmsBaseUrl, token);
 
-        return Result.Success(new CreateUserResult(user.Id, emailSent));
+        bool emailSent = await PasswordLinks.SendAsync(
+            emailService, logger, user, url, PasswordLinks.IssuedByAdministrator, PasswordLinkKind.Setup, cancellationToken);
+
+        return Result.Success(new CreateUserResult(user.Id, emailSent, emailSent ? null : url, expires));
     }
 }

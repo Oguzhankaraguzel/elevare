@@ -10,7 +10,8 @@ public static class PageInfoErrors
     public static readonly Error SlugAlreadyExists = Error.Conflict("PageInfo.SlugAlreadyExists", "A page with this slug already exists for the selected language.");
     public static readonly Error CircularParentReference = Error.Failure("PageInfo.CircularParentReference", "A page cannot be set as its own parent or descendant.");
     public static readonly Error CannotDeleteWithChildren = Error.Conflict("PageInfo.CannotDeleteWithChildren", "The page cannot be deleted because it has child pages.");
-    public static readonly Error CannotUnpublishHomePage = Error.Failure("PageInfo.CannotUnpublishHomePage", "The home page cannot be unpublished.");
+    public static readonly Error HomePageUnpublishNeedsConfirmation = Error.Failure("PageInfo.HomePageUnpublishNeedsConfirmation", "This is a language's homepage: taking it off the site makes that language's root address answer 404. Confirm to continue.");
+    public static readonly Error DefaultHomePageUnpublishNeedsConfirmation = Error.Failure("PageInfo.DefaultHomePageUnpublishNeedsConfirmation", "This is the site's homepage: taking it off the site makes the site's own address answer 404. Confirm to continue.");
     public static readonly Error SameLanguage = Error.Failure("PageInfo.SameLanguage", "The target language must be different from the source page's language.");
     public static readonly Error TranslationAlreadyExists = Error.Conflict("PageInfo.TranslationAlreadyExists", "A translation for this page already exists in the selected language.");
     public static readonly Error ParentNotFound = Error.NotFound("PageInfo.ParentNotFound", "The selected parent page was not found.");

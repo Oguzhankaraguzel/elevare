@@ -1,5 +1,6 @@
 using Application.Abstraction.Data;
 using Application.Abstraction.Services;
+using Domain.Entities.PublicLanguages;
 using Domain.Entities.PublicPages;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Abstraction.Messaging;
@@ -66,6 +67,20 @@ internal sealed class GetPublicPageBySlugQueryHandler(IPublicReadDbContext db, I
         if (!page.IsActive)
             return Result.Failure<PublicPageResponse>(PublicPageErrors.Inactive(fullSlug));
 
+        // FullSlug alone does not say which language was asked for. With English
+        // unpublished, "/en/about" no longer matches the language route, falls through
+        // to the default-language fallback as the slug "en/about" — and that is exactly
+        // the English page's FullSlug, so every page of an unpublished language kept
+        // being served (hreflang and all). The page must belong to the language the
+        // request resolved to, and that language must be one visitors may see.
+        string? pageLanguageCode = await db.Languages
+            .Where(PublicLanguage.PubliclyVisible)
+            .Where(l => l.Id == page.LanguageId)
+            .Select(l => l.TwoLetterCode)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (!string.Equals(pageLanguageCode, request.LanguageCode, StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<PublicPageResponse>(PublicPageErrors.LanguageNotServed(fullSlug, request.LanguageCode));
+
         List<PageAlternateResponse> alternates = [];
         if (page.PageGroupId is not null)
         {
@@ -76,6 +91,9 @@ internal sealed class GetPublicPageBySlugQueryHandler(IPublicReadDbContext db, I
                    && p.Id != page.Id
                    && p.PageStatus == PublicPageStatus.Published
                    && p.IsActive
+                   // An hreflang pointing at a language visitors cannot reach is a
+                   // link to a 404 that search engines are told to treat as this page.
+                   && l.IsActive && l.IsPublished
                 select new PageAlternateResponse(l.TwoLetterCode, p.FullSlug, l.IsDefault))
                 .ToListAsync(cancellationToken);
         }

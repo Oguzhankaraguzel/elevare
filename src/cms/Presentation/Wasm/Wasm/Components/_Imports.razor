@@ -39,9 +39,10 @@
 @using Application.Features.Commands.StructuredData.RefreshNodes
 @using Application.Features.Commands.Users.CreateUser
 @using Application.Features.Commands.Users.DeleteUser
-@using Application.Features.Commands.Users.ResendPasswordSetup
+@using Application.Features.Commands.Users.IssuePasswordLink
 @using Application.Features.Commands.Users.SetPassword
 @using Application.Features.Commands.Users.SetUserPasswordManually
+@using Application.Features.Commands.Users.RequestPasswordReset
 @using Application.Features.Commands.Users.UpdateUser
 @using Application.Features.Commands.Users.UpdateMyProfile
 @using Application.Features.Commands.Users.ChangeMyPassword
@@ -141,10 +142,13 @@
 
 @using Application.Features.Queries.Languages
 @using Application.Features.Queries.Languages.GetLanguages
+@using Application.Features.Queries.Languages.GetLanguageVisibilityImpact
 @using Application.Features.Queries.Media.GetMediaFiles
 @using Application.Features.Queries.Media.GetMediaFileAltText
 @using Application.Features.Queries.SiteSettings.GetSiteSettings
+@using Application.Features.Queries.SiteSettings.GetEmailSenderFallback
 @using Application.Features.Queries.SiteSettings.GetSiteIdentity
+@using Application.Features.Queries.SiteSettings.GetEmailStatus
 @using Application.Features.Queries.Users.GetUsers
 @using Application.Features.Queries.Users.GetAssignableUsers
 @using Application.Features.Queries.Users.GetMyProfile
