@@ -6,6 +6,36 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-14
+
+### Added
+
+- **Getting in without mail.** An administrator can make a one-time password link
+  (valid for 48 hours) and pass it on themselves; users can ask for a reset link
+  from the sign-in screen; a user given a temporary password is made to change it
+  at first sign-in. A SuperAdmin locked out can be recovered with
+  `ADMIN_RESET_PASSWORD=true`.
+- **Redirects can be 301 or 302**, chosen per rule and in CSV imports.
+- **The CMS shows the site it manages** in the sidebar, tab titles and sign-in
+  screen, with Elevare's version beside it.
+- **Languages and homepages can be taken off the site safely**: unpublishing asks
+  first and says what readers will see instead.
+
+### Changed
+
+- **Secrets are no longer shown.** The Secrets screen keeps every input empty and
+  says instead whether a value is saved, comes from the server's configuration
+  (`.env`) or is missing; saving or clearing one asks for confirmation. Mail set
+  up only in `.env` no longer looks unconfigured.
+- Seeded placeholder secrets are released so the server's own values take effect.
+- Section sitemaps are served from the site root.
+- The Turkish documentation was rewritten in natural Turkish.
+
+### Fixed
+
+- Buttons keep their content when the forms plugin loads.
+- Name correction in the user and profile screens; empty sidebar sections are hidden.
+
 ## [1.0.0] - 2026-10-04
 
 The first public release. Elevare is a .NET 9 content management system — a Blazor
