@@ -206,26 +206,38 @@ Site iki seviyede önbellek kullanır:
 
 | Seviye | İçerik | Süre | Konum |
 | --- | --- | --- | --- |
-| Hazır sayfalar | `PageController.Index`'in döndürdüğü küçültülmüş HTML yanıtının tamamı. Anahtar, adres ile sayfa listesi parametrelerinden (`page`, `tag`, `q` ve bunların bloklara özel hâlleri; `ListingQuery`) oluşur. Başka bir parametre (`utm_*`, `fbclid`) sayfayı değiştirmez ve önbellekte yeni bir kayıt oluşturmaz. | 1 saat | ASP.NET Core output cache (site sürecinin belleğinde), `Pages` politikası |
+| Hazır sayfalar | `PageController.Index`'in döndürdüğü küçültülmüş HTML yanıtının tamamı. Anahtar, adres ile sayfa listesi parametrelerinden (`page`, `tag`, `q` ve bunların bloklara özel hâlleri; `ListingQuery`) oluşur. Başka bir parametre (`utm_*`, `fbclid`) sayfayı değiştirmez ve önbellekte yeni bir kayıt oluşturmaz. | 24 saat (404 için 5 dakika) | ASP.NET Core output cache (site sürecinin belleğinde), `Pages` politikası |
 | Sorgu sonuçları | Adrese göre sayfa, site ayarları, site kodları | 30 saniye | `ICacheService`: ayarlanmışsa Redis, aksi hâlde süreç belleği |
 
-Bir saatlik süre, ancak sayfaların kendiliğinden eskimesine gerek olmadığı için
-güvenlidir. Her başarılı CMS komutundan sonra
-`PublicSiteCacheInvalidationPipelineBehavior`, `IPublicSiteCacheInvalidator`
-üzerinden sitenin önbelleğinin temizlenmesini ister. Birbirinden bir saniyeden kısa
-aralıkla gelen istekler (toplu bir düzenleme ya da birkaç komuttan oluşan bir kayıt
-işlemi) tek bir `POST /api/cache/clear` çağrısı olarak gönderilir. Bu uç nokta
-sırasıyla `ICacheService`'i boşaltır, dil ve bakım modu anlık görüntülerini yeniler
-ve ancak ondan sonra `pages` etiketli output cache kayıtlarını siler. Bu sıralama,
-arada gelen bir isteğin eski veriyle oluşturulmuş bir sayfayı yeniden önbelleğe
-koymasını engeller.
+Bir günlük süre, ancak sayfaların kendiliğinden eskimesine gerek olmadığı için
+güvenlidir. Oluşturulan her sayfa, neyden üretildiğini gösteren etiketlerle
+önbelleğe girer (`PageCacheTags`): sayfanın kendisi, kullandığı her bağlı şablon,
+breadcrumb ve dil seçicide adı geçen sayfalar, çeviri grubu, ayrıca sayfa listesi
+varsa `listing`, yüklenmiş görsel varsa `media`. Bu etiketleri, sayfayı oluşturan
+çözümleyiciler okudukları sırada kaydeder (`PageCacheDependencies`).
 
-Önbellek, yalnızca içeriği değiştiren belirli komutlardan sonra değil, bilerek her
-komuttan sonra temizlenir. Bir sayfa; sayfalar, şablonlar, medya, site ayarları,
-site kodları, diller, yönlendirmeler ve daha fazlasından beslenir. Böyle bir liste,
-ileride eklenecek ilk özelliği gözden kaçırırdı. Siteyi etkilemeyen bir komutun
-bedeli yalnızca bir sayfanın fazladan bir kez oluşturulmasıdır. Temizleme çağrısı
-siteye ulaşamazsa CMS bir uyarı kaydı yazar; bu durumda sitede en fazla bir saat
+CMS tarafında veritabanı bağlamı, kaydettiği her satıra bakar
+(`PublicSiteChangeClassifier`). Bir sayfanın içeriği değişirse o sayfa ve listeler
+temizlenir. Başlığı ya da adresi değişirse ona ek olarak adını gösteren sayfalar ve
+önbellekteki 404'ler de temizlenir. Bağlı bir şablon değişirse onu kullanan bütün
+sayfalar temizlenir. Not, görev, kullanıcı ya da form yanıtı gibi sitede görünmeyen
+kayıtlar hiçbir şeyi temizlemez. Sınıflandırıcının tanımadığı bir tablo ya da site
+geneline ait veriler (ayarlar, diller, site kodları, yönlendirmeler) bütün siteyi
+temizler. Her komuttan sonra `PublicSiteCacheInvalidationPipelineBehavior`,
+kaydedilenleri `IPublicSiteCacheInvalidator`'a iletir. Bir saniye içinde gelen
+istekler birleştirilir ve tek çağrı olarak gider: etiketlerle
+`POST /api/cache/evict` ya da her şey için `POST /api/cache/clear`. Başarılı olduğu
+hâlde bağlamın göremediği bir kayıtla biten komut, siteyi başka bir yoldan
+değiştirmiş olabileceği için bütün siteyi temizler.
+
+İki uç nokta da hazır sayfaları silmeden önce `ICacheService`'i boşaltır; böylece
+arada gelen bir istek, eski veriyle oluşturulmuş bir sayfayı yeniden önbelleğe
+koyamaz. `/clear` ayrıca dil ve bakım modu anlık görüntülerini yeniler. Ardından
+`PageCacheWarmer`, yayındaki her sayfayı ziyaretçilerin kullandığı alan adı ve
+şemayla kendi sürecinden ister: silinen sayfalar bir ziyaretçi gelmeden yeniden
+oluşturulur, diğerleri zaten önbellekten döner. Uygulama açıldığında da aynısını
+yapar; hangi adres için ısıtacağını ilk ziyaretçiden öğrenir. Temizleme çağrısı
+siteye ulaşamazsa CMS bir uyarı kaydı yazar; bu durumda sitede en fazla bir gün
 eski içerik görünebilir. CMS'i devre dışı bırakan değişiklikler için (veritabanını
 geri yükleme, elle yapılan bir SQL düzeltmesi) `/admin/cache` ekranındaki
 "Önbelleği Temizle" butonu kullanılır.

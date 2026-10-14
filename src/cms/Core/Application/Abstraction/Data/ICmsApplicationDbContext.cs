@@ -82,4 +82,11 @@ public interface ICmsApplicationDbContext
     int SaveChanges(CancellationToken cancellationToken = default);
     int SaveChangesWithRetry(int retryCount = 3, CancellationToken cancellationToken = default);
     bool EnsureDatabaseCreated(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// What the saves since the last call changed on the public site, and starts
+    /// over — read by <c>PublicSiteCacheInvalidationPipelineBehavior</c> after each
+    /// command, so the site drops only the pages that command touched.
+    /// </summary>
+    Application.Abstraction.Services.PublicSiteChange TakePublicSiteChange();
 }

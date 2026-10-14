@@ -30,16 +30,30 @@ internal sealed class CacheClearService(
 {
     private const string PublicSiteBaseUrlKey = "Advanced.PublicSiteBaseUrl";
     private const string SecretHeaderName = "X-Cache-Secret";
+    private const int MaxTags = 2000;
 
-    public async Task<Result> ClearAsync(CancellationToken cancellationToken = default)
+    public Task<Result> ClearAsync(CancellationToken cancellationToken = default) =>
+        PostAsync("/api/cache/clear", content: null, cancellationToken);
+
+    public Task<Result> EvictAsync(PublicSiteChange change, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(change);
+        // The site refuses a longer list (CacheEndpoints.MaxTags): that many pages is everything.
+        return change.IsEverything || change.Tags.Count > MaxTags
+            ? ClearAsync(cancellationToken)
+            : PostAsync("/api/cache/evict", JsonContent.Create(new { tags = change.Tags }), cancellationToken);
+    }
+
+    private async Task<Result> PostAsync(string path, HttpContent? content, CancellationToken cancellationToken)
+    {
+        using HttpContent? body = content;
         Result<string> baseUrl = await ResolveBaseUrlAsync(cancellationToken);
         if (baseUrl.IsFailure)
             return Result.Failure(baseUrl.Error);
 
         try
         {
-            using HttpRequestMessage request = new(HttpMethod.Post, $"{baseUrl.Value}/api/cache/clear");
+            using HttpRequestMessage request = new(HttpMethod.Post, baseUrl.Value + path) { Content = body };
             request.Headers.Add(SecretHeaderName, options.Value.ClearSecret);
 
             using HttpResponseMessage response = await httpClient.SendAsync(request, cancellationToken);

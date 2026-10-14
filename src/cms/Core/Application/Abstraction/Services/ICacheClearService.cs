@@ -12,6 +12,12 @@ public interface ICacheClearService
 {
     Task<Result> ClearAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Drops the cached pages <paramref name="change"/> made stale — all of them
+    /// when it says <see cref="PublicSiteChange.IsEverything"/>.
+    /// </summary>
+    Task<Result> EvictAsync(PublicSiteChange change, CancellationToken cancellationToken = default);
+
     /// <summary>Live cache health, for the CMS's <c>/admin/cache</c> page.</summary>
     Task<Result<SiteCacheStatus>> GetStatusAsync(CancellationToken cancellationToken = default);
 }

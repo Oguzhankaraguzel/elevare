@@ -1105,4 +1105,39 @@
             });
         });
     })();
+    // ---------------------------------------------------------------
+    // Later slides' images, held back by the server (ContentEnhancer) so they do
+    // not download with the page. Put back once it has loaded and the browser is
+    // idle — long before the slider's first turn — or at once when the visitor
+    // moves a slider before that.
+    // ---------------------------------------------------------------
+    (function () {
+        function restore(root) {
+            var held = (root || document).querySelectorAll('[data-elevare-src], [data-elevare-srcset]');
+            Array.prototype.forEach.call(held, function (el) {
+                var srcset = el.getAttribute('data-elevare-srcset');
+                if (srcset) { el.setAttribute('srcset', srcset); el.removeAttribute('data-elevare-srcset'); }
+                var src = el.getAttribute('data-elevare-src');
+                if (src) { el.setAttribute('src', src); el.removeAttribute('data-elevare-src'); }
+            });
+        }
+
+        if (!document.querySelector('[data-elevare-src], [data-elevare-srcset]')) return;
+
+        document.addEventListener('click', function (e) {
+            var control = e.target.closest && e.target.closest('.el-slider-prev, .el-slider-next, .el-slider-dot');
+            if (control) restore(control.parentElement);
+        }, true);
+        document.addEventListener('touchstart', function (e) {
+            var slides = e.target.closest && e.target.closest('.el-slides');
+            if (slides) restore(slides);
+        }, { passive: true, capture: true });
+
+        function later() {
+            if (window.requestIdleCallback) window.requestIdleCallback(function () { restore(); }, { timeout: 2000 });
+            else setTimeout(restore, 300);
+        }
+        if (document.readyState === 'complete') later();
+        else window.addEventListener('load', later);
+    })();
 })();

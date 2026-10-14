@@ -4,6 +4,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
 
 namespace WebMvc.Controllers;
 
@@ -24,12 +25,12 @@ public sealed class FeedController(ISender sender, ILanguageDirectory languageDi
 #pragma warning restore S1075
 
     [HttpGet(FeedFileName)]
-    [OutputCache(PolicyName = PageController.OutputCachePolicy)]
+    [OutputCache(PolicyName = PageController.OutputCachePolicy, Tags = [PageCacheTags.Listing])]
     public Task<IActionResult> Default(CancellationToken cancellationToken) =>
         ServeAsync(languageDirectory.DefaultLanguageCode, Root, Root + FeedFileName, cancellationToken);
 
     [HttpGet("{languageCode}/" + FeedFileName)]
-    [OutputCache(PolicyName = PageController.OutputCachePolicy)]
+    [OutputCache(PolicyName = PageController.OutputCachePolicy, Tags = [PageCacheTags.Listing])]
     public Task<IActionResult> ForLanguage(string languageCode, CancellationToken cancellationToken)
     {
         // The default language's feed has one address, not two.

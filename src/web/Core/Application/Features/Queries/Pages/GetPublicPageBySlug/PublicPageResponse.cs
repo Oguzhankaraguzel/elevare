@@ -25,4 +25,7 @@ public sealed record PublicPageResponse(
     string? GjsCss,
     bool IsDefaultLanguage,
     List<PageAlternateResponse> Alternates,
-    SocialMeta Social);
+    SocialMeta Social,
+    // The translation group the hreflang alternates come from — the rendered
+    // page is tagged with it, so a translation's change reaches its <head>.
+    int? PageGroupId = null);

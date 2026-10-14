@@ -6,6 +6,35 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-14
+
+### Changed
+
+- **A save clears only the pages it touched.** The CMS reads what each save actually
+  wrote and tells the site which cached pages are stale: a page's content clears that
+  page and the lists showing it, a linked template every page using it, a note, task
+  or user nothing at all. Site-wide data and anything not understood still clear the
+  whole site. Before, every save — and the sitemap rebuild every two hours — emptied
+  the site's cache.
+- **Rendered pages are kept for a day** instead of an hour, since a change now reaches
+  them on save.
+- **The site warms its own cache**: after an eviction and after start-up it renders
+  the pages that are not cached, so a visitor rarely waits for a render.
+- **The web image is compiled ahead of time** (ReadyToRun), so the first requests
+  after a deploy no longer wait for the JIT.
+- **Card and grid images get a fitting `sizes` hint** from the page's own CSS, and
+  lazy images let the browser measure them (`sizes="auto"`): a card a third of the
+  page wide no longer downloads the full-width file.
+- **Slider images after the first wait for the page to load** instead of downloading
+  with it.
+- **A missing page is answered without an exception**: one log line instead of a
+  stack trace, and the 404 is cached for five minutes.
+
+### Security
+
+- Microsoft ASP.NET Core and EF Core packages updated to 9.0.21 (CVE-2026-96230 in
+  `Microsoft.AspNetCore.Components.WebAssembly.Server`).
+
 ## [1.1.0] - 2026-10-14
 
 ### Added

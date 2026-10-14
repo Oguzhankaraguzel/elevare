@@ -13,6 +13,7 @@ public static class ApplicationServiceRegistration
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(IWebApplication).Assembly));
 
+        services.AddScoped<PageCacheDependencies>();
         services.AddScoped<TemplateResolutionService>();
         services.AddScoped<LanguageSwitcherResolutionService>();
         services.AddScoped<PageListingResolutionService>();

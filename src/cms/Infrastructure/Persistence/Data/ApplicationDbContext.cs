@@ -1,4 +1,5 @@
 ﻿using Application.Abstraction.Data;
+using Application.Abstraction.Services;
 using Application.Abstraction.Services.Authentication;
 using Domain.Entities.Abstractions;
 using Domain.Entities.Analytics;
@@ -220,6 +221,19 @@ internal sealed class ApplicationDbContext
         // The opt-in lasts exactly one save. Without this, an entity purged and then
         // re-attached later in the same context would skip the soft delete again.
         _hardDeletes.Clear();
+
+        // After the soft deletes, which turn a removal into the update it really is.
+        PublicSiteChangeClassifier.Classify(ChangeTracker, _publicSiteChange);
+    }
+
+    private PublicSiteChange _publicSiteChange = new();
+
+    /// <inheritdoc />
+    public PublicSiteChange TakePublicSiteChange()
+    {
+        PublicSiteChange taken = _publicSiteChange;
+        _publicSiteChange = new PublicSiteChange();
+        return taken;
     }
 
     /// <summary>Stamps create/update timestamps and user ids on every <see cref="IAuditable"/> entry.</summary>

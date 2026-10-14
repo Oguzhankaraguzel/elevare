@@ -1,9 +1,10 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using Application.Abstraction.Data;
 using Application.Abstraction.Services;
 using Domain.Entities.PublicPages;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
 
 namespace Application.Services;
 
@@ -22,7 +23,8 @@ namespace Application.Services;
 /// fallback order.
 /// </para>
 /// </summary>
-public sealed class SystemPageProvider(IPublicReadDbContext db, TemplateResolutionService templateResolver)
+public sealed class SystemPageProvider(
+    IPublicReadDbContext db, TemplateResolutionService templateResolver, PageCacheDependencies? dependencies = null)
 {
     public const string NotFoundSlug = "404";
     public const string ServerErrorSlug = "500";
@@ -103,6 +105,8 @@ public sealed class SystemPageProvider(IPublicReadDbContext db, TemplateResoluti
 
         if (page?.Content?.GjsHtml is not { Length: > 0 } html)
             return Result.Success<SystemPageContent?>(null);
+
+        dependencies?.Add(PageCacheTags.Page(page.Id));
 
         Result<ResolvedTemplateContent> resolved = await templateResolver.ResolveAsync(html, cancellationToken);
         if (resolved.IsFailure)
