@@ -37,6 +37,20 @@ public sealed class ImageLayoutEstimatorTests
     }
 
     [Fact]
+    public void An_auto_fit_grid_fits_as_many_minimum_columns_as_its_box_allows()
+    {
+        // The card grid block's own rule, which outranks a class asking for three columns.
+        string css = ".inner{max-width:1200px}.cards{display:grid !important;grid-template-columns:repeat(3,1fr)}" +
+            "#grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,367px),1fr));gap:24px}";
+
+        Estimate("""<div class="inner"><ul id="grid" class="cards"><li><img></li></ul></div>""", css)
+            .ShouldBe("(max-width: 767px) 100vw, 400px");
+        // With nothing capping it, a column is under two minimums wide.
+        Estimate("""<ul id="grid"><li><img></li></ul>""", css)
+            .ShouldBe("(max-width: 767px) 100vw, 734px");
+    }
+
+    [Fact]
     public void A_pixel_column_is_the_images_width()
     {
         string? sizes = Estimate(

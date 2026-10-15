@@ -35,6 +35,10 @@ public sealed class ImageLayoutEstimator
     private static readonly Regex Pixels = new(@"^(?<px>\d{1,5}(?:\.\d+)?)px$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex Repeat = new(@"repeat\(\s*(?<n>\d{1,2})\s*,\s*(?<track>[^)]+)\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
+    private static readonly Regex AutoRepeat = new(
+        @"repeat\(\s*auto-(?:fit|fill)\s*,\s*minmax\(\s*(?:min\(\s*100%\s*,\s*)?(?<px>\d{1,5}(?:\.\d+)?)px",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     private const int MaxDepth = 24;
 
     /// <summary>Declarations by selector (".name" / "#name"), in source order.</summary>
@@ -54,6 +58,9 @@ public sealed class ImageLayoutEstimator
             return null;
 
         double fraction = 1;
+        // An auto-fit grid's column count depends on the width it is given, so it
+        // waits for the next pixel width up — see AutoFitMinimum.
+        double? autoFitMinimum = null;
         IElement child = image;
         int depth = 0;
         for (IElement? element = image;
@@ -62,21 +69,40 @@ public sealed class ImageLayoutEstimator
         {
             Dictionary<string, string> declarations = DeclarationsFor(element);
 
-            if (element != image
-                && declarations.TryGetValue("grid-template-columns", out string? columns)
-                && Tracks(columns) is { Count: > 1 } tracks)
+            if (element != image && autoFitMinimum is null
+                && declarations.TryGetValue("grid-template-columns", out string? columns))
             {
-                string track = tracks[IndexAmongSiblings(child) % tracks.Count];
-                if (TryPixels(track, out double trackPx))
-                    return Describe(fraction * trackPx, inGrid: true);
-                fraction /= tracks.Count;
+                if (AutoFitMinimum(columns) is double minimum)
+                {
+                    autoFitMinimum = minimum;
+                }
+                else if (Tracks(columns) is { Count: > 1 } tracks)
+                {
+                    string track = tracks[IndexAmongSiblings(child) % tracks.Count];
+                    if (TryPixels(track, out double trackPx))
+                        return Describe(fraction * trackPx, inGrid: true);
+                    fraction /= tracks.Count;
+                }
             }
 
             if (PixelWidth(declarations) is double px)
+            {
+                if (autoFitMinimum is double min)
+                {
+                    // As many columns of at least `min` as fit, sharing the width.
+                    double columnCount = Math.Max(1, Math.Floor(px / min));
+                    return Describe(fraction * px / columnCount, inGrid: true);
+                }
                 return Describe(fraction * px, inGrid: fraction < 1);
+            }
 
             child = element;
         }
+
+        // No pixel width above an auto-fit grid: a column is narrower than two
+        // minimums, or a second one would have fitted beside it.
+        if (autoFitMinimum is double unbounded)
+            return Describe(fraction * unbounded * 2, inGrid: true);
 
         // No pixel width anywhere above: a share of the viewport, when a grid gave one.
         if (fraction >= 1)
@@ -173,6 +199,17 @@ public sealed class ImageLayoutEstimator
                 result[property] = value;
         }
         return result;
+    }
+
+    /// <summary>
+    /// The minimum column width of <c>repeat(auto-fit|auto-fill, minmax(320px, 1fr))</c>
+    /// — also written <c>minmax(min(100%, 320px), 1fr)</c> so one column never
+    /// overflows a phone — or null for any other value.
+    /// </summary>
+    private static double? AutoFitMinimum(string value)
+    {
+        Match match = AutoRepeat.Match(value);
+        return match.Success && TryPixels(match.Groups["px"].Value + "px", out double px) ? px : null;
     }
 
     /// <summary>The column tracks of a <c>grid-template-columns</c> value, <c>repeat()</c> expanded.</summary>
