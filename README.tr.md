@@ -523,9 +523,11 @@ adresleri ve yapısal veri de yeni adreslere göre güncellenir. Kaydettikten so
 CMS kaç adresin taşındığını gösterir.
 
 CMS'te kaydettiğiniz diğer değişiklikler de aynı şekilde hemen yansır. Site,
-oluşturduğu sayfaları bir saate kadar önbellekte tutar; ancak CMS her başarılı
-kayıttan sonra siteye önbelleği temizlemesini söyler, böylece değişiklik bir
-sonraki sayfa açılışında görünür. **Önbellek** ekranındaki "Önbelleği Temizle"
+oluşturduğu sayfaları bir güne kadar önbellekte tutar. Her kayıttan sonra CMS,
+siteye değişikliğin hangi sayfalara dokunduğunu bildirir; örneğin bağlı bir şablonu
+düzenlediğinizde onu kullanan bütün sayfalar önbellekten çıkar. Site bu sayfaları
+arka planda yeniden oluşturur, böylece değişiklik bir sonraki sayfa açılışında
+görünür. **Önbellek** ekranındaki "Önbelleği Temizle"
 butonu CMS dışında yapılan değişiklikler içindir (veritabanını geri yükleme, elle
 yapılan bir düzeltme gibi). Ayrıntılar
 [docs/ARCHITECTURE.tr.md](docs/ARCHITECTURE.tr.md#sitenin-önbelleği) içinde.

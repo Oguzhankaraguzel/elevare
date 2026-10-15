@@ -5,6 +5,7 @@ using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
 
 namespace WebMvc.Controllers;
 
@@ -19,10 +20,10 @@ public sealed class SitemapController(ISender sender) : BaseController
 {
     // Sitemaps only change every 2 hours (the Hangfire job's interval); a short
     // cache still meaningfully cuts DB hits from repeat crawler requests.
-    // Tagged with the pages so the CMS's cache clear drops them too — the sitemap
-    // job asks for one when it has rebuilt them, see SitemapJob.
+    // Tagged so the CMS's cache clear drops them too, and the sitemap job's own
+    // eviction when it has rebuilt them (see SitemapJob).
     [HttpGet("sitemap.xml")]
-    [OutputCache(Duration = 600, Tags = [PageController.OutputCacheTag])]
+    [OutputCache(Duration = 600, Tags = [PageCacheTags.All, PageCacheTags.Sitemap])]
     public Task<IActionResult> Index(CancellationToken cancellationToken)
         => ServeAsync("index", cancellationToken);
 
@@ -33,7 +34,7 @@ public sealed class SitemapController(ISender sender) : BaseController
     // Served from the site root: a file under /{slug}/ may only list URLs below that
     // path, and a section sitemap also holds the section page and its translations.
     [HttpGet("sitemap-{slug}.xml")]
-    [OutputCache(Duration = 600, Tags = [PageController.OutputCacheTag])]
+    [OutputCache(Duration = 600, Tags = [PageCacheTags.All, PageCacheTags.Sitemap])]
     public async Task<IActionResult> Section(string slug, CancellationToken cancellationToken)
     {
         // "index" is the sitemap index's own key, served only as /sitemap.xml.

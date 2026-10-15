@@ -7,6 +7,7 @@ using Application.Abstraction.Services;
 using Domain.Entities.PublicPages;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
 
 namespace Application.Services;
 
@@ -17,7 +18,7 @@ namespace Application.Services;
 /// template propagate to every page that uses it, with no caching or explicit
 /// re-save/propagation step: every request re-resolves against the live template row.
 /// </summary>
-public sealed class TemplateResolutionService(IPublicReadDbContext db)
+public sealed class TemplateResolutionService(IPublicReadDbContext db, PageCacheDependencies? dependencies = null)
 {
     private const string MarkerClass = "elevare-tpl-ref";
     // Unlinked copies carry their content already, so nothing resolves them — but
@@ -97,6 +98,7 @@ public sealed class TemplateResolutionService(IPublicReadDbContext db)
                     || InsideItself(marker, idText))
                     continue;
 
+                dependencies?.Add(PageCacheTags.Template(id));
                 marker.InnerHtml = template.GjsHtml ?? string.Empty;
                 if (!string.IsNullOrWhiteSpace(template.GjsCss) && cssAdded.Add(id))
                     cssBuilder.Append(template.GjsCss);

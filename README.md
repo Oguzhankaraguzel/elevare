@@ -483,8 +483,9 @@ A new language is created **active but not published**. Publishing takes effect 
 the public site within a second or two — no restart.
 
 The same goes for every other change saved in the CMS. The public site keeps rendered
-pages for up to an hour, but the CMS tells it to drop them after each successful save,
-so edits show up on the next page view. The **Cache** screen's "Clear cache" button is
+pages for up to a day, but after each save the CMS tells it which pages the change
+touched — editing a linked template drops every page using it — and the site renders
+those again in the background, so edits show up on the next page view. The **Cache** screen's "Clear cache" button is
 for changes made outside the CMS (a database restore, a manual edit), and
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#public-site-caching) has the details.
 

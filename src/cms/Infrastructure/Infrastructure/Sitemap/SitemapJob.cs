@@ -1,5 +1,6 @@
 ﻿using Application.Abstraction.Data;
 using Application.Abstraction.Services;
+using SharedKernel.Content;
 using Domain.Entities.Languages;
 using Domain.Entities.PageInfos;
 using Domain.Entities.Sitemaps;
@@ -80,7 +81,7 @@ public sealed class SitemapJob
 
         await _db.SaveChangesAsync(cancellationToken);
         // The site keeps serving the sitemaps it has cached until told otherwise.
-        _publicSite.RequestInvalidation();
+        _publicSite.RequestInvalidation(PublicSiteChange.ForTags(PageCacheTags.Sitemap));
         _logger.LogInformation("Sitemap generation completed. {Count} sub-sitemaps.", subSitemapEntries.Count);
     }
 

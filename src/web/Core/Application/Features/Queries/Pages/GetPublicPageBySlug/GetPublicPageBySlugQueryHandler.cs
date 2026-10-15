@@ -121,7 +121,8 @@ internal sealed class GetPublicPageBySlugQueryHandler(IPublicReadDbContext db, I
             page.Content?.GjsCss,
             isDefaultLanguage,
             alternates,
-            SocialMeta.FromJson(page.SeoSocialJson));
+            SocialMeta.FromJson(page.SeoSocialJson),
+            page.PageGroupId);
 
         await cache.SetAsync(cacheKey, response, CacheTtl, cancellationToken);
         return Result.Success(response);

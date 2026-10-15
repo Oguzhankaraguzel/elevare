@@ -1,8 +1,9 @@
-using Application.Abstraction.Services;
+﻿using Application.Abstraction.Services;
 using Infrastructure.Caching;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.Extensions.Options;
-using WebMvc.Controllers;
+using SharedKernel.Content;
+using WebMvc.Caching;
 using WebMvc.RateLimiting;
 
 namespace WebMvc.Endpoints;
@@ -16,12 +17,19 @@ namespace WebMvc.Endpoints;
 /// </summary>
 public static class CacheEndpoints
 {
+    // A save touches a page, its group and a handful of shared tags; a bulk edit a
+    // few hundred pages. Past this, the caller should be clearing everything.
+    private const int MaxTags = 2000;
+
+    /// <summary>The body of <c>/api/cache/evict</c>.</summary>
+    public sealed record EvictRequest(IReadOnlyList<string>? Tags);
+
     public static WebApplication MapCacheEndpoints(this WebApplication app)
     {
         app.MapPost("/api/cache/clear", async (
             HttpContext http, ICacheService cache, IOutputCacheStore outputCache,
             ILanguageDirectory languageDirectory, IMaintenanceState maintenanceState,
-            IWwwRedirectState wwwRedirectState,
+            IWwwRedirectState wwwRedirectState, PageCacheWarmer warmer,
             IOptions<CacheOptions> options, CancellationToken ct) =>
         {
             if (!InternalAdminAuthorization.IsAuthorized(http, options.Value.ClearSecret))
@@ -38,7 +46,32 @@ public static class CacheEndpoints
             await languageDirectory.RefreshAsync(ct);
             await maintenanceState.RefreshAsync(ct);
             await wwwRedirectState.RefreshAsync(ct);
-            await outputCache.EvictByTagAsync(PageController.OutputCacheTag, ct);
+            await outputCache.EvictByTagAsync(PageCacheTags.All, ct);
+            warmer.RequestWarmup();
+            return Results.NoContent();
+        }).RequireRateLimiting(RateLimitPolicies.CacheAdmin);
+
+        // What the CMS sends after an ordinary save: only the pages built from what
+        // it changed (see PageCacheTags). Data caches are cleared whole — cheap, and
+        // the renders that follow must not read a stale copy. The language and
+        // maintenance snapshots are left alone: a change to either is never
+        // narrowed down, so it arrives at /clear above.
+        app.MapPost("/api/cache/evict", async (
+            HttpContext http, EvictRequest body, ICacheService cache, IOutputCacheStore outputCache,
+            PageCacheWarmer warmer, ILoggerFactory loggers, IOptions<CacheOptions> options, CancellationToken ct) =>
+        {
+            if (!InternalAdminAuthorization.IsAuthorized(http, options.Value.ClearSecret))
+                return Results.Unauthorized();
+            if (body.Tags is not { Count: > 0 and <= MaxTags })
+                return Results.BadRequest();
+
+            await cache.ClearAsync(ct);
+            string[] tags = [.. body.Tags.Distinct(StringComparer.Ordinal)];
+            foreach (string tag in tags)
+                await outputCache.EvictByTagAsync(tag, ct);
+            loggers.CreateLogger(typeof(CacheEndpoints)).LogInformation(
+                "Evicted cached pages tagged {Tags}", string.Join(", ", tags.Take(20)));
+            warmer.RequestWarmup();
             return Results.NoContent();
         }).RequireRateLimiting(RateLimitPolicies.CacheAdmin);
 

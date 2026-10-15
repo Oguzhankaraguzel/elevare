@@ -6,6 +6,65 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-10-14
+
+### Changed
+
+- **A save clears only the pages it touched.** The CMS reads what each save actually
+  wrote and tells the site which cached pages are stale: a page's content clears that
+  page and the lists showing it, a linked template every page using it, a note, task
+  or user nothing at all. Site-wide data and anything not understood still clear the
+  whole site. Before, every save — and the sitemap rebuild every two hours — emptied
+  the site's cache.
+- **Rendered pages are kept for a day** instead of an hour, since a change now reaches
+  them on save.
+- **The site warms its own cache**: after an eviction and after start-up it renders
+  the pages that are not cached, so a visitor rarely waits for a render.
+- **The web image is compiled ahead of time** (ReadyToRun), so the first requests
+  after a deploy no longer wait for the JIT.
+- **Card and grid images get a fitting `sizes` hint** from the page's own CSS, and
+  lazy images let the browser measure them (`sizes="auto"`): a card a third of the
+  page wide no longer downloads the full-width file.
+- **Slider images after the first wait for the page to load** instead of downloading
+  with it.
+- **A missing page is answered without an exception**: one log line instead of a
+  stack trace, and the 404 is cached for five minutes.
+
+### Security
+
+- Microsoft ASP.NET Core and EF Core packages updated to 9.0.21 (CVE-2026-96230 in
+  `Microsoft.AspNetCore.Components.WebAssembly.Server`).
+
+## [1.1.0] - 2026-10-14
+
+### Added
+
+- **Getting in without mail.** An administrator can make a one-time password link
+  (valid for 48 hours) and pass it on themselves; users can ask for a reset link
+  from the sign-in screen; a user given a temporary password is made to change it
+  at first sign-in. A SuperAdmin locked out can be recovered with
+  `ADMIN_RESET_PASSWORD=true`.
+- **Redirects can be 301 or 302**, chosen per rule and in CSV imports.
+- **The CMS shows the site it manages** in the sidebar, tab titles and sign-in
+  screen, with Elevare's version beside it.
+- **Languages and homepages can be taken off the site safely**: unpublishing asks
+  first and says what readers will see instead.
+
+### Changed
+
+- **Secrets are no longer shown.** The Secrets screen keeps every input empty and
+  says instead whether a value is saved, comes from the server's configuration
+  (`.env`) or is missing; saving or clearing one asks for confirmation. Mail set
+  up only in `.env` no longer looks unconfigured.
+- Seeded placeholder secrets are released so the server's own values take effect.
+- Section sitemaps are served from the site root.
+- The Turkish documentation was rewritten in natural Turkish.
+
+### Fixed
+
+- Buttons keep their content when the forms plugin loads.
+- Name correction in the user and profile screens; empty sidebar sections are hidden.
+
 ## [1.0.0] - 2026-10-04
 
 The first public release. Elevare is a .NET 9 content management system — a Blazor

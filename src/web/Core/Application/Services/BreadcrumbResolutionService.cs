@@ -6,6 +6,7 @@ using Domain.Entities.PublicPages;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Concrete;
 using System.Data.Common;
+using SharedKernel.Content;
 
 namespace Application.Services;
 
@@ -20,7 +21,7 @@ namespace Application.Services;
 /// it only copies what is already on the canvas.
 /// </para>
 /// </summary>
-public sealed class BreadcrumbResolutionService(IPublicReadDbContext db)
+public sealed class BreadcrumbResolutionService(IPublicReadDbContext db, PageCacheDependencies? dependencies = null)
 {
     private const string MarkerAttribute = "data-elevare-breadcrumb";
     private const string HomeLabelAttribute = "data-elevare-breadcrumb-home";
@@ -142,6 +143,7 @@ public sealed class BreadcrumbResolutionService(IPublicReadDbContext db)
 
         for (int depth = 0; cursor is int id && depth < MaxDepth; depth++)
         {
+            dependencies?.Add(PageCacheTags.PageInfo(id));
             PublicPage? page = await db.PageInfos.FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
             if (page is null)
                 break;

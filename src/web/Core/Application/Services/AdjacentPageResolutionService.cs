@@ -6,6 +6,7 @@ using Application.Abstraction.Services;
 using Domain.Entities.PublicPages;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
 
 namespace Application.Services;
 
@@ -16,7 +17,7 @@ namespace Application.Services;
 /// neighbour is left empty (so the other keeps its place); a page with neither loses
 /// the block.
 /// </summary>
-public sealed class AdjacentPageResolutionService(IPublicReadDbContext db)
+public sealed class AdjacentPageResolutionService(IPublicReadDbContext db, PageCacheDependencies? dependencies = null)
 {
     private const string MarkerAttribute = "data-elevare-adjacent";
 
@@ -24,6 +25,7 @@ public sealed class AdjacentPageResolutionService(IPublicReadDbContext db)
     {
         if (string.IsNullOrWhiteSpace(html) || !html.Contains(MarkerAttribute, StringComparison.Ordinal))
             return Result.Success(html);
+        dependencies?.Add(PageCacheTags.Listing);
         try
         {
             return Result.Success(await ResolveCoreAsync(html, currentPageId, cancellationToken));

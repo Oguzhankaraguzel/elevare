@@ -1,4 +1,4 @@
-using System.Data.Common;
+﻿using System.Data.Common;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using AngleSharp;
@@ -9,6 +9,7 @@ using Domain.Entities.PublicMedia;
 using Microsoft.EntityFrameworkCore;
 using SharedKernel.Concrete;
 using SharedKernel.Media;
+using SharedKernel.Content;
 
 namespace Application.Services;
 
@@ -38,7 +39,7 @@ namespace Application.Services;
 /// library is not touched at all.
 /// </para>
 /// </summary>
-public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
+public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db, PageCacheDependencies? dependencies = null)
 {
     /// <summary>
     /// Only paths under the upload root are considered ours. Anything else in a
@@ -99,6 +100,7 @@ public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
         if (pathByImage.Count == 0)
             return Result.Success<string?>(document.Body?.InnerHtml ?? html);
 
+        dependencies?.Add(PageCacheTags.Media);
         string[] paths = [.. pathByImage.Values.Distinct()];
 
         // One query: each embedded file carries its own renditions on its row.
@@ -114,6 +116,7 @@ public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
             .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
 
         Dictionary<string, int> cssWidthById = CssPixelWidths(pageCss);
+        var layout = new ImageLayoutEstimator(pageCss);
 
         foreach ((IElement image, string path) in pathByImage)
         {
@@ -123,7 +126,7 @@ public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
             IReadOnlyList<ImageRendition> renditions = ImageRenditions.Parse(file.Renditions);
             ApplyAlt(image, file);
             ApplyIntrinsicSize(image, file);
-            ApplySrcset(image, file, renditions, cssWidthById);
+            ApplySrcset(image, file, renditions, cssWidthById, layout);
             ApplyWebpSource(document, image, renditions);
         }
 
@@ -286,7 +289,8 @@ public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
         IElement image,
         PublicMediaFile file,
         IReadOnlyList<ImageRendition> renditions,
-        Dictionary<string, int> cssWidthById)
+        Dictionary<string, int> cssWidthById,
+        ImageLayoutEstimator layout)
     {
         if (image.HasAttribute("srcset") || renditions.Count == 0) return;
 
@@ -307,10 +311,12 @@ public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
         // Without `sizes`, the browser assumes the image spans the viewport and
         // always picks the largest file — which would make the srcset actively
         // harmful on a phone. When the page's own CSS gives this image a pixel
-        // width, that is the answer; otherwise the honest upper bound: never wider
-        // than the largest variant, and full-width below that.
+        // width, that is the answer; failing that, the width its grid and boxes
+        // allow (ImageLayoutEstimator); otherwise the honest upper bound: never
+        // wider than the largest variant, and full-width below that.
         if (!image.HasAttribute("sizes"))
         {
+            string sizes;
             string? id = image.GetAttribute("id");
             if (id is not null && cssWidthById.TryGetValue(id, out int cssWidth))
             {
@@ -319,16 +325,27 @@ public sealed class ResponsiveImageResolutionService(IPublicReadDbContext db)
                 // the block's own stylesheet stretches it to the full card below
                 // 767px. Left at the pixel width, a phone picked a file half the
                 // size it needed and showed the card image blurred.
-                image.SetAttribute("sizes", image.Closest(ListingItemSelector) is not null
+                sizes = image.Closest(ListingItemSelector) is not null
                     ? $"(max-width: {ListingFullWidthBelowPx}px) 100vw, {width}"
-                    : width);
+                    : width;
+            }
+            else if (layout.EstimateSizes(image) is { } estimated)
+            {
+                sizes = estimated;
             }
             else
             {
                 int largest = Math.Max(file.Width ?? 0, renditions[^1].Width);
                 string largestText = largest.ToString(CultureInfo.InvariantCulture);
-                image.SetAttribute("sizes", $"(max-width: {largestText}px) 100vw, {largestText}px");
+                sizes = $"(max-width: {largestText}px) 100vw, {largestText}px";
             }
+
+            // A lazy image is laid out before it loads, so the browser can measure
+            // it: "auto" uses the real drawn width where supported (Chromium), and
+            // the rest read the estimate after it.
+            if (string.Equals(image.GetAttribute("loading"), "lazy", StringComparison.OrdinalIgnoreCase))
+                sizes = "auto, " + sizes;
+            image.SetAttribute("sizes", sizes);
         }
     }
 }

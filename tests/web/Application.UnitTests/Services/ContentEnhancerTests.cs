@@ -1,4 +1,4 @@
-using Application.Services;
+﻿using Application.Services;
 using SharedKernel.Content;
 using Shouldly;
 
@@ -153,5 +153,23 @@ public sealed class ContentEnhancerTests
 
         html.ShouldContain(">Aradığın yazı yok, başka bir şey dene.<");
         html.ShouldContain("placeholder=\"Makale ara\"");
+    }
+
+    [Fact]
+    public async Task Only_the_first_slides_images_load_with_the_page()
+    {
+        string? html = await ContentEnhancer.EnhanceAsync(
+            """<div class="el-slides"><div class="el-slide"><img src="/a.jpg" loading="eager" fetchpriority="high"></div>""" +
+            """<div class="el-slide"><picture><source srcset="/b-480w.webp 480w"><img src="/b.jpg" srcset="/b-480w.jpg 480w" loading="eager" fetchpriority="high"></picture></div></div>""",
+            "tr", CancellationToken.None);
+
+        html.ShouldNotBeNull();
+        html.ShouldContain("""<img src="/a.jpg" loading="eager" fetchpriority="high">""");
+        html.ShouldContain("""<source data-elevare-srcset="/b-480w.webp 480w">""");
+        html.ShouldContain("""data-elevare-src="/b.jpg" """.TrimEnd());
+        html.ShouldContain("""data-elevare-srcset="/b-480w.jpg 480w" """.TrimEnd());
+        html.ShouldNotContain(" src=\"/b.jpg\"");
+        // The held-back image is not the page's priority either.
+        html[html.LastIndexOf("el-slide", StringComparison.Ordinal)..].ShouldNotContain("fetchpriority");
     }
 }

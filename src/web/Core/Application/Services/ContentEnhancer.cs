@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Text.RegularExpressions;
 using AngleSharp;
 using AngleSharp.Dom;
@@ -41,8 +41,8 @@ public static partial class ContentEnhancer
 
     public static async Task<string?> EnhanceAsync(string? html, string languageCode, CancellationToken cancellationToken)
     {
-        // Everything below keys on the builder's data-elevare-* markers.
-        if (string.IsNullOrWhiteSpace(html) || !BlockTextLocalizer.MayApply(html))
+        // Everything below keys on the builder's data-elevare-* markers and slider classes.
+        if (string.IsNullOrWhiteSpace(html) || !MayApply(html))
             return html;
 
         try
@@ -52,12 +52,58 @@ public static partial class ContentEnhancer
             HighlightCode(document);
             FillReadingTimes(document, languageCode);
             BlockTextLocalizer.Apply(document, languageCode);
+            DeferHiddenSlides(document);
             return document.Body?.InnerHtml ?? html;
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
         {
             return html;
         }
+    }
+
+    private const string SlideClass = "el-slide";
+
+    private static bool MayApply(string html) =>
+        BlockTextLocalizer.MayApply(html) || html.Contains(SlideClass, StringComparison.Ordinal);
+    private const string DeferredSrc = "data-elevare-src";
+    private const string DeferredSrcset = "data-elevare-srcset";
+
+    /// <summary>
+    /// Holds back the images of every slide but the first until the page has
+    /// loaded (elevare-interactions.js puts them back). A later slide sits beside
+    /// the first, off to the side but inside the distance lazy loading looks
+    /// ahead, so <c>loading="lazy"</c> alone still fetched it with the page — on
+    /// the home page, a 335 KB photo nobody sees for five seconds.
+    /// </summary>
+    private static void DeferHiddenSlides(IDocument document)
+    {
+        foreach (IElement track in document.QuerySelectorAll(".el-slides"))
+        {
+            IEnumerable<IElement> laterSlides = track.Children
+                .Where(child => child.ClassList.Contains(SlideClass))
+                .Skip(1);
+            foreach (IElement slide in laterSlides)
+            {
+                foreach (IElement image in slide.QuerySelectorAll("img"))
+                {
+                    Defer(image, "src", DeferredSrc);
+                    Defer(image, "srcset", DeferredSrcset);
+                    image.SetAttribute("loading", "lazy");
+                    image.RemoveAttribute("fetchpriority");
+                }
+                foreach (IElement source in slide.QuerySelectorAll("picture source"))
+                    Defer(source, "srcset", DeferredSrcset);
+            }
+        }
+    }
+
+    private static void Defer(IElement element, string attribute, string deferred)
+    {
+        string? value = element.GetAttribute(attribute);
+        if (string.IsNullOrEmpty(value) || value.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            return;
+        element.SetAttribute(deferred, value);
+        element.RemoveAttribute(attribute);
     }
 
     private static void HighlightCode(IDocument document)

@@ -1,4 +1,4 @@
-using Application.Abstraction.Services;
+﻿using Application.Abstraction.Services;
 using Application.Features.Queries.Pages.GetPreviewPageById;
 using Application.Features.Queries.Pages.GetPublicPageBySlug;
 using Application.Features.Queries.Redirects.GetRedirectTarget;
@@ -9,6 +9,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.Net.Http.Headers;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
+using Domain.Entities.PublicLogs;
+using WebMvc.Caching;
+using WebMvc.Middleware;
 
 namespace WebMvc.Controllers;
 
@@ -34,20 +38,22 @@ public sealed class PageController(
     BreadcrumbResolutionService breadcrumbResolver,
     ResponsiveImageResolutionService responsiveImageResolver,
     IPreviewTokenValidator previewTokenService,
-    ILanguageDirectory languageDirectory) : BaseController
+    ILanguageDirectory languageDirectory,
+    PageCacheDependencies cacheDependencies,
+    PageCacheWarmer cacheWarmer,
+    ILogger<PageController> logger) : BaseController
 {
-    /// <summary>Evicted by <c>/api/cache/clear</c>, which the CMS calls after every successful change.</summary>
-    public const string OutputCacheTag = "pages";
 
     /// <summary>The output-cache policy for rendered pages — see Program.cs and <see cref="ListingQuery"/>.</summary>
     public const string OutputCachePolicy = "Pages";
 
-    // A rendered page is kept for an hour. That is only safe because it does not
-    // have to expire on its own: every successful CMS command asks the site to drop
-    // this tag (PublicSiteCacheInvalidationPipelineBehavior in the CMS), so an edit
-    // is live on the next request. The hour is the ceiling for the case where that
-    // call cannot get through. Of the query string, only the listing parameters are
-    // part of the key: they are the only part a page reacts to.
+    // A rendered page is kept for a day. That is only safe because it does not
+    // have to expire on its own: the CMS evicts the pages a change touches as soon
+    // as it is saved (PublicSiteCacheInvalidationPipelineBehavior there), by the
+    // PageCacheTags each response carries — a linked template's tag is on every page
+    // using it. The day is the ceiling for the case where that call cannot get
+    // through. Of the query string, only the listing parameters are part of the
+    // key: they are the only part a page reacts to.
     [OutputCache(PolicyName = OutputCachePolicy)]
     public async Task<IActionResult> Index(string? languageCode, string? slug, CancellationToken cancellationToken)
     {
@@ -95,18 +101,52 @@ public sealed class PageController(
                     : Redirect(redirect.Value.Url);
 
             // The query's error explains the real cause (no such page / exists but
-            // Draft / inactive) — surface it so logs and the debugger tell the truth.
-            // The visitor still just sees the 404 page.
-            throw NotFoundResource(result.Error.Description);
+            // Draft / inactive) — logged so the CMS log tells the truth. The visitor
+            // still just sees the 404 page.
+            return await NotFoundPageAsync(result.Error.Description);
         }
 
         ViewData["Lang"] = resolvedLanguageCode;
 
         // Resolve any "linked" template blocks embedded in the page content to their
         // current version — same-request, no caching, so edits propagate immediately.
-        await ResolveAndStoreHtmlAsync(result.Value, cancellationToken);
+        string? notFound = await ResolveAndStoreHtmlAsync(result.Value, cancellationToken);
+        if (notFound is not null)
+            return await NotFoundPageAsync(notFound);
+
+        cacheDependencies.Add(PageCacheTags.Page(result.Value.Id));
+        if (result.Value.PageGroupId is int group)
+            cacheDependencies.Add(PageCacheTags.Group(group));
+        TagCachedResponse();
+        cacheWarmer.RecordOrigin(Request);
 
         return View(result.Value);
+    }
+
+    /// <summary>
+    /// Answers a missing page without an exception: bots probe for hundreds of
+    /// addresses, and each used to cost a stack trace in the log and an uncached
+    /// render. The 404 is cached briefly (see <c>PageCachePolicy</c>) and dropped
+    /// as soon as a page changes, in case one now lives at that address.
+    /// </summary>
+    private async Task<IActionResult> NotFoundPageAsync(string reason)
+    {
+        logger.LogInformation("Not found: {Path} ({Reason})", Request.Path, reason);
+        await ErrorPages.RecordAsync(HttpContext, PublicAppLogLevel.Warning, reason, exception: null);
+
+        cacheDependencies.Add(PageCacheTags.NotFound);
+        await ErrorPages.RenderNotFoundAsync(HttpContext);
+        TagCachedResponse();
+        return new EmptyResult();
+    }
+
+    /// <summary>Puts what the page was built from on its cache entry, for the CMS to evict by.</summary>
+    private void TagCachedResponse()
+    {
+        if (HttpContext.Features.Get<IOutputCacheFeature>()?.Context is not { } cache)
+            return;
+        foreach (string tag in cacheDependencies.Tags)
+            cache.Tags.Add(tag);
     }
 
 
@@ -123,7 +163,8 @@ public sealed class PageController(
     /// reason (which the Result carries) to AppLogs on the way out.
     /// </para>
     /// </summary>
-    private async Task ResolveAndStoreHtmlAsync(PublicPageResponse page, CancellationToken cancellationToken)
+    /// <returns>Why the address has nothing at it, when it turns out to have nothing; otherwise null.</returns>
+    private async Task<string?> ResolveAndStoreHtmlAsync(PublicPageResponse page, CancellationToken cancellationToken)
     {
         Result<ResolvedTemplateContent> templates = await templateResolver.ResolveAsync(page.GjsHtml, cancellationToken);
         if (templates.IsFailure)
@@ -148,7 +189,7 @@ public sealed class PageController(
         // "?page=99" of a three-page list is an address with nothing at it. A 404 says
         // so; an empty 200 is a soft 404 that search engines index as a thin page.
         if (withListings.Value.Pagination is { IsOutOfRange: true })
-            throw NotFoundResource($"Listing page {withListings.Value.Pagination.Page} is past the last page ({withListings.Value.Pagination.TotalPages}).");
+            return $"Listing page {withListings.Value.Pagination.Page} is past the last page ({withListings.Value.Pagination.TotalPages}).";
 
         Result<string?> withAdjacent = await adjacentPageResolver.ResolveAsync(
             withListings.Value.Html, page.Id, cancellationToken);
@@ -198,6 +239,7 @@ public sealed class PageController(
         // the exclusions, it just carries every site code, which is the default.
         Result<HashSet<int>> excluded = await sender.Send(new GetPageSiteCodeExclusionsQuery(page.Id), cancellationToken);
         ViewData[SiteCodeExclusions.ViewDataKey] = excluded.IsSuccess ? excluded.Value : [];
+        return null;
     }
 
     private static Dictionary<string, string?> ToQueryDictionary(IQueryCollection query)
@@ -225,7 +267,9 @@ public sealed class PageController(
         ViewData["Lang"] = result.Value.LanguageCode;
         ViewData["IsPreview"] = true;
 
-        await ResolveAndStoreHtmlAsync(result.Value, cancellationToken);
+        string? notFound = await ResolveAndStoreHtmlAsync(result.Value, cancellationToken);
+        if (notFound is not null)
+            throw NotFoundResource(notFound);
 
         Response.Headers[HeaderNames.CacheControl] = "no-store";
 

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Application.Abstraction.Services;
 using SharedKernel.Concrete;
 using System.Data.Common;
+using SharedKernel.Content;
 
 namespace Application.Services;
 
@@ -16,7 +17,7 @@ namespace Application.Services;
 /// active language, the target is: this page's own translation (same PageGroup) if
 /// one exists, else the nearest ancestor's translation, else that language's homepage.
 /// </summary>
-public sealed class LanguageSwitcherResolutionService(IPublicReadDbContext db)
+public sealed class LanguageSwitcherResolutionService(IPublicReadDbContext db, PageCacheDependencies? dependencies = null)
 {
     private const string MarkerAttribute = "data-elevare-lang-slot";
 
@@ -131,8 +132,10 @@ public sealed class LanguageSwitcherResolutionService(IPublicReadDbContext db)
         PublicPage? cursor = startPage;
         while (cursor is not null)
         {
+            dependencies?.Add(PageCacheTags.PageInfo(cursor.Id));
             if (cursor.PageGroupId is not null)
             {
+                dependencies?.Add(PageCacheTags.Group(cursor.PageGroupId.Value));
                 string? sibling = await db.PageInfos
                     .Where(p => p.PageGroupId == cursor.PageGroupId
                         && p.LanguageId == targetLanguageId
@@ -155,6 +158,8 @@ public sealed class LanguageSwitcherResolutionService(IPublicReadDbContext db)
 
     private async Task<string?> FindHomeAsync(int languageId, CancellationToken cancellationToken)
     {
+        // Any page change evicts listings, the homepage's publishing included.
+        dependencies?.Add(PageCacheTags.Listing);
         return await db.PageInfos
             .Where(p => p.Slug == "home"
                 && p.ParentPageId == null

@@ -155,24 +155,35 @@ The site caches at two levels:
 
 | Level | What | Lifetime | Where |
 | --- | --- | --- | --- |
-| Rendered pages | The whole minified HTML response of `PageController.Index`, keyed by path plus the page-listing parameters (`page`, `tag`, `q` and their per-block variants — `ListingQuery`); any other query parameter (`utm_*`, `fbclid`) neither changes the page nor makes a new entry | 1 hour | ASP.NET Core output cache (in the Web process's memory), policy `Pages` |
+| Rendered pages | The whole minified HTML response of `PageController.Index`, keyed by path plus the page-listing parameters (`page`, `tag`, `q` and their per-block variants — `ListingQuery`); any other query parameter (`utm_*`, `fbclid`) neither changes the page nor makes a new entry | 24 hours (a 404: 5 minutes) | ASP.NET Core output cache (in the Web process's memory), policy `Pages` |
 | Lookups | Page by slug, site settings, site-code snippets | 30 seconds | `ICacheService` — Redis when configured, otherwise in-process memory |
 
-The hour is safe only because pages do not have to expire on their own. After every
-successful CMS command, `PublicSiteCacheInvalidationPipelineBehavior` asks
-`IPublicSiteCacheInvalidator` to clear the site; calls arriving within a second of each
-other (a bulk edit, a save made of several commands) go out as one
-`POST /api/cache/clear`. That endpoint, in order, empties `ICacheService`, refreshes
-the language and maintenance snapshots, and only then evicts the `pages` output-cache
-tag — so no request can slip in between and re-cache a page built from stale data.
+The day is safe only because pages do not have to expire on their own. Each rendered
+page is tagged with what it was built from (`PageCacheTags`): itself, every linked
+template it resolved, the pages its breadcrumb and language switcher name, its
+translation group, and `listing` / `media` when it lists pages or shows uploads. The
+resolvers record these as they read (`PageCacheDependencies`).
 
-It is deliberately every command rather than a list of content-changing ones: a page
-is built from pages, templates, media, site settings, site codes, languages, redirects
-and more, and a list would miss the next feature to be added. A command that changes
-nothing public costs one extra re-render. If the call cannot get through, the CMS logs
-a warning and the hour is the ceiling on staleness. Changes that bypass the CMS — a
-database restore, a manual SQL edit — need the "Clear cache" button on
-`/admin/cache`.
+On the CMS side, the database context classifies every entry it saves
+(`PublicSiteChangeClassifier`): a page's content evicts that page and the lists; its
+title or address also the pages naming it and any cached 404; a linked template every
+page using it; a note, task, user or form reply nothing at all. A table the classifier
+does not know, and site-wide data (settings, languages, site codes, redirects),
+clears everything. After each command `PublicSiteCacheInvalidationPipelineBehavior`
+hands what was saved to `IPublicSiteCacheInvalidator`, which folds calls arriving
+within a second into one: `POST /api/cache/evict` with the tags, or
+`POST /api/cache/clear` for everything. A command that succeeded without a save the
+context could see clears everything, since it may have changed the site some other way.
+
+Both endpoints empty `ICacheService` before evicting rendered pages, so no request can
+slip in between and re-cache a page built from stale data; `/clear` also refreshes the
+language and maintenance snapshots. Then `PageCacheWarmer` requests every published
+page from the process itself, with the host and scheme visitors use: whatever was
+evicted is rendered again before a visitor asks for it, and the rest answer from the
+cache. It does the same after start-up, once the first visitor has shown which address
+to warm for. If an eviction cannot get through, the CMS logs a warning and the day is
+the ceiling on staleness. Changes that bypass the CMS — a database restore, a manual
+SQL edit — need the "Clear cache" button on `/admin/cache`.
 
 A language is only routable when it is **both** active and published; see the
 Languages section of the [README](../README.md) for what those two flags mean.

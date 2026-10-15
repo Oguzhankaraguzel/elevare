@@ -21,6 +21,8 @@ using WebMvc.Middleware.Rules;
 using WebMvc.RateLimiting;
 using WebMvc.Routing;
 using WebOptimizer;
+using SharedKernel.Content;
+using WebMvc.Caching;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -166,21 +168,28 @@ builder.Services
 // ── Output Caching ─────────────────────────────────────────────────────────
 builder.Services.AddOutputCache(options =>
 {
-    // Rendered pages: an hour, evicted by tag on every CMS change (see PageController).
-    // The query string is not part of the key as a whole — the default would cache
-    // "?utm_source=…" and "?fbclid=…" as separate pages, one entry per shared link —
-    // only the listing parameters are (ListingQuery), because only they change what
-    // a page shows.
+    // Rendered pages: a day, evicted by tag as soon as the CMS saves something
+    // they were built from (see PageController and PageCacheTags). A 404 is kept
+    // for minutes (NotFoundCachePolicy). The query string is not part of the key
+    // as a whole — the default would cache "?utm_source=…" and "?fbclid=…" as
+    // separate pages, one entry per shared link — only the listing parameters are
+    // (ListingQuery), because only they change what a page shows.
     options.AddPolicy(PageController.OutputCachePolicy, policy => policy
-        .Expire(TimeSpan.FromHours(1))
-        .Tag(PageController.OutputCacheTag)
+        .Expire(TimeSpan.FromHours(24))
+        .Tag(PageCacheTags.All)
         .SetVaryByQuery(Array.Empty<string>())
         .VaryByValue(context => new KeyValuePair<string, string>(
             "listing",
-            ListingQuery.CacheKey(context.Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.ToString()))))));
+            ListingQuery.CacheKey(context.Request.Query.Select(kv => new KeyValuePair<string, string?>(kv.Key, kv.Value.ToString())))))
+        .AddPolicy<NotFoundCachePolicy>());
 });
 
-// ── Rate Limiting ────────────────────────────────────────────────────────────
+// Re-renders what an eviction dropped before a visitor asks for it (see PageCacheWarmer).
+builder.Services.AddHttpClient(PageCacheWarmer.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(30))
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false, UseCookies = false });
+builder.Services.AddSingleton<PageCacheWarmer>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<PageCacheWarmer>());
+
 // Applies to the /api/* endpoints only; see RateLimitPolicies for the reasoning.
 builder.Services.AddElevareRateLimiting(builder.Configuration);
 

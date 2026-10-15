@@ -27,7 +27,7 @@ namespace Application.Services;
 /// else in the URL is carried anywhere.
 /// </para>
 /// </summary>
-public sealed class PageListingResolutionService(IPublicReadDbContext db)
+public sealed class PageListingResolutionService(IPublicReadDbContext db, PageCacheDependencies? dependencies = null)
 {
     private const string MarkerClass = "elevare-page-listing";
     private const int MaxItemsPerPage = 100;
@@ -70,6 +70,7 @@ public sealed class PageListingResolutionService(IPublicReadDbContext db)
         if (markers.Count == 0)
             return Result.Success(new PageListingResolution(document.Body?.InnerHtml ?? html, null));
 
+        dependencies?.Add(PageCacheTags.Listing);
         var state = new ListingLinks(request.BasePath, ListingQuery.Filter(request.Query));
         var texts = ListingTexts.For(request.LanguageCode);
 

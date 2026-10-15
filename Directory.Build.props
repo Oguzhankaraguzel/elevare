@@ -1,5 +1,7 @@
 <Project>
   <PropertyGroup>
+    <!-- The release in CHANGELOG.md; the CMS sidebar shows it. -->
+    <Version>1.2.0</Version>
 
     <TargetFramework>net9.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
