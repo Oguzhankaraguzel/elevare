@@ -11,6 +11,14 @@
 
 name: elevare
 
+# Docker keeps a container's output in one JSON file that never stops growing.
+# Capped, so a long-running site cannot fill the disk with its own logs.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   db:
     # Pinned to match the postgresql-client major version Debian bookworm (the
@@ -30,6 +38,7 @@ services:
     # independently by its own policy on startup, not by re-running `compose up`,
     # so depends_on's ordering never gets a chance to matter.
     restart: unless-stopped
+    logging: *default-logging
     healthcheck:
       # The apps run migrations on startup, so they must not start against a
       # server that is still booting — this gate is what makes `up` reliable.
@@ -45,6 +54,7 @@ services:
     # serves fine without one. Kept here so the option is a setting change rather
     # than an infrastructure project.
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
@@ -156,6 +166,7 @@ services:
       - cms-keys:/app/keys
       - db-backups:/app/Backups
     restart: unless-stopped
+    logging: *default-logging
 
   web:
     build:
@@ -225,6 +236,7 @@ services:
       # it never writes them.
       - cms-uploads:/app/wwwroot/uploads:ro
     restart: unless-stopped
+    logging: *default-logging
 
 volumes:
   db-data:

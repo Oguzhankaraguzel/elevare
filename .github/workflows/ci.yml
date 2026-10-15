@@ -131,4 +131,9 @@ jobs:
             git fetch origin master
             git reset --hard origin/master
             docker compose up -d --build
+            # Every build leaves its intermediate layers behind, and nothing removed
+            # them: the server's 90 GB disk filled up after a day of deploys and took
+            # the site down with it. The images in use stay; a day of build cache is
+            # kept so the next deploy still restores from it.
             docker image prune -f
+            docker builder prune -af --filter "until=24h"
