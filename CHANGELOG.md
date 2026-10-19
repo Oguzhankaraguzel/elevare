@@ -30,6 +30,12 @@ Notable changes to Elevare. The format follows
 - **A missing page is answered without an exception**: one log line instead of a
   stack trace, and the 404 is cached for five minutes.
 
+### Fixed
+
+- **Deploys no longer fill the server's disk.** Each build left its intermediate
+  layers behind and nothing removed them; the deploy now prunes build cache older
+  than a day, and container logs are capped at 3 × 10 MB per service.
+
 ### Security
 
 - Microsoft ASP.NET Core and EF Core packages updated to 9.0.21 (CVE-2026-96230 in
