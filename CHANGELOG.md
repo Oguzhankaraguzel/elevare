@@ -18,7 +18,9 @@ Notable changes to Elevare. The format follows
   signed preview in a hidden frame; the site sends back the finished page, which
   is measured inside the editor at desktop, tablet and phone widths with its
   scripts turned off, and every finding still locates its element in the editor.
-  Colour contrast is checked in both the light and the dark theme. When no
+  Colour contrast is checked in both the light and the dark theme. What scripts
+  add after the page has loaded (the cookie banner, a captcha badge) is left out,
+  since it is not the page's content. When no
   preview can be had, the canvas is analysed as before and the report says so.
 - **A knowledge base entry on the SEO analysis** — what it reads, how the score is
   worked out, when it runs and how to read the findings — linked from the report.
