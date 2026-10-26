@@ -3314,6 +3314,24 @@
 	<data name="SeoAnalyzer_SeverityNote" xml:space="preserve">
 	  <value>The score is here to nudge the page toward perfect. A ✕ (fail) is what matters — fix these first. A ! (warning) is a small improvement; you do not have to clear every one.</value>
 	</data>
+	<data name="SeoAnalyzer_KbLink" xml:space="preserve">
+	  <value>How the analysis and the score work</value>
+	</data>
+	<data name="SeoAnalyzer_SourcePreview" xml:space="preserve">
+	  <value>Read from the page as the public site renders it (its preview), at desktop, tablet and phone widths.</value>
+	</data>
+	<data name="SeoAnalyzer_SourceCanvas" xml:space="preserve">
+	  <value>The preview could not be loaded, so the editor canvas was read instead. Some findings may be wrong: the site fills in addresses, image details and linked templates while rendering.</value>
+	</data>
+	<data name="SeoAnalyzer_ThemeLight" xml:space="preserve">
+	  <value>light theme</value>
+	</data>
+	<data name="SeoAnalyzer_ThemeDark" xml:space="preserve">
+	  <value>dark theme</value>
+	</data>
+	<data name="SeoAnalyzer_ContrastThemes" xml:space="preserve">
+	  <value>In: {themes}.</value>
+	</data>
 	<data name="SeoAnalyzer_CatContent" xml:space="preserve">
 		<value>Content</value>
 	</data>
@@ -5980,5 +5998,35 @@
   </data>
   <data name="Settings_SenderFromServer" xml:space="preserve">
     <value>Empty: {0} from the server's configuration is used</value>
+  </data>
+  <data name="KB_SeoAnalysisTitle" xml:space="preserve">
+    <value>How the SEO analysis works</value>
+  </data>
+  <data name="KB_SeoAnalysisIntro" xml:space="preserve">
+    <value>The SEO button in the page editor checks the page under four headings: content, technical, accessibility and responsive. The score starts at 100 and every problem found is taken off it.</value>
+  </data>
+  <data name="KB_SeoAnalysisReadsSubtitle" xml:space="preserve">
+    <value>What it reads</value>
+  </data>
+  <data name="KB_SeoAnalysisReadsBody" xml:space="preserve">
+    <value>Not the editor's canvas but the page's preview: the site renders the page as it would publish it — the language switcher's and breadcrumb's addresses, alt text and image sizes from the media library, the linked templates' current content — and sends that back to the editor. It is laid out inside the editor without running its scripts and measured at desktop (1366 px), tablet (768 px) and phone (375 px) widths; colour contrast is checked in both the light and the dark theme. Each finding's Locate button takes you to the element in the editor. If no preview can be had (the public site address is not set, or the site is not answering), the canvas is read instead and the report says so; things the site fills in while rendering can then show up as missing.</value>
+  </data>
+  <data name="KB_SeoAnalysisScoreSubtitle" xml:space="preserve">
+    <value>How the score is worked out</value>
+  </data>
+  <data name="KB_SeoAnalysisScoreBody" xml:space="preserve">
+    <value>A ✕ (fail) takes off its full weight — 10 for a missing H1, 8 for a missing meta description, 4 plus 3 per element (at most 16) for poor contrast, and so on. Each ! (warning) takes off at most 3 points, and all warnings together at most 20, so a page whose only findings are warnings never drops below 80. An empty page scores 0. 80 and above shows green, 50 to 79 amber, below 50 red.</value>
+  </data>
+  <data name="KB_SeoAnalysisWhenSubtitle" xml:space="preserve">
+    <value>When it runs</value>
+  </data>
+  <data name="KB_SeoAnalysisWhenBody" xml:space="preserve">
+    <value>Once when the editor opens, and again from that preview whenever the page's settings change. After you change the content, opening the report takes a new preview; Re-analyze always does. A preview is written to the page's draft columns only and never changes the published page.</value>
+  </data>
+  <data name="KB_SeoAnalysisReadSubtitle" xml:space="preserve">
+    <value>Reading the findings</value>
+  </data>
+  <data name="KB_SeoAnalysisReadBody" xml:space="preserve">
+    <value>Fix the ✕ rows first; warnings are suggestions, and you do not have to clear every one. A finding inside a linked template (the shared header or footer) cannot be fixed from the page — the report notes it; open the template instead. The title length is judged with the site's title suffix included, as it appears in search results.</value>
   </data>
 </root>

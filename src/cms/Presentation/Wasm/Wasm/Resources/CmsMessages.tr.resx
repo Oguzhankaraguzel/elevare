@@ -3314,6 +3314,24 @@
 	<data name="SeoAnalyzer_SeverityNote" xml:space="preserve">
 	  <value>Puan, sayfayı mükemmele yaklaştırmak için burada. Asıl önemli olan ✕ (hata) satırları — önce onları düzeltin. ! (uyarı) küçük bir iyileştirmedir; hepsini gidermek zorunda değilsiniz.</value>
 	</data>
+	<data name="SeoAnalyzer_KbLink" xml:space="preserve">
+	  <value>Analiz ve puan nasıl çalışır?</value>
+	</data>
+	<data name="SeoAnalyzer_SourcePreview" xml:space="preserve">
+	  <value>Sayfa, sitenin oluşturduğu hâliyle (önizlemesiyle) masaüstü, tablet ve telefon genişliğinde incelendi.</value>
+	</data>
+	<data name="SeoAnalyzer_SourceCanvas" xml:space="preserve">
+	  <value>Önizleme alınamadığı için editör görünümü incelendi. Bazı bulgular yanlış olabilir: site; adresleri, görsel bilgilerini ve bağlı şablonları sayfayı oluştururken dolduruyor.</value>
+	</data>
+	<data name="SeoAnalyzer_ThemeLight" xml:space="preserve">
+	  <value>açık tema</value>
+	</data>
+	<data name="SeoAnalyzer_ThemeDark" xml:space="preserve">
+	  <value>koyu tema</value>
+	</data>
+	<data name="SeoAnalyzer_ContrastThemes" xml:space="preserve">
+	  <value>Etkilenen tema: {themes}.</value>
+	</data>
 	<data name="SeoAnalyzer_CatContent" xml:space="preserve">
 		<value>İçerik</value>
 	</data>
@@ -5980,5 +5998,35 @@
   </data>
   <data name="Settings_SenderFromServer" xml:space="preserve">
     <value>Boş: sunucu ayarındaki {0} kullanılıyor</value>
+  </data>
+  <data name="KB_SeoAnalysisTitle" xml:space="preserve">
+    <value>SEO analizi nasıl çalışır?</value>
+  </data>
+  <data name="KB_SeoAnalysisIntro" xml:space="preserve">
+    <value>Sayfa düzenleyicideki SEO düğmesi sayfayı dört başlıkta inceler: içerik, teknik, erişilebilirlik ve responsive. Puan 100'den başlar, bulunan her sorun puandan düşülür.</value>
+  </data>
+  <data name="KB_SeoAnalysisReadsSubtitle" xml:space="preserve">
+    <value>Neyi inceler?</value>
+  </data>
+  <data name="KB_SeoAnalysisReadsBody" xml:space="preserve">
+    <value>Editördeki tuvali değil, sayfanın önizlemesini. Site sayfayı yayınlayacağı gibi oluşturur (dil düğmesi ve sayfa yolu adresleri, medya kütüphanesinden gelen alt metin ve görsel boyutları, bağlı şablonların güncel hâli) ve bu hâli editöre geri gönderir. Sayfa, script'leri çalıştırılmadan editörün içinde masaüstü (1366 px), tablet (768 px) ve telefon (375 px) genişliğinde ölçülür; renk kontrastı hem açık hem koyu temada denetlenir. Her bulgudaki Bul düğmesi sizi editördeki öğeye götürür. Önizleme alınamazsa (site adresi tanımlı değilse ya da site o an yanıt vermiyorsa) tuval incelenir ve rapor bunu yazar; bu durumda sitenin sayfayı oluştururken doldurduğu şeyler eksik görünebilir.</value>
+  </data>
+  <data name="KB_SeoAnalysisScoreSubtitle" xml:space="preserve">
+    <value>Puan nasıl hesaplanır?</value>
+  </data>
+  <data name="KB_SeoAnalysisScoreBody" xml:space="preserve">
+    <value>✕ işaretli hatalar kendi ağırlıkları kadar puan düşürür: H1 yoksa 10, meta açıklama yoksa 8, renk kontrastı yetersizse 4 artı öğe başına 3 (en fazla 16) gibi. ! işaretli uyarıların her biri en fazla 3 puan düşürür ve bütün uyarılar birlikte en fazla 20 puan düşürebilir; yani yalnızca uyarısı olan bir sayfa 80'in altına inmez. Boş bir sayfanın puanı 0'dır. 80 ve üstü yeşil, 50 ile 79 arası turuncu, 50'nin altı kırmızı gösterilir.</value>
+  </data>
+  <data name="KB_SeoAnalysisWhenSubtitle" xml:space="preserve">
+    <value>Ne zaman çalışır?</value>
+  </data>
+  <data name="KB_SeoAnalysisWhenBody" xml:space="preserve">
+    <value>Editör açıldığında bir kez, sayfa ayarları değiştikçe de aynı önizleme üzerinden yeniden. İçeriği değiştirdiyseniz raporu açtığınızda yeni bir önizleme alınır; Yeniden Analiz Et her zaman yenisini alır. Önizleme yalnızca sayfanın taslak alanlarına yazılır, yayındaki sayfayı hiç değiştirmez.</value>
+  </data>
+  <data name="KB_SeoAnalysisReadSubtitle" xml:space="preserve">
+    <value>Bulgular nasıl okunmalı?</value>
+  </data>
+  <data name="KB_SeoAnalysisReadBody" xml:space="preserve">
+    <value>Önce ✕ satırlarını düzeltin. Uyarılar iyileştirme önerisidir, hepsini kapatmak zorunda değilsiniz. Bağlı bir şablonun (paylaşılan üst menü ya da alt bilgi) içindeki bir sorun sayfadan düzeltilemez; rapor bunu not olarak gösterir, düzeltmek için şablonu açın. Sayfa başlığının uzunluğu, arama sonuçlarında göründüğü gibi sitenin başlık son ekiyle birlikte hesaplanır.</value>
   </data>
 </root>

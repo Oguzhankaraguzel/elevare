@@ -206,6 +206,13 @@
 
     @await RenderSectionAsync("Scripts", required: false)
 
+    @* ── SEO analysis: a preview the CMS's analyzer opened sends it the page ── *@
+    @* ── as rendered here (see PreviewAnalysis). Only on such a preview.     ── *@
+    @if (ViewData["PreviewAnalysisOrigin"] is string analysisOrigin)
+    {
+        <script src="~/js/elevare-preview-analysis.js" asp-append-version="true" data-origin="@analysisOrigin" defer></script>
+    }
+
     @* ── Structured data (JSON-LD) ─────────────────────────────────────────── *@
     @* Last thing in the body: it is read by crawlers, never by the layout engine *@
     @* or the visitor, so it has no business competing with content for the first *@

@@ -5,6 +5,7 @@ using System.Text;
 using Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using SharedKernel.Content;
 using Shouldly;
 
 namespace ArchitectureTests.Security;
@@ -114,5 +115,33 @@ public sealed class PreviewTokenValidatorTests
     {
         CreateValidator().TryValidate(token, out int pageId).ShouldBeFalse();
         pageId.ShouldBe(0);
+    }
+    [Fact]
+    public void The_analysis_origin_is_read_back_from_the_token()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        Claim[] claims =
+        [
+            new(JwtRegisteredClaimNames.Sub, "42"),
+            new(PreviewAnalysis.OriginClaim, "https://cms.example.com"),
+        ];
+        string token = new JwtSecurityTokenHandler().WriteToken(
+            new JwtSecurityToken(claims: claims, expires: DateTime.UtcNow.AddMinutes(15), signingCredentials: credentials));
+
+        bool ok = CreateValidator().TryValidate(token, out int pageId, out string? origin);
+
+        ok.ShouldBeTrue();
+        pageId.ShouldBe(42);
+        origin.ShouldBe("https://cms.example.com");
+    }
+
+    [Fact]
+    public void An_ordinary_preview_token_has_no_analysis_origin()
+    {
+        string token = MakeToken(42, DateTimeOffset.UtcNow.AddMinutes(15));
+
+        CreateValidator().TryValidate(token, out _, out string? origin).ShouldBeTrue();
+        origin.ShouldBeNull();
     }
 }

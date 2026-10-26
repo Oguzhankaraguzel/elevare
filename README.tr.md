@@ -48,6 +48,8 @@ oluşturur ve veriyi CMS yazar; site yalnızca okur.**
 - **SEO araçları.** Sayfa bazında meta etiketleri ve yapısal veri, panelden
   düzenlenebilen `robots.txt` ve `llms.txt`, otomatik oluşturulan site haritası.
   Yönlendirmeler ekranı ölü hedefleri ve döngüleri kendiliğinden tespit eder.
+  Editördeki SEO analizi sayfayı sitenin oluşturduğu hâliyle (önizlemesiyle)
+  masaüstü, tablet ve telefon genişliğinde inceleyip puanlar.
 - **Sosyal medya paylaşımı.** Her sayfa için Open Graph etiketlerinin tamamı (tüm
   `og:type` türleri ve bunlara özel alanlar; görsel, video ve ses ayrıntıları; dil)
   ve X'in dört kart türü. Paylaşım kartının nasıl görüneceği editörde önizlenir.

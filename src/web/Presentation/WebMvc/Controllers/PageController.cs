@@ -256,7 +256,7 @@ public sealed class PageController(
     [HttpGet("elevare-preview")]
     public async Task<IActionResult> Preview(string? token, CancellationToken cancellationToken)
     {
-        if (!previewTokenService.TryValidate(token, out int pageId))
+        if (!previewTokenService.TryValidate(token, out int pageId, out string? analysisOrigin))
             throw NotFoundResource("Preview token is missing, malformed, expired, or has an invalid signature.");
 
         Result<PublicPageResponse> result = await sender.Send(new GetPreviewPageByIdQuery(pageId), cancellationToken);
@@ -272,6 +272,17 @@ public sealed class PageController(
             throw NotFoundResource(notFound);
 
         Response.Headers[HeaderNames.CacheControl] = "no-store";
+
+        // The CMS's SEO analyzer frames this preview and reads the rendered page
+        // back (see PreviewAnalysis). Only the origin the signed token names may
+        // frame it, and only that origin is sent the page; an ordinary preview link
+        // keeps the site-wide "frame-ancestors 'self'".
+        if (analysisOrigin is not null)
+        {
+            Response.Headers["Content-Security-Policy"] = $"frame-ancestors 'self' {analysisOrigin}";
+            Response.Headers.Remove("X-Frame-Options");
+            ViewData["PreviewAnalysisOrigin"] = analysisOrigin;
+        }
 
         return View("Index", result.Value);
     }

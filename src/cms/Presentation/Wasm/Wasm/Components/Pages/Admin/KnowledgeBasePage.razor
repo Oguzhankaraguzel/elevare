@@ -38,6 +38,23 @@
     <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_LanguageTemplatesBody"]</p>
 </div>
 
+@* ── SEO analysis ─────────────────────────────────────────────────────────────
+   What the page editor's SEO report reads and how it scores. Linked from the
+   report itself ("How the analysis and the score work"). The numbers here are
+   the analyzer's own (elevare-seo.js) — change them together. *@
+<div class="cms-card" style="margin-bottom:16px" id="seo-analysis">
+    <h4 style="margin-top:0"><i class="bi bi-speedometer2"></i> @L["KB_SeoAnalysisTitle"]</h4>
+    <p style="color:var(--cms-text-muted)">@L["KB_SeoAnalysisIntro"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SeoAnalysisReadsSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_SeoAnalysisReadsBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SeoAnalysisScoreSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_SeoAnalysisScoreBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SeoAnalysisWhenSubtitle"]</p>
+    <p style="color:var(--cms-text-muted)">@L["KB_SeoAnalysisWhenBody"]</p>
+    <p style="font-weight:600;margin-bottom:4px">@L["KB_SeoAnalysisReadSubtitle"]</p>
+    <p style="color:var(--cms-text-muted);margin-bottom:0">@L["KB_SeoAnalysisReadBody"]</p>
+</div>
+
 @* ── Templates: linked vs copied ─────────────────────────────────────────────
    Written after a linked template got edited on the homepage and the edit went
    nowhere: the public site and the editor both replace a linked wrapper's

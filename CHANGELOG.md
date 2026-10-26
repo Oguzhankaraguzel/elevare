@@ -6,6 +6,38 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-26
+
+### Added
+
+- **The SEO analysis reads the page the public site renders, not the editor's
+  canvas.** The site fills in a good deal while rendering — the language switcher's
+  and breadcrumb's addresses, alt text, sizes and srcset from the media library,
+  the linked templates' current content — so judging the canvas reported things
+  as missing that are there on the real page. The analyzer now opens the page's
+  signed preview in a hidden frame; the site sends back the finished page, which
+  is measured inside the editor at desktop, tablet and phone widths with its
+  scripts turned off, and every finding still locates its element in the editor.
+  Colour contrast is checked in both the light and the dark theme. What scripts
+  add after the page has loaded (the cookie banner, a captcha badge) is left out,
+  since it is not the page's content. When no
+  preview can be had, the canvas is analysed as before and the report says so.
+- **A knowledge base entry on the SEO analysis** — what it reads, how the score is
+  worked out, when it runs and how to read the findings — linked from the report.
+
+### Changed
+
+- Only a preview link made for the analyzer can be framed, and only by the CMS
+  origin its signed token names; an ordinary preview link stays unframeable.
+- On the canvas, the links the site fills in while rendering are no longer
+  reported as having no destination, and the breadcrumb step for the current
+  page never is.
+- The code block's copy button is at least 24 pixels tall, the minimum tap target.
+- The deploy job waits up to 30 minutes for the server's build instead of the SSH
+  action's default 10, which a build from a pruned cache can overrun.
+- The SEO report waits for an analysis already running instead of ignoring the
+  click.
+
 ## [1.2.0] - 2026-10-14
 
 ### Changed

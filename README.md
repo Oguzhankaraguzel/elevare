@@ -38,7 +38,8 @@ schema and writes; the site reads.**
   translation matrix on the Pages screen.
 - **SEO tooling**: per-page meta and structured data, editable `robots.txt` and
   `llms.txt`, a generated sitemap, and redirect management that reports dead targets
-  and loops.
+  and loops. The editor's SEO analysis reads the page as the public site renders it
+  (its preview), at desktop, tablet and phone widths, and scores it.
 - **Social sharing**: the full Open Graph vocabulary per page — every `og:type` with
   its type-specific properties, image/video/audio details, locale — and all four X
   card types, with a preview of the share card in the editor.

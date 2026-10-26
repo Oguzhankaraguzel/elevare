@@ -119,6 +119,10 @@ window.elevareSeoAnalyzer = (function () {
 .elevare-seo-legend{margin:0 0 12px;padding:8px 12px;background:var(--cms-accent-light,rgba(217,119,6,.07));border:1px solid var(--seo-border);border-radius:8px;font-size:12px;line-height:1.5;color:var(--cms-text-muted,#6b7280);}
 .elevare-seo-locate{background:none;border:1px solid var(--seo-border);color:var(--seo-accent);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;flex-shrink:0;font-weight:600;}
 .elevare-seo-locate:hover{border-color:var(--seo-accent);}
+.elevare-seo-kb{display:inline-block;margin-left:4px;color:var(--seo-accent);font-weight:600;text-decoration:none;}
+.elevare-seo-kb:hover{text-decoration:underline;}
+.elevare-seo-source{margin:0 0 12px;font-size:12px;line-height:1.5;color:var(--seo-muted);}
+.elevare-seo-source.canvas{color:var(--seo-warn);}
 .elevare-seo-loading{display:flex;align-items:center;justify-content:center;gap:12px;padding:48px 12px;color:var(--cms-text-muted,#6b7280);font-size:14px;}
 .elevare-seo-spinner{width:26px;height:26px;border:3px solid var(--cms-border,#e5e7eb);border-top-color:var(--cms-accent,#2563eb);border-radius:50%;animation:elevareSpin .8s linear infinite;}
 @keyframes elevareSpin{to{transform:rotate(360deg);}}
@@ -246,19 +250,163 @@ window.elevareSeoAnalyzer = (function () {
             dotNetRef?.invokeMethodAsync('OnSeoScoreUpdated', score).catch(() => { });
         }
 
-        function collect() {
-            const wrapper = editor.getWrapper();
+        // ------------------------------------------------------------
+        // WHAT IS ANALYSED: the public site's preview, or the canvas
+        //
+        // The canvas is not the page a visitor gets. The site fills in much of it
+        // while rendering — the language switcher's and breadcrumb's addresses,
+        // image alt/size/srcset from the media library, the linked templates'
+        // current content — so judging the canvas reported "missing" things that
+        // are there on the real page. The analysis therefore reads the page's
+        // signed preview: the site renders it through its own pipeline and posts
+        // the finished document back (elevare-preview-analysis.js on the site,
+        // PreviewAnalysis in SharedKernel). That document is laid out here in a
+        // sandboxed, script-less frame on this origin, measured at each device
+        // width, and every finding is tied back to the editor's component by id.
+        // When no preview can be had — no public site address, the site down — the
+        // canvas is analysed as before and the report says so.
+        // ------------------------------------------------------------
+        const SNAPSHOT_TIMEOUT_MS = 20000;
+        const PREVIEW_DEVICES = [
+            { key: 'desktop', label: 'Desktop', width: 1366, height: 900 },
+            { key: 'tablet', label: 'Tablet', width: 768, height: 1024 },
+            { key: 'mobile', label: 'Mobile portrait', width: 375, height: 812 }
+        ];
+        state.preview = null;        // { frame, idMap } of the last snapshot
+        state.contentDirty = true;   // the canvas changed since that snapshot
+        editor.on('update', () => { state.contentDirty = true; });
+
+        function canvasCompByEl() {
             const compByEl = new Map();
             (function walk(c) {
                 const el = c.getEl && c.getEl();
                 if (el && el.nodeType === 1) compByEl.set(el, c);
                 c.components().forEach(walk);
-            })(wrapper);
+            })(editor.getWrapper());
+            return compByEl;
+        }
+
+        function collect() {
+            if (state.source === 'preview' && state.preview) {
+                const fdoc = state.preview.frame.contentDocument;
+                const idMap = state.preview.idMap;
+                // Same shape as the canvas map: findComp walks up from an element
+                // and asks for its component; here an element is matched by id.
+                const compByEl = { get: (el) => (el && el.id ? idMap.get(el.id) : undefined) };
+                return { compByEl, doc: fdoc, body: fdoc.body };
+            }
             return {
-                compByEl,
+                compByEl: canvasCompByEl(),
                 doc: editor.Canvas.getDocument(),
                 body: editor.Canvas.getBody()
             };
+        }
+
+        function editorIdMap() {
+            const map = new Map();
+            (function walk(c) {
+                const id = c.getId && c.getId();
+                if (id && !map.has(id)) map.set(id, c);
+                c.components().forEach(walk);
+            })(editor.getWrapper());
+            return map;
+        }
+
+        function fetchSnapshot(url) {
+            return new Promise((resolve) => {
+                let target;
+                try { target = new URL(url).origin; } catch (e) { resolve(null); return; }
+                const f = document.createElement('iframe');
+                f.setAttribute('aria-hidden', 'true');
+                f.tabIndex = -1;
+                f.style.cssText = 'position:fixed;left:-20000px;top:0;width:1366px;height:900px;border:0;visibility:hidden;';
+                let done = false;
+                const finish = (v) => {
+                    if (done) return;
+                    done = true;
+                    window.removeEventListener('message', onMessage);
+                    clearTimeout(timer);
+                    f.remove();
+                    resolve(v);
+                };
+                const onMessage = (e) => {
+                    if (e.origin !== target || e.source !== f.contentWindow) return;
+                    const d = e.data;
+                    if (d && d.type === 'elevare-seo-snapshot' && typeof d.html === 'string') finish(d);
+                };
+                window.addEventListener('message', onMessage);
+                const timer = setTimeout(() => finish(null), SNAPSHOT_TIMEOUT_MS);
+                f.src = url;
+                document.body.appendChild(f);
+            });
+        }
+
+        async function buildAnalysisFrame(snap) {
+            const d = new DOMParser().parseFromString(snap.html, 'text/html');
+            // Nothing from the page runs here: the frame is sandboxed without
+            // scripts, and the scripts are taken out besides.
+            d.querySelectorAll('script:not([type="application/ld+json"]), meta[http-equiv]').forEach((n) => n.remove());
+            // Entrance animations hide their targets until scrolled to, armed by
+            // this class; unarmed, everything shows as it does once revealed.
+            d.documentElement.classList.remove('elevare-anim-ready');
+            const base = d.createElement('base');
+            base.href = snap.url;
+            d.head.insertBefore(base, d.head.firstChild);
+            const still = d.createElement('style');
+            still.textContent = '*,*::before,*::after{transition:none!important;animation:none!important;}';
+            d.head.appendChild(still);
+
+            const f = document.createElement('iframe');
+            f.setAttribute('sandbox', 'allow-same-origin');
+            f.setAttribute('aria-hidden', 'true');
+            f.tabIndex = -1;
+            f.style.cssText = 'position:fixed;left:-20000px;top:0;width:1366px;height:900px;border:0;';
+            document.body.appendChild(f);
+            await new Promise((r) => { f.onload = () => r(); f.srcdoc = '<!doctype html>' + d.documentElement.outerHTML; });
+            try { await Promise.race([f.contentDocument.fonts.ready, wait(3000)]); } catch (e) { }
+            await wait(150);
+            return f;
+        }
+
+        // A fresh preview of the canvas as it is now, or null when none can be had.
+        async function loadPreview() {
+            if (!dotNetRef) return null;
+            let url = null;
+            try { url = await dotNetRef.invokeMethodAsync('PrepareSeoPreview'); } catch (e) { url = null; }
+            if (!url) return null;
+            const snap = await fetchSnapshot(url);
+            if (!snap) return null;
+            const frame = await buildAnalysisFrame(snap);
+            return { frame, idMap: editorIdMap() };
+        }
+
+        // Decides what the next analysis reads. A new snapshot is taken when asked
+        // for (Re-analyze, or opening the report after the canvas changed) or when
+        // there is none yet; a settings change alone re-reads the last one.
+        async function chooseSource(freshSnapshot) {
+            if (freshSnapshot || !state.preview) {
+                const next = await loadPreview();
+                if (next) {
+                    if (state.preview) state.preview.frame.remove();
+                    state.preview = next;
+                    state.contentDirty = false;
+                    state.lastMobile = null;
+                    state.lastViewportImages = null;
+                }
+            }
+            state.source = state.preview ? 'preview' : 'canvas';
+        }
+
+        async function setFrameSize(device) {
+            const f = state.preview.frame;
+            f.style.width = device.width + 'px';
+            f.style.height = device.height + 'px';
+            const doc = f.contentDocument;
+            for (let j = 0; j < 10; j++) {
+                await wait(40);
+                if (doc.documentElement.clientWidth === device.width || Math.abs(doc.documentElement.clientWidth - device.width) <= 20) break;
+            }
+            await wait(60);
         }
         function findComp(el, compByEl) {
             let n = el;
@@ -308,7 +456,33 @@ window.elevareSeoAnalyzer = (function () {
         // ------------------------------------------------------------
         // DEVICE-BASED MOBILE OVERFLOW TEST
         // ------------------------------------------------------------
+        // Elements reaching past the right (or left) edge of the viewport.
+        function overflowOffenders(body, cw) {
+            const offenders = [];
+            const els = body.querySelectorAll('*');
+            for (let i = 0; i < els.length && i < SCAN_CAP; i++) {
+                const r = els[i].getBoundingClientRect();
+                if (r.width > 0 && (r.right > cw + 4 || r.left < -4)) offenders.push(els[i]);
+                if (offenders.length >= 12) break;
+            }
+            return offenders;
+        }
+
         async function measureMobileOverflow(compByEl) {
+            if (state.source === 'preview' && state.preview) {
+                const mobile = PREVIEW_DEVICES[PREVIEW_DEVICES.length - 1];
+                const doc = state.preview.frame.contentDocument;
+                try {
+                    await setFrameSize(mobile);
+                    const cw = doc.documentElement.clientWidth;
+                    const overflow = doc.documentElement.scrollWidth > cw + 4;
+                    return { overflow, comps: overflow ? mapComps(overflowOffenders(doc.body, cw), compByEl) : [], width: cw };
+                } catch (e) {
+                    return null;
+                } finally {
+                    await setFrameSize(PREVIEW_DEVICES[0]);
+                }
+            }
             const dm = editor.Devices || editor.DeviceManager;
             if (!dm || !dm.getAll) return null;
             let name = null;
@@ -340,18 +514,7 @@ window.elevareSeoAnalyzer = (function () {
 
                 const cw = doc.documentElement.clientWidth;
                 const overflow = body.scrollWidth > cw + 4;
-                let comps = [];
-                if (overflow) {
-                    const offenders = [];
-                    const els = body.querySelectorAll('*');
-                    for (let i = 0; i < els.length && i < SCAN_CAP; i++) {
-                        const el = els[i];
-                        const r = el.getBoundingClientRect();
-                        if (r.width > 0 && (r.right > cw + 4 || r.left < -4)) offenders.push(el);
-                        if (offenders.length >= 12) break;
-                    }
-                    comps = mapComps(offenders, compByEl);
-                }
+                const comps = overflow ? mapComps(overflowOffenders(body, cw), compByEl) : [];
                 return { overflow, comps, width: cw };
             } catch (e) {
                 return null;
@@ -373,7 +536,77 @@ window.elevareSeoAnalyzer = (function () {
         // ------------------------------------------------------------
         const DEVICE_LABELS = { desktop: /desktop/i, tablet: /tablet/i, mobile: /mobile/i };
 
+        // Which of the page's images are painted in the first screen at this size,
+        // and which only after scrolling — the half each loading check needs.
+        function classifyImages(doc, body, vh, vw) {
+            const win = doc.defaultView;
+            const imgs = Array.prototype.slice.call(body.querySelectorAll('img'));
+            // An image is "above the fold" only when it is actually painted
+            // in the initial viewport: inside it BOTH vertically and
+            // horizontally, and hidden by neither itself nor an ancestor. A
+            // carousel lays its slides out in a row and shows one at a time —
+            // the others are shifted out and clipped, or faded to opacity:0.
+            // The old vertical-only test counted every slide as visible, so
+            // every slide but the first was flagged "above-fold lazy"; making
+            // them all eager then tripped the multiple-eager warning, leaving
+            // no setting that passed. Now only the shown slide counts.
+            const notHidden = (start) => {
+                for (let n = start; n && n !== doc.documentElement; n = n.parentElement) {
+                    const cs = win.getComputedStyle(n);
+                    if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) return false;
+                }
+                return true;
+            };
+            const renderedInViewport = (img) => {
+                const slidesRow = img.closest && img.closest('.el-slides');
+                if (slidesRow) {
+                    // A carousel shows only its first slide when the published
+                    // page loads — whatever slide the editor happens to sit on
+                    // now. So only the first slide's image can be above the
+                    // fold, and it is judged by the SLIDER's box, not its own:
+                    // the editor may have slid the track sideways, putting the
+                    // first slide's image off-screen (x < 0) even though on load
+                    // it sits at x=0. That makes the advice deterministic and
+                    // match the real LCP — first slide eager, the rest lazy.
+                    let slide = img;
+                    while (slide && slide.parentElement !== slidesRow) slide = slide.parentElement;
+                    if (slide && slide !== slidesRow.firstElementChild) return false;
+                    const sr = slidesRow.getBoundingClientRect();
+                    return sr.height > 1 && sr.bottom > 0 && sr.top < vh && notHidden(slidesRow);
+                }
+                const r = img.getBoundingClientRect();
+                if (r.width <= 1 || r.height <= 1) return false;
+                if (!(r.bottom > 0 && r.top < vh)) return false;   // vertical
+                if (!(r.right > 0 && r.left < vw)) return false;   // horizontal
+                return notHidden(img);
+            };
+            const aboveFold = [], belowFold = [];
+            imgs.forEach((img) => (renderedInViewport(img) ? aboveFold : belowFold).push(img));
+            return {
+                lazyAboveFold: aboveFold.filter((i) => i.getAttribute('loading') === 'lazy'),
+                // Same fix as the multipleEager check below: a below-fold <img>
+                // with no loading attribute renders eager by browser default, same
+                // as one that says so explicitly. A carousel's off-screen slides land
+                // here too, which is correct: they SHOULD be lazy.
+                eagerBelowFold: belowFold.filter((i) => i.getAttribute('loading') !== 'lazy')
+            };
+        }
+
         async function measureViewportImageLoading() {
+            if (state.source === 'preview' && state.preview) {
+                const perDevice = {};
+                const doc = state.preview.frame.contentDocument;
+                for (const d of PREVIEW_DEVICES) {
+                    try {
+                        await setFrameSize(d);
+                        perDevice[d.key] = Object.assign({ label: d.label }, classifyImages(doc, doc.body, doc.documentElement.clientHeight, doc.documentElement.clientWidth));
+                    } catch (e) {
+                        perDevice[d.key] = null;
+                    }
+                }
+                await setFrameSize(PREVIEW_DEVICES[0]);
+                return perDevice;
+            }
             const dm = editor.Devices || editor.DeviceManager;
             if (!dm || !dm.getAll) return null;
 
@@ -408,63 +641,8 @@ window.elevareSeoAnalyzer = (function () {
                         // canvas (installDeviceFit); the fold is what is visible, so
                         // undo that stretch.
                         const zoom = (editor.Canvas.getZoom ? editor.Canvas.getZoom() : 100) / 100 || 1;
-                        const vh = doc.documentElement.clientHeight * zoom;
-                        const vw = doc.documentElement.clientWidth;
-                        const win = doc.defaultView;
-                        const imgs = Array.prototype.slice.call(body.querySelectorAll('img'));
-                        // An image is "above the fold" only when it is actually painted
-                        // in the initial viewport: inside it BOTH vertically and
-                        // horizontally, and hidden by neither itself nor an ancestor. A
-                        // carousel lays its slides out in a row and shows one at a time —
-                        // the others are shifted out and clipped, or faded to opacity:0.
-                        // The old vertical-only test counted every slide as visible, so
-                        // every slide but the first was flagged "above-fold lazy"; making
-                        // them all eager then tripped the multiple-eager warning, leaving
-                        // no setting that passed. Now only the shown slide counts.
-                        const notHidden = (start) => {
-                            for (let n = start; n && n !== doc.documentElement; n = n.parentElement) {
-                                const cs = win.getComputedStyle(n);
-                                if (cs.display === 'none' || cs.visibility === 'hidden' || parseFloat(cs.opacity) === 0) return false;
-                            }
-                            return true;
-                        };
-                        const renderedInViewport = (img) => {
-                            const slidesRow = img.closest && img.closest('.el-slides');
-                            if (slidesRow) {
-                                // A carousel shows only its first slide when the published
-                                // page loads — whatever slide the editor happens to sit on
-                                // now. So only the first slide's image can be above the
-                                // fold, and it is judged by the SLIDER's box, not its own:
-                                // the editor may have slid the track sideways, putting the
-                                // first slide's image off-screen (x < 0) even though on load
-                                // it sits at x=0. That makes the advice deterministic and
-                                // match the real LCP — first slide eager, the rest lazy.
-                                let slide = img;
-                                while (slide && slide.parentElement !== slidesRow) slide = slide.parentElement;
-                                if (slide && slide !== slidesRow.firstElementChild) return false;
-                                const sr = slidesRow.getBoundingClientRect();
-                                return sr.height > 1 && sr.bottom > 0 && sr.top < vh && notHidden(slidesRow);
-                            }
-                            const r = img.getBoundingClientRect();
-                            if (r.width <= 1 || r.height <= 1) return false;
-                            if (!(r.bottom > 0 && r.top < vh)) return false;   // vertical
-                            if (!(r.right > 0 && r.left < vw)) return false;   // horizontal
-                            return notHidden(img);
-                        };
-                        const aboveFold = [], belowFold = [];
-                        imgs.forEach((img) => (renderedInViewport(img) ? aboveFold : belowFold).push(img));
-                        perDevice[key] = {
-                            label: name,
-                            lazyAboveFold: aboveFold.filter((i) => i.getAttribute('loading') === 'lazy'),
-                            // Same fix as the multipleEager check below: a below-fold
-                            // <img> with no loading attribute renders eager by browser
-                            // default, same as one that says so explicitly — checking
-                            // only the literal 'eager' string let the common case (no
-                            // attribute set) through uncaught. A carousel's off-screen
-                            // slides land here too, which is correct: they SHOULD be
-                            // lazy, so an eager one among them is worth flagging.
-                            eagerBelowFold: belowFold.filter((i) => i.getAttribute('loading') !== 'lazy')
-                        };
+                        const c = classifyImages(doc, body, doc.documentElement.clientHeight * zoom, doc.documentElement.clientWidth);
+                        perDevice[key] = { label: name, lazyAboveFold: c.lazyAboveFold, eagerBelowFold: c.eagerBelowFold };
                     } catch (e) {
                         perDevice[key] = null;
                     }
@@ -813,7 +991,17 @@ window.elevareSeoAnalyzer = (function () {
                 add('genericLink', 'technical', 'warn', tc('genericLinkTitle', 'Generic link text'), fmt(tc('genericLinkDetail', '{n} link(s) use text like "click here". Use descriptive anchor text.'), { n: generic.length }), mapComps(generic, compByEl), Math.min(6, generic.length * 2));
             }
 
+            // Links the public site fills in while rendering — the language
+            // switcher's, the breadcrumb's, the search box's result templates, the
+            // previous/next post. On the canvas they still say "#"; on the preview
+            // they carry their real address, so only the canvas needs to skip them.
+            const SERVER_FILLED = '[data-elevare-lang-slot],[data-elevare-crumb-link],[data-elevare-crumb-template],[data-elevare-adjacent],'
+                + '[data-elevare-search-item-template],[data-elevare-search-group-template],[data-elevare-search-empty-template]';
             const emptyHref = links.filter((a) => {
+                // The breadcrumb's last step names the page you are on: no address
+                // is the correct markup for it, not a missing one.
+                if (a.getAttribute('aria-current') === 'page' && !a.hasAttribute('href')) return false;
+                if (state.source !== 'preview' && a.closest(SERVER_FILLED)) return false;
                 const h = a.getAttribute('href');
                 if (h == null || h === '' || h === '#') return true;
                 const hl = h.trim().toLowerCase();
@@ -871,27 +1059,51 @@ window.elevareSeoAnalyzer = (function () {
             const smallFonts = [];
             let contrastChecked = 0;
             const allEls = body.querySelectorAll('*');
-            for (let i = 0; i < allEls.length && i < SCAN_CAP; i++) {
-                const el = allEls[i];
-                if (!ownText(el) || !visible(el)) continue;
-                const cs = el.ownerDocument.defaultView.getComputedStyle(el);
-                const fs = parseFloat(cs.fontSize) || 16;
-                if (fs < 12) smallFonts.push(el);
-                const fg = parseColor(cs.color);
-                if (!fg) continue;
-                const bg = effectiveBg(el);
-                if (!bg) continue;
-                contrastChecked++;
-                const weight = parseInt(cs.fontWeight, 10) || 400;
-                const large = fs >= 24 || (fs >= 18.66 && weight >= 700);
-                const needed = large ? 3 : 4.5;
-                const ratio = contrastRatio(fg.a < 1 ? blend(fg, bg) : fg, bg);
-                if (ratio < needed) contrastFails.push({ el, ratio, needed });
+            // The site has a light and a dark theme, and a visitor gets either. The
+            // canvas shows one; on the preview both are measured, by switching the
+            // theme attribute the site's own toggle sets.
+            const root = body.ownerDocument.documentElement;
+            const themes = state.source === 'preview' && root.hasAttribute('data-theme') ? ['light', 'dark'] : [null];
+            const initialTheme = root.getAttribute('data-theme');
+            const failingThemes = [];
+            const failedEls = new Set();
+            try {
+                for (const theme of themes) {
+                    if (theme) { root.setAttribute('data-theme', theme); await wait(30); }
+                    let themeFailed = false;
+                    for (let i = 0; i < allEls.length && i < SCAN_CAP; i++) {
+                        const el = allEls[i];
+                        if (!ownText(el) || !visible(el)) continue;
+                        const cs = el.ownerDocument.defaultView.getComputedStyle(el);
+                        const fs = parseFloat(cs.fontSize) || 16;
+                        if (fs < 12 && !smallFonts.includes(el)) smallFonts.push(el);
+                        const fg = parseColor(cs.color);
+                        if (!fg) continue;
+                        const bg = effectiveBg(el);
+                        if (!bg) continue;
+                        contrastChecked++;
+                        const weight = parseInt(cs.fontWeight, 10) || 400;
+                        const large = fs >= 24 || (fs >= 18.66 && weight >= 700);
+                        const needed = large ? 3 : 4.5;
+                        const ratio = contrastRatio(fg.a < 1 ? blend(fg, bg) : fg, bg);
+                        if (ratio < needed) {
+                            themeFailed = true;
+                            if (!failedEls.has(el)) { failedEls.add(el); contrastFails.push({ el, ratio, needed }); }
+                        }
+                    }
+                    if (theme && themeFailed) failingThemes.push(theme === 'dark' ? tr('themeDark', 'dark theme') : tr('themeLight', 'light theme'));
+                }
+            } finally {
+                if (themes[0]) {
+                    if (initialTheme == null) root.removeAttribute('data-theme'); else root.setAttribute('data-theme', initialTheme);
+                }
             }
             if (contrastFails.length) {
                 contrastFails.sort((a, b) => a.ratio - b.ratio);
                 const worst = contrastFails[0];
-                add('contrast', 'a11y', 'fail', tc('contrastFailTitle', 'Insufficient color contrast'), fmt(tc('contrastFailDetail', '{n} element(s) fall below WCAG AA contrast (worst: {r}:1, required {req}:1).'), { n: contrastFails.length, r: worst.ratio.toFixed(2), req: worst.needed }), mapComps(contrastFails.map((f) => f.el), compByEl), Math.min(16, 4 + contrastFails.length * 3));
+                let detail = fmt(tc('contrastFailDetail', '{n} element(s) fall below WCAG AA contrast (worst: {r}:1, required {req}:1).'), { n: contrastFails.length, r: worst.ratio.toFixed(2), req: worst.needed });
+                if (failingThemes.length) detail += ' ' + fmt(tr('contrastThemes', 'In: {themes}.'), { themes: failingThemes.join(', ') });
+                add('contrast', 'a11y', 'fail', tc('contrastFailTitle', 'Insufficient color contrast'), detail, mapComps(contrastFails.map((f) => f.el), compByEl), Math.min(16, 4 + contrastFails.length * 3));
             } else if (contrastChecked > 0) {
                 add('contrast', 'a11y', 'pass', tc('contrastOkTitle', 'Color contrast meets WCAG AA'), '', [], 0);
             }
@@ -927,7 +1139,13 @@ window.elevareSeoAnalyzer = (function () {
             }
 
             let css = '';
-            try { css = editor.getCss() || ''; } catch (e) { }
+            try {
+                // The preview's own stylesheet is the page's inline <style>; the
+                // site's linked files are another origin and cannot be read here.
+                css = state.source === 'preview'
+                    ? Array.prototype.map.call(body.ownerDocument.querySelectorAll('style'), (st) => st.textContent).join(' ')
+                    : (editor.getCss() || '');
+            } catch (e) { }
             if (css && css.indexOf('@media') === -1) {
                 add('mediaQuery', 'responsive', 'warn', tc('noMediaQueryTitle', 'No @media rules in CSS'), tc('noMediaQueryDetail', 'The stylesheet has no media queries. Flex/grid can still adapt, but verify the mobile layout.'), [], 2);
             }
@@ -948,7 +1166,7 @@ window.elevareSeoAnalyzer = (function () {
             score = Math.max(0, Math.round(score));
             const rank = { fail: 0, warn: 1, pass: 2 };
             checks.sort((a, b) => rank[a.status] - rank[b.status]);
-            return { score, checks };
+            return { score, checks, source: state.source === 'preview' ? 'preview' : 'canvas' };
         }
 
         // ------------------------------------------------------------
@@ -1015,7 +1233,11 @@ window.elevareSeoAnalyzer = (function () {
                     <button type="button" class="elevare-seo-reanalyze">${esc(tr('reanalyzeBtn', 'Re-analyze'))}</button>
                 </div>
                 <div class="elevare-seo-cats">${chips}</div>
-                <p class="elevare-seo-legend">${esc(tr('severityNote', 'The score is here to nudge the page toward perfect. A ✕ (fail) is what matters — fix these first. A ! (warning) is a small improvement; you do not have to clear every one.'))}</p>
+                <p class="elevare-seo-legend">${esc(tr('severityNote', 'The score is here to nudge the page toward perfect. A ✕ (fail) is what matters — fix these first. A ! (warning) is a small improvement; you do not have to clear every one.'))}
+                    <a class="elevare-seo-kb" href="/admin/knowledge-base#seo-analysis" target="_blank" rel="noopener">${esc(tr('kbLink', 'How the analysis and the score work'))}</a></p>
+                <p class="elevare-seo-source ${result.source}">${esc(result.source === 'preview'
+                    ? tr('sourcePreview', 'Read from the page as the public site renders it (its preview), at desktop, tablet and phone widths.')
+                    : tr('sourceCanvas', 'The preview could not be loaded, so the editor canvas was read instead. Some findings may be wrong: the site fills in addresses, image details and linked templates while rendering.'))}</p>
                 ${rowsHtml}`;
 
             root.querySelector('.elevare-seo-reanalyze').addEventListener('click', () => openModal(true));
@@ -1052,16 +1274,30 @@ window.elevareSeoAnalyzer = (function () {
         }
 
         async function openModal(force) {
-            if (state.analyzing) return;
             injectCss();
             const modal = editor.Modal;
+            // A background analysis (the one on load, or after a settings change)
+            // can take a few seconds now that it reads the preview: wait for it and
+            // show its result, rather than ignoring the click.
+            if (state.analyzing) {
+                try {
+                    modal.setTitle(esc(tr('title', 'SEO Analysis')));
+                    modal.setContent(`<div class="elevare-seo-loading"><div class="elevare-seo-spinner"></div><span>${esc(tr('loading', 'Analyzing page…'))}</span></div>`);
+                    modal.open();
+                    await state.running;
+                } catch (e) { }
+                if (state.lastResult && !force) {
+                    try { modal.setContent(buildReport(state.lastResult)); } catch (e) { }
+                    return;
+                }
+            }
             // Reopening the report from the toolbar button shows the LAST full result
             // as-is — no second device sweep. That sweep flips the canvas through
             // desktop/tablet/mobile and back, which is the slow, flickery part; running
             // it every time the author peeks at the panel is what made the button feel
             // heavy. A fresh analysis happens only on the first open (nothing measured
             // yet) or when the author asks for it with "Re-analyze" inside the window.
-            if (state.lastResult && !force) {
+            if (state.lastResult && !force && !state.contentDirty) {
                 try {
                     modal.setTitle(esc(tr('title', 'SEO Analysis')));
                     modal.setContent(buildReport(state.lastResult));
@@ -1070,11 +1306,14 @@ window.elevareSeoAnalyzer = (function () {
                 return;
             }
             state.analyzing = true;
+            let release;
+            state.running = new Promise((r) => { release = r; });
             try {
                 modal.setTitle(esc(tr('title', 'SEO Analysis')));
                 modal.setContent(`<div class="elevare-seo-loading"><div class="elevare-seo-spinner"></div><span>${esc(tr('loading', 'Analyzing page…'))}</span></div>`);
                 modal.open();
                 await wait(40);
+                await chooseSource(force || state.contentDirty);
                 const result = await analyzeSeo(true);
                 state.lastResult = result;
                 state.lastScore = result.score;
@@ -1086,19 +1325,27 @@ window.elevareSeoAnalyzer = (function () {
                 try { modal.close(); } catch (e2) { }
             } finally {
                 state.analyzing = false;
+                release();
             }
         }
 
         async function silentAnalyze() {
             if (state.analyzing) return;
             state.analyzing = true;
+            let release;
+            state.running = new Promise((r) => { release = r; });
             try {
-                const result = await analyzeSeo(false);
+                // Takes a snapshot only when there is none yet; a settings change
+                // re-reads the last one rather than staging a new preview per keystroke.
+                await chooseSource(false);
+                const result = await analyzeSeo(state.source === 'preview');
+                state.lastResult = result;
                 state.lastScore = result.score;
                 updateButton(result.score);
                 notify(result.score);
             } catch (e) { } finally {
                 state.analyzing = false;
+                release();
             }
         }
 

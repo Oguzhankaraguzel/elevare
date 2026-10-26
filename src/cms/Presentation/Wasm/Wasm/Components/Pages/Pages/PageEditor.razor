@@ -2,6 +2,7 @@
 @layout CMSLayout
 @implements IAsyncDisposable
 @using SharedKernel.Social
+@using SharedKernel.Content
 @using Application.Features.Queries.Pages.GetListingPreview
 @inject IJSRuntime JS
 
@@ -1649,6 +1650,12 @@ else
         CatTechnical = L["SeoAnalyzer_CatTechnical"],
         CatAccessibility = L["SeoAnalyzer_CatAccessibility"],
         CatResponsive = L["SeoAnalyzer_CatResponsive"],
+        KbLink = L["SeoAnalyzer_KbLink"],
+        SourcePreview = L["SeoAnalyzer_SourcePreview"],
+        SourceCanvas = L["SeoAnalyzer_SourceCanvas"],
+        ThemeLight = L["SeoAnalyzer_ThemeLight"],
+        ThemeDark = L["SeoAnalyzer_ThemeDark"],
+        ContrastThemes = L["SeoAnalyzer_ContrastThemes"],
         Checks = new
         {
             H1MissingTitle = L["SeoAnalyzer_Check_H1MissingTitle"],
@@ -2232,25 +2239,54 @@ else
             return;
         }
 
-        // Stages the editor's current (possibly unsaved) content into the preview
-        // snapshot columns only — this never touches the live Gjs/Title/Slug/Status
-        // fields, so an already-Published page's real visitors see no change.
+        string? url = await StagePreviewAsync(gjs, analysisOrigin: null, reportErrors: true);
+        await JS.InvokeVoidAsync("cmsJs.navigatePendingWindow", handle, url ?? "about:blank");
+    }
+
+    /// <summary>
+    /// Stages <paramref name="gjs"/> into the preview snapshot columns and returns a
+    /// signed preview link, or null. Staging never touches the live Gjs/Title/Slug/
+    /// Status fields, so an already-Published page's real visitors see no change.
+    /// </summary>
+    private async Task<string?> StagePreviewAsync(GjsResult gjs, string? analysisOrigin, bool reportErrors)
+    {
         bool staged = false;
         (await Sender.Send(new SavePreviewContentCommand(Id, gjs.Html, gjs.Css)))
-            .Match(() => staged = true, error => Toast.Error(L.Error(error)));
-
+            .Match(() => staged = true, error => { if (reportErrors) Toast.Error(L.Error(error)); });
         if (!staged)
-        {
-            await JS.InvokeVoidAsync("cmsJs.navigatePendingWindow", handle, "about:blank");
-            return;
-        }
+            return null;
 
         string? url = null;
-        (await Sender.Send(new GetPreviewLinkQuery(Id))).Match(
+        (await Sender.Send(new GetPreviewLinkQuery(Id, analysisOrigin))).Match(
             u => url = u,
-            error => Toast.Error(L.Error(error)));
+            error => { if (reportErrors) Toast.Error(L.Error(error)); });
+        return url;
+    }
 
-        await JS.InvokeVoidAsync("cmsJs.navigatePendingWindow", handle, url ?? "about:blank");
+    /// <summary>
+    /// For the SEO analyzer: stages the canvas as it is now and returns a preview
+    /// link this editor's origin may frame, so the analysis reads the page as the
+    /// public site renders it (see PreviewAnalysis). Null when no preview can be
+    /// made — no public site address, no signing key — and the analyzer then falls
+    /// back to the canvas, quietly: the report says which one it read.
+    /// </summary>
+    [JSInvokable]
+    public async Task<string?> PrepareSeoPreview()
+    {
+        GjsResult? gjs;
+        try
+        {
+            gjs = await JS.InvokeAsync<GjsResult?>("grapesEditor.getData");
+        }
+        catch (JSException)
+        {
+            return null;
+        }
+        if (gjs is null)
+            return null;
+
+        string? origin = PreviewAnalysis.NormalizeOrigin(Nav.BaseUri);
+        return origin is null ? null : await StagePreviewAsync(gjs, origin, reportErrors: false);
     }
 
     public async ValueTask DisposeAsync()
