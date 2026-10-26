@@ -125,6 +125,9 @@ jobs:
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           port: ${{ secrets.DEPLOY_PORT }}
+          # The action stops the script after 10 minutes by default, and a build
+          # after the cache below has been pruned can take longer than that.
+          command_timeout: 30m
           script: |
             set -e
             cd "${{ vars.DEPLOY_PATH }}"

@@ -31,6 +31,8 @@ Notable changes to Elevare. The format follows
   reported as having no destination, and the breadcrumb step for the current
   page never is.
 - The code block's copy button is at least 24 pixels tall, the minimum tap target.
+- The deploy job waits up to 30 minutes for the server's build instead of the SSH
+  action's default 10, which a build from a pruned cache can overrun.
 - The SEO report waits for an analysis already running instead of ignoring the
   click.
 
