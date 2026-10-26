@@ -32,7 +32,7 @@ internal sealed class GetPreviewLinkQueryHandler(ICmsApplicationDbContext db, IP
             return Result.Failure<string>(PageInfoErrors.PreviewBaseUrlNotConfigured);
 
         DateTimeOffset expiry = DateTimeOffset.UtcNow.Add(LinkLifetime);
-        Result<string> token = signer.Sign(request.PageId, expiry);
+        Result<string> token = signer.Sign(request.PageId, expiry, request.AnalysisOrigin);
         if (token.IsFailure)
             return Result.Failure<string>(token.Error);
 

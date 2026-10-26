@@ -15,5 +15,8 @@ namespace Application.Abstraction.Services;
 /// </summary>
 public interface IPreviewLinkSigner
 {
-    Result<string> Sign(int pageId, DateTimeOffset expiry);
+    /// <param name="analysisOrigin">The CMS origin allowed to frame the preview and
+    /// receive its rendered document (see <c>PreviewAnalysis</c>); null for an
+    /// ordinary preview link, which stays unframeable.</param>
+    Result<string> Sign(int pageId, DateTimeOffset expiry, string? analysisOrigin = null);
 }

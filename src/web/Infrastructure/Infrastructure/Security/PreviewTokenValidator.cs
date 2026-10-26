@@ -4,6 +4,7 @@ using System.Text;
 using Application.Abstraction.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using SharedKernel.Content;
 
 namespace Infrastructure.Security;
 
@@ -23,9 +24,12 @@ internal sealed class PreviewTokenValidator(IConfiguration configuration) : IPre
     // setup (see its InfrastructureServiceRegistration).
     private static readonly JwtSecurityTokenHandler Handler = new() { MapInboundClaims = false };
 
-    public bool TryValidate(string? token, out int pageId)
+    public bool TryValidate(string? token, out int pageId) => TryValidate(token, out pageId, out _);
+
+    public bool TryValidate(string? token, out int pageId, out string? analysisOrigin)
     {
         pageId = 0;
+        analysisOrigin = null;
         if (string.IsNullOrWhiteSpace(token))
             return false;
 
@@ -75,6 +79,7 @@ internal sealed class PreviewTokenValidator(IConfiguration configuration) : IPre
             return false;
 
         pageId = parsedPageId;
+        analysisOrigin = PreviewAnalysis.NormalizeOrigin(principal.FindFirstValue(PreviewAnalysis.OriginClaim));
         return true;
     }
 }

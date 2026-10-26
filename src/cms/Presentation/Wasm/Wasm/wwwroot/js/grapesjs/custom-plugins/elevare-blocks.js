@@ -4632,7 +4632,7 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         return '.elevare-code{border-radius:10px;overflow:hidden;background:#1e1e1e;color:#d4d4d4;margin:20px 0;font-size:14px}' +
             '.elevare-code .el-code-head{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#2d2d2d;color:#a0a0a0;font-size:12px}' +
             '.elevare-code .el-code-lang{font-weight:700;text-transform:uppercase;letter-spacing:.04em}' +
-            '.elevare-code .el-code-copy{margin-left:auto;background:transparent;border:1px solid #4a4a4a;color:#cfcfcf;border-radius:6px;padding:3px 10px;font-size:12px}' +
+            '.elevare-code .el-code-copy{margin-left:auto;background:transparent;border:1px solid #4a4a4a;color:#cfcfcf;border-radius:6px;padding:3px 10px;min-height:24px;font-size:12px}' +
             '.elevare-code pre{margin:0;padding:16px 18px;overflow:auto;line-height:1.6}' +
             '.elevare-code code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre;color:#d4d4d4;background:none}' +
             // The token colours — the same as the public site's (ContentEnhancer).

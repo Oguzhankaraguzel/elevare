@@ -29,7 +29,7 @@ public static partial class ContentEnhancer
         ".elevare-code .el-code-head{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#2d2d2d;color:#a0a0a0;font-size:12px;font-family:inherit}" +
         ".elevare-code .el-code-lang{font-weight:700;text-transform:uppercase;letter-spacing:.04em}" +
         ".elevare-code .el-code-file{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#cfcfcf}" +
-        ".elevare-code .el-code-copy{margin-left:auto;background:transparent;border:1px solid #4a4a4a;color:#cfcfcf;border-radius:6px;padding:3px 10px;font-size:12px;cursor:pointer}" +
+        ".elevare-code .el-code-copy{margin-left:auto;background:transparent;border:1px solid #4a4a4a;color:#cfcfcf;border-radius:6px;padding:3px 10px;min-height:24px;font-size:12px;cursor:pointer}" +
         ".elevare-code .el-code-copy:hover{border-color:#8a8a8a;color:#fff}" +
         ".elevare-code pre{margin:0;padding:16px 18px;overflow:auto;line-height:1.6;background:transparent;tab-size:4}" +
         ".elevare-code code{font-family:ui-monospace,SFMono-Regular,Consolas,\"Cascadia Code\",Menlo,monospace;background:none;color:inherit;padding:0;font-size:inherit;white-space:pre}" +

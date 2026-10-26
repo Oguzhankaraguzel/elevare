@@ -6,6 +6,7 @@ using Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 using SharedKernel.Concrete;
+using SharedKernel.Content;
 using Shouldly;
 
 namespace Cms.Tests.Security;
@@ -128,5 +129,39 @@ public sealed class PreviewLinkSignerTests
 
         forPage42.ShouldNotBe(forPage43);
         forPage42.ShouldNotBe(laterExpiry);
+    }
+    [Fact]
+    public void An_analysis_link_carries_the_editor_origin_and_an_ordinary_link_does_not()
+    {
+        // The public site lets only this origin frame the preview and receive the
+        // rendered page (PreviewAnalysis). The "Önizle" button's link must not get it.
+        PreviewLinkSigner signer = CreateSigner();
+        DateTimeOffset expiry = DateTimeOffset.UtcNow.AddMinutes(15);
+        JwtSecurityTokenHandler handler = new() { MapInboundClaims = false };
+
+        ClaimsPrincipal analysis = handler.ValidateToken(
+            signer.Sign(42, expiry, "https://cms.example.com/pages/edit/42").Value, ValidationParameters(SigningKey), out _);
+        ClaimsPrincipal ordinary = handler.ValidateToken(
+            signer.Sign(42, expiry).Value, ValidationParameters(SigningKey), out _);
+
+        analysis.FindFirstValue(PreviewAnalysis.OriginClaim).ShouldBe("https://cms.example.com");
+        ordinary.FindFirstValue(PreviewAnalysis.OriginClaim).ShouldBeNull();
+    }
+
+    [Theory]
+    [InlineData("javascript:alert(1)")]
+    [InlineData("cms.example.com")]
+    [InlineData("ftp://cms.example.com")]
+    [InlineData("https://cms.example.com\r\nX-Injected: 1")]
+    public void An_origin_that_is_not_a_plain_http_url_is_left_out(string origin)
+    {
+        // It ends up in a response header and a postMessage target on the site.
+        PreviewLinkSigner signer = CreateSigner();
+        JwtSecurityTokenHandler handler = new() { MapInboundClaims = false };
+
+        ClaimsPrincipal principal = handler.ValidateToken(
+            signer.Sign(42, DateTimeOffset.UtcNow.AddMinutes(15), origin).Value, ValidationParameters(SigningKey), out _);
+
+        principal.FindFirstValue(PreviewAnalysis.OriginClaim).ShouldBeNull();
     }
 }

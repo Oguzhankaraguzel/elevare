@@ -17,4 +17,11 @@ public interface IPreviewTokenValidator
     /// be tempted to treat any rejection as partially trustworthy.
     /// </summary>
     bool TryValidate(string? token, out int pageId);
+
+    /// <summary>
+    /// As <see cref="TryValidate(string?, out int)"/>, also returning the CMS origin
+    /// the token lets frame the preview and receive its rendered document (see
+    /// <c>PreviewAnalysis</c>) — null for an ordinary preview link.
+    /// </summary>
+    bool TryValidate(string? token, out int pageId, out string? analysisOrigin);
 }
