@@ -215,11 +215,14 @@ internal sealed class UpdatePageCommandHandler(ICmsApplicationDbContext db, IUse
         {
             page.Content.GjsHtml = request.GjsHtml;
             page.Content.GjsCss = request.GjsCss;
-            // A genuine publish supersedes any staged preview snapshot — clear it so
-            // a stale unsaved-edit preview never lingers past a real publish.
+            // A direct publish supersedes anything staged for approval earlier.
             page.Content.PreviewGjsHtml = null;
             page.Content.PreviewGjsCss = null;
         }
+
+        // Saved either way: the editor's scratch copy has served its purpose.
+        page.Content.DraftGjsHtml = null;
+        page.Content.DraftGjsCss = null;
 
         PagePublication.Stamp(page, DateTime.UtcNow);
 

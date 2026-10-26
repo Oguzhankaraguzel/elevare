@@ -18,5 +18,7 @@ public interface IPreviewLinkSigner
     /// <param name="analysisOrigin">The CMS origin allowed to frame the preview and
     /// receive its rendered document (see <c>PreviewAnalysis</c>); null for an
     /// ordinary preview link, which stays unframeable.</param>
-    Result<string> Sign(int pageId, DateTimeOffset expiry, string? analysisOrigin = null);
+    /// <param name="showsDraft">True for the page editor's own links, which show its
+    /// unsaved draft (see <c>PreviewDraft</c>); false shows what was saved.</param>
+    Result<string> Sign(int pageId, DateTimeOffset expiry, string? analysisOrigin = null, bool showsDraft = false);
 }

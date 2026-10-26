@@ -25,8 +25,8 @@ internal sealed class SavePreviewContentCommandHandler(ICmsApplicationDbContext 
             return Result.Failure(PageInfoErrors.NotFound);
 
         page.Content ??= new PageContent { PageInfoId = page.Id };
-        page.Content.PreviewGjsHtml = request.GjsHtml;
-        page.Content.PreviewGjsCss = request.GjsCss;
+        page.Content.DraftGjsHtml = request.GjsHtml;
+        page.Content.DraftGjsCss = request.GjsCss;
 
         return Result.Success();
     }

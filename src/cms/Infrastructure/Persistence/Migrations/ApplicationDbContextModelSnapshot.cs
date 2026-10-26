@@ -863,6 +863,12 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Property<Guid?>("DeleteUserId")
                     .HasColumnType("uuid");
 
+                b.Property<string>("DraftGjsCss")
+                    .HasColumnType("text");
+
+                b.Property<string>("DraftGjsHtml")
+                    .HasColumnType("text");
+
                 b.Property<string>("GjsCss")
                     .HasColumnType("text");
 

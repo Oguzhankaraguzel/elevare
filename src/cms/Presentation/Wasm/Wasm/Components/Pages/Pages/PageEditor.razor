@@ -2244,9 +2244,9 @@ else
     }
 
     /// <summary>
-    /// Stages <paramref name="gjs"/> into the preview snapshot columns and returns a
-    /// signed preview link, or null. Staging never touches the live Gjs/Title/Slug/
-    /// Status fields, so an already-Published page's real visitors see no change.
+    /// Writes <paramref name="gjs"/> to the page's draft columns and returns a signed
+    /// link that previews that draft, or null. Neither the live content nor content
+    /// staged for approval is touched, so real visitors and reviewers see no change.
     /// </summary>
     private async Task<string?> StagePreviewAsync(GjsResult gjs, string? analysisOrigin, bool reportErrors)
     {
@@ -2257,7 +2257,7 @@ else
             return null;
 
         string? url = null;
-        (await Sender.Send(new GetPreviewLinkQuery(Id, analysisOrigin))).Match(
+        (await Sender.Send(new GetPreviewLinkQuery(Id, ShowsDraft: true, AnalysisOrigin: analysisOrigin))).Match(
             u => url = u,
             error => { if (reportErrors) Toast.Error(L.Error(error)); });
         return url;

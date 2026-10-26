@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -24,12 +25,16 @@ internal sealed class PreviewTokenValidator(IConfiguration configuration) : IPre
     // setup (see its InfrastructureServiceRegistration).
     private static readonly JwtSecurityTokenHandler Handler = new() { MapInboundClaims = false };
 
-    public bool TryValidate(string? token, out int pageId) => TryValidate(token, out pageId, out _);
-
-    public bool TryValidate(string? token, out int pageId, out string? analysisOrigin)
+    public bool TryValidate(string? token, out int pageId)
     {
-        pageId = 0;
-        analysisOrigin = null;
+        bool valid = TryValidate(token, out PreviewGrant? grant);
+        pageId = grant?.PageId ?? 0;
+        return valid;
+    }
+
+    public bool TryValidate(string? token, [NotNullWhen(true)] out PreviewGrant? grant)
+    {
+        grant = null;
         if (string.IsNullOrWhiteSpace(token))
             return false;
 
@@ -78,8 +83,10 @@ internal sealed class PreviewTokenValidator(IConfiguration configuration) : IPre
         if (!int.TryParse(sub, out int parsedPageId) || parsedPageId <= 0)
             return false;
 
-        pageId = parsedPageId;
-        analysisOrigin = PreviewAnalysis.NormalizeOrigin(principal.FindFirstValue(PreviewAnalysis.OriginClaim));
+        grant = new PreviewGrant(
+            parsedPageId,
+            ShowsDraft: string.Equals(principal.FindFirstValue(PreviewDraft.Claim), "true", StringComparison.OrdinalIgnoreCase),
+            AnalysisOrigin: PreviewAnalysis.NormalizeOrigin(principal.FindFirstValue(PreviewAnalysis.OriginClaim)));
         return true;
     }
 }

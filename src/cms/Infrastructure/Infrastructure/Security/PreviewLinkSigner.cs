@@ -13,8 +13,8 @@ namespace Infrastructure.Security;
 
 /// <summary>
 /// Signs preview tokens — a standard JWT, HMAC-SHA256, carrying the page id
-/// (as the registered <c>sub</c> claim), an expiry and, for the SEO analyzer's
-/// links, the CMS origin allowed to frame the page. The Web app's
+/// (as the registered <c>sub</c> claim), an expiry, whether it shows the editor's
+/// draft and, for the SEO analyzer's links, the CMS origin allowed to frame the page. The Web app's
 /// <c>PreviewTokenValidator</c> verifies it with the same shared
 /// <c>Preview:SigningKey</c> secret and the same library
 /// (<see cref="JwtSecurityTokenHandler"/>) — replacing an earlier hand-rolled
@@ -25,7 +25,7 @@ namespace Infrastructure.Security;
 /// </summary>
 internal sealed class PreviewLinkSigner(IConfiguration configuration) : IPreviewLinkSigner
 {
-    public Result<string> Sign(int pageId, DateTimeOffset expiry, string? analysisOrigin = null)
+    public Result<string> Sign(int pageId, DateTimeOffset expiry, string? analysisOrigin = null, bool showsDraft = false)
     {
         string? secret = configuration["Preview:SigningKey"];
         if (string.IsNullOrWhiteSpace(secret))
@@ -43,6 +43,8 @@ internal sealed class PreviewLinkSigner(IConfiguration configuration) : IPreview
         List<Claim> claims = [new(JwtRegisteredClaimNames.Sub, pageId.ToString(CultureInfo.InvariantCulture))];
         if (PreviewAnalysis.NormalizeOrigin(analysisOrigin) is string origin)
             claims.Add(new Claim(PreviewAnalysis.OriginClaim, origin));
+        if (showsDraft)
+            claims.Add(new Claim(PreviewDraft.Claim, "true"));
 
         var token = new JwtSecurityToken(claims: claims, expires: expiry.UtcDateTime, signingCredentials: credentials);
 

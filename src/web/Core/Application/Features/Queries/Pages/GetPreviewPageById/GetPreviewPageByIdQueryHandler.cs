@@ -24,6 +24,16 @@ internal sealed class GetPreviewPageByIdQueryHandler(IPublicReadDbContext db)
         if (page is null)
             return Result.Failure<PublicPageResponse>(PublicPageErrors.PreviewNotFound(request.PageId));
 
+        // The newest copy the link is meant to show: the editor's draft for its own
+        // links, then content staged for approval, then the live content (a page
+        // with neither, like a brand-new one). HTML and CSS always come as a pair.
+        PublicPageContent? content = page.Content;
+        (string? html, string? css) = (content?.GjsHtml, content?.GjsCss);
+        if (request.ShowsDraft && content is { DraftGjsHtml: not null })
+            (html, css) = (content.DraftGjsHtml, content.DraftGjsCss);
+        else if (content is { PreviewGjsHtml: not null })
+            (html, css) = (content.PreviewGjsHtml, content.PreviewGjsCss);
+
         string defaultCode = await db.Languages
             .Where(l => l.IsDefault && l.IsActive)
             .Select(l => l.TwoLetterCode)
@@ -69,12 +79,8 @@ internal sealed class GetPreviewPageByIdQueryHandler(IPublicReadDbContext db)
             page.OgUrl,
             page.TwitterCard,
             page.TwitterSite,
-            // Staged unsaved edits take priority over live content, so previewing an
-            // already-Published page shows what the CMS user is currently working on
-            // rather than what real visitors see. Falls back to live content when no
-            // preview snapshot has been staged yet (e.g. a brand-new Draft page).
-            page.Content?.PreviewGjsHtml ?? page.Content?.GjsHtml,
-            page.Content?.PreviewGjsCss ?? page.Content?.GjsCss,
+            html,
+            css,
             isDefaultLanguage,
             alternates,
             SocialMeta.FromJson(page.SeoSocialJson));

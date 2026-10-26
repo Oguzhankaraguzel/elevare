@@ -8,5 +8,7 @@ namespace Application.Features.Queries.Pages.GetPreviewPageById;
 /// <see cref="GetPublicPageBySlugQuery"/>, this intentionally does NOT filter by
 /// <c>PageStatus</c> or <c>IsActive</c>; access control is entirely the caller's
 /// job (validating the signed token before ever sending this query).
+/// <paramref name="ShowsDraft"/>, set by the CMS editor's own links, shows the
+/// editor's unsaved draft instead of what was saved.
 /// </summary>
-public sealed record GetPreviewPageByIdQuery(int PageId) : IQuery<PublicPageResponse>;
+public sealed record GetPreviewPageByIdQuery(int PageId, bool ShowsDraft = false) : IQuery<PublicPageResponse>;

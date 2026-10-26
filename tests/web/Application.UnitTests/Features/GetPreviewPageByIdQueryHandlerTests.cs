@@ -36,7 +36,22 @@ public sealed class GetPreviewPageByIdQueryHandlerTests
             NewPage(5, "silinmis-sayfa", PublicPageStatus.Published, languageId: 1, isDeleted: true),
             // Language group: 6 (tr, default) <-> 7 (en) share pageGroupId 100.
             NewPage(6, "hakkimizda", PublicPageStatus.Published, languageId: 1, pageGroupId: 100),
-            NewPage(7, "en/about", PublicPageStatus.Published, languageId: 2, pageGroupId: 100));
+            NewPage(7, "en/about", PublicPageStatus.Published, languageId: 2, pageGroupId: 100),
+            NewPage(8, "onayda", PublicPageStatus.Published, languageId: 1,
+                content: new PublicPageContent
+                {
+                    Id = 8, PageInfoId = 8,
+                    GjsHtml = "<p>Canlı</p>", GjsCss = "p{}",
+                    PreviewGjsHtml = "<p>Onay bekliyor</p>", PreviewGjsCss = "p{color:red}",
+                    DraftGjsHtml = "<p>Kaydedilmedi</p>", DraftGjsCss = "p{color:blue}",
+                }),
+            NewPage(9, "yalniz-taslak", PublicPageStatus.Published, languageId: 1,
+                content: new PublicPageContent
+                {
+                    Id = 9, PageInfoId = 9,
+                    GjsHtml = "<p>Canlı</p>", GjsCss = "p{}",
+                    DraftGjsHtml = "<p>Kaydedilmedi</p>", DraftGjsCss = "p{color:blue}",
+                }));
 
         db.SaveChanges();
     }
@@ -57,11 +72,38 @@ public sealed class GetPreviewPageByIdQueryHandlerTests
         Content = content
     };
 
-    private async Task<Result<PublicPageResponse>> HandleAsync(int pageId)
+    private async Task<Result<PublicPageResponse>> HandleAsync(int pageId, bool showsDraft = false)
     {
         using PublicReadDbContext db = TestDbFactory.Create(_options);
         GetPreviewPageByIdQueryHandler handler = new(db);
-        return await handler.Handle(new GetPreviewPageByIdQuery(pageId), CancellationToken.None);
+        return await handler.Handle(new GetPreviewPageByIdQuery(pageId, showsDraft), CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task The_editors_link_shows_its_draft()
+    {
+        Result<PublicPageResponse> result = await HandleAsync(8, showsDraft: true);
+
+        result.Value.GjsHtml.ShouldBe("<p>Kaydedilmedi</p>");
+        result.Value.GjsCss.ShouldBe("p{color:blue}");
+    }
+
+    [Fact]
+    public async Task Any_other_link_shows_the_content_awaiting_approval_never_the_draft()
+    {
+        Result<PublicPageResponse> result = await HandleAsync(8);
+
+        result.Value.GjsHtml.ShouldBe("<p>Onay bekliyor</p>");
+        result.Value.GjsCss.ShouldBe("p{color:red}");
+    }
+
+    [Fact]
+    public async Task Without_anything_staged_any_other_link_shows_the_live_content()
+    {
+        Result<PublicPageResponse> result = await HandleAsync(9);
+
+        result.Value.GjsHtml.ShouldBe("<p>Canlı</p>");
+        result.Value.GjsCss.ShouldBe("p{}");
     }
 
     [Fact]

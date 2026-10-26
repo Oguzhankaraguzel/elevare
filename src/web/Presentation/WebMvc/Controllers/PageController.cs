@@ -256,10 +256,11 @@ public sealed class PageController(
     [HttpGet("elevare-preview")]
     public async Task<IActionResult> Preview(string? token, CancellationToken cancellationToken)
     {
-        if (!previewTokenService.TryValidate(token, out int pageId, out string? analysisOrigin))
+        if (!previewTokenService.TryValidate(token, out PreviewGrant? grant))
             throw NotFoundResource("Preview token is missing, malformed, expired, or has an invalid signature.");
 
-        Result<PublicPageResponse> result = await sender.Send(new GetPreviewPageByIdQuery(pageId), cancellationToken);
+        Result<PublicPageResponse> result = await sender.Send(new GetPreviewPageByIdQuery(grant.PageId, grant.ShowsDraft), cancellationToken);
+        string? analysisOrigin = grant.AnalysisOrigin;
 
         if (result.IsFailure)
             throw NotFoundResource(result.Error.Description);

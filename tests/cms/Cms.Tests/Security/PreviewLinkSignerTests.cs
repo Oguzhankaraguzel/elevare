@@ -164,4 +164,22 @@ public sealed class PreviewLinkSignerTests
 
         principal.FindFirstValue(PreviewAnalysis.OriginClaim).ShouldBeNull();
     }
+
+    [Fact]
+    public void Only_the_editors_own_links_show_its_draft()
+    {
+        // A reviewer's link must show what was submitted for approval, never the
+        // editor's unsaved canvas.
+        PreviewLinkSigner signer = CreateSigner();
+        DateTimeOffset expiry = DateTimeOffset.UtcNow.AddMinutes(15);
+        JwtSecurityTokenHandler handler = new() { MapInboundClaims = false };
+
+        ClaimsPrincipal editor = handler.ValidateToken(
+            signer.Sign(42, expiry, showsDraft: true).Value, ValidationParameters(SigningKey), out _);
+        ClaimsPrincipal reviewer = handler.ValidateToken(
+            signer.Sign(42, expiry).Value, ValidationParameters(SigningKey), out _);
+
+        editor.FindFirstValue(PreviewDraft.Claim).ShouldBe("true");
+        reviewer.FindFirstValue(PreviewDraft.Claim).ShouldBeNull();
+    }
 }

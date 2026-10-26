@@ -6,6 +6,20 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-10-27
+
+### Fixed
+
+- **Previewing a page no longer touches content waiting for approval.** The
+  editor's Preview button, and since 1.3.0 the SEO analyzer each time a page was
+  opened, wrote the unsaved canvas into the same columns an approval workflow
+  stages a save into: a reviewer could have approved a draft nobody submitted,
+  and every previewed page was listed as "published, but its update has not gone
+  live yet". The editor's previews now keep a draft of their own, which only its
+  own links show; a reviewer's link shows what was submitted, and a save clears
+  the draft. The upgrade moves leftover previews out of the staging columns
+  wherever no approval request is pending or rejected, so the false notices go.
+
 ## [1.3.0] - 2026-10-26
 
 ### Added

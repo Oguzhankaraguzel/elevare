@@ -87,6 +87,7 @@ public sealed class PublicSiteChangeTests
         template.PreviewGjsHtml = "<nav>Taslak</nav>";
         PageContent content = await db.PageContents.SingleAsync(c => c.PageInfoId == 3);
         content.PreviewGjsHtml = "<p>Taslak</p>";
+        content.DraftGjsHtml = "<p>Kaydedilmedi</p>";
 
         PublicSiteChange change = await SaveAsync(db);
 

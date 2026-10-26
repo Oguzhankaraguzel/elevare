@@ -10,4 +10,6 @@ public sealed class PublicPageContent
     public string? GjsCss { get; set; }
     public string? PreviewGjsHtml { get; set; }
     public string? PreviewGjsCss { get; set; }
+    public string? DraftGjsHtml { get; set; }
+    public string? DraftGjsCss { get; set; }
 }
