@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using Application.Abstraction.Services;
 using Infrastructure.Security;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
@@ -129,19 +130,42 @@ public sealed class PreviewTokenValidatorTests
         string token = new JwtSecurityTokenHandler().WriteToken(
             new JwtSecurityToken(claims: claims, expires: DateTime.UtcNow.AddMinutes(15), signingCredentials: credentials));
 
-        bool ok = CreateValidator().TryValidate(token, out int pageId, out string? origin);
+        bool ok = CreateValidator().TryValidate(token, out PreviewGrant? grant);
 
         ok.ShouldBeTrue();
-        pageId.ShouldBe(42);
-        origin.ShouldBe("https://cms.example.com");
+        grant!.PageId.ShouldBe(42);
+        grant.AnalysisOrigin.ShouldBe("https://cms.example.com");
     }
 
     [Fact]
-    public void An_ordinary_preview_token_has_no_analysis_origin()
+    public void An_ordinary_preview_token_has_no_analysis_origin_and_shows_what_was_saved()
     {
         string token = MakeToken(42, DateTimeOffset.UtcNow.AddMinutes(15));
 
-        CreateValidator().TryValidate(token, out _, out string? origin).ShouldBeTrue();
-        origin.ShouldBeNull();
+        CreateValidator().TryValidate(token, out PreviewGrant? grant).ShouldBeTrue();
+        grant!.AnalysisOrigin.ShouldBeNull();
+        grant.ShowsDraft.ShouldBeFalse();
+    }
+
+    [Fact]
+    public void The_editors_draft_claim_is_read_back_from_the_token()
+    {
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(Secret));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        Claim[] claims = [new(JwtRegisteredClaimNames.Sub, "42"), new(PreviewDraft.Claim, "true")];
+        string token = new JwtSecurityTokenHandler().WriteToken(
+            new JwtSecurityToken(claims: claims, expires: DateTime.UtcNow.AddMinutes(15), signingCredentials: credentials));
+
+        CreateValidator().TryValidate(token, out PreviewGrant? grant).ShouldBeTrue();
+        grant!.ShowsDraft.ShouldBeTrue();
+    }
+
+    [Fact]
+    public void A_rejected_token_grants_nothing()
+    {
+        string token = MakeToken(42, DateTimeOffset.UtcNow.AddMinutes(-1));
+
+        CreateValidator().TryValidate(token, out PreviewGrant? grant).ShouldBeFalse();
+        grant.ShouldBeNull();
     }
 }

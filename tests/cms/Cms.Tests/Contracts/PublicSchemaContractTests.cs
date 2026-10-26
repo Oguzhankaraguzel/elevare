@@ -34,7 +34,7 @@ public sealed class PublicSchemaContractTests
             "OgTitle", "OgDescription", "OgType", "OgImage", "OgUrl",
             "TwitterCard", "TwitterSite", "SeoSocialJson"
         ],
-        ["PageContents"] = ["Id", "PageInfoId", "GjsHtml", "GjsCss", "PreviewGjsHtml", "PreviewGjsCss", "IsDeleted"],
+        ["PageContents"] = ["Id", "PageInfoId", "GjsHtml", "GjsCss", "PreviewGjsHtml", "PreviewGjsCss", "DraftGjsHtml", "DraftGjsCss", "IsDeleted"],
         ["PageTemplates"] = ["Id", "Name", "Type", "IsLinked", "GjsHtml", "GjsCss", "IsDeleted"],
         ["SiteSettings"] = ["Id", "Key", "Value", "IsDeleted"],
         ["SiteCodeSnippets"] = ["Id", "Name", "Placement", "Content", "IsEnabled", "SortOrder", "IsDeleted"],

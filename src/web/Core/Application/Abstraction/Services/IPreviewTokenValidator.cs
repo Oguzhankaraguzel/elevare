@@ -1,3 +1,5 @@
+using System.Diagnostics.CodeAnalysis;
+
 namespace Application.Abstraction.Services;
 
 /// <summary>
@@ -19,9 +21,18 @@ public interface IPreviewTokenValidator
     bool TryValidate(string? token, out int pageId);
 
     /// <summary>
-    /// As <see cref="TryValidate(string?, out int)"/>, also returning the CMS origin
-    /// the token lets frame the preview and receive its rendered document (see
-    /// <c>PreviewAnalysis</c>) — null for an ordinary preview link.
+    /// As <see cref="TryValidate(string?, out int)"/>, with everything else the
+    /// token decides: see <see cref="PreviewGrant"/>. <paramref name="grant"/> is
+    /// null whenever the token is rejected.
     /// </summary>
-    bool TryValidate(string? token, out int pageId, out string? analysisOrigin);
+    bool TryValidate(string? token, [NotNullWhen(true)] out PreviewGrant? grant);
 }
+
+/// <summary>What a valid preview token allows.</summary>
+/// <param name="PageId">The page it previews.</param>
+/// <param name="ShowsDraft">True for the CMS editor's own links, which show its
+/// unsaved draft; false shows what was saved (see <c>PreviewDraft</c>).</param>
+/// <param name="AnalysisOrigin">The CMS origin allowed to frame the preview and
+/// receive its rendered document (see <c>PreviewAnalysis</c>); null for an ordinary
+/// preview link.</param>
+public sealed record PreviewGrant(int PageId, bool ShowsDraft, string? AnalysisOrigin);

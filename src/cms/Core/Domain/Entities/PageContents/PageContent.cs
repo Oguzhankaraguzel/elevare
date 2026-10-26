@@ -24,14 +24,27 @@ public class PageContent : BaseEntity
     public string? GjsData { get; set; }
 
     /// <summary>
-    /// Staged HTML for the "preview without publishing" flow — set by
-    /// <c>SavePreviewContentCommand</c>, read only by preview links, and cleared on every
-    /// real save so a stale snapshot never lingers past a genuine publish.
+    /// HTML saved behind an approval workflow, waiting for the chain to clear — what
+    /// <c>DecideApprovalCommand</c> promotes to live, and what a reviewer's preview
+    /// link shows. Only a real save writes it; cleared when it is promoted or
+    /// superseded by a direct publish.
     /// </summary>
     public string? PreviewGjsHtml { get; set; }
 
     /// <summary>Staged CSS counterpart to <see cref="PreviewGjsHtml"/>.</summary>
     public string? PreviewGjsCss { get; set; }
+
+    /// <summary>
+    /// The editor's unsaved canvas, written for its own preview links (the Preview
+    /// button and the SEO analyzer) by <c>SavePreviewContentCommand</c>. A scratch
+    /// copy: nothing publishes it, and every real save clears it. Kept apart from
+    /// <see cref="PreviewGjsHtml"/> so previewing never replaces content awaiting
+    /// approval or makes a page look as if it had an update pending.
+    /// </summary>
+    public string? DraftGjsHtml { get; set; }
+
+    /// <summary>CSS counterpart to <see cref="DraftGjsHtml"/>.</summary>
+    public string? DraftGjsCss { get; set; }
 
     public virtual PageInfo PageInfo { get; set; } = null!;
 }

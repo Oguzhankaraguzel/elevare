@@ -51,12 +51,13 @@ internal static class PublicSiteChangeClassifier
     ];
 
     /// <summary>
-    /// Columns that change without changing what a visitor sees: the editor's
-    /// unpublished preview copy, and the audit stamps every save writes.
+    /// Columns that change without changing what a visitor sees: content staged
+    /// for approval, the editor's draft copy, and the audit stamps every save writes.
     /// </summary>
     private static readonly HashSet<string> Invisible =
     [
         nameof(PageContent.PreviewGjsHtml), nameof(PageContent.PreviewGjsCss),
+        nameof(PageContent.DraftGjsHtml), nameof(PageContent.DraftGjsCss),
         nameof(IAuditable.UpdateDate), nameof(IAuditable.UpdateUserId),
     ];
 

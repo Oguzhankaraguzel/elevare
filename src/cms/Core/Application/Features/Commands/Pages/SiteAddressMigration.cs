@@ -61,6 +61,8 @@ public static class SiteAddressMigration
             Rewrite(c.GjsData, v => c.GjsData = v);
             Rewrite(c.PreviewGjsHtml, v => c.PreviewGjsHtml = v);
             Rewrite(c.PreviewGjsCss, v => c.PreviewGjsCss = v);
+            Rewrite(c.DraftGjsHtml, v => c.DraftGjsHtml = v);
+            Rewrite(c.DraftGjsCss, v => c.DraftGjsCss = v);
             Count(before);
         }
 
