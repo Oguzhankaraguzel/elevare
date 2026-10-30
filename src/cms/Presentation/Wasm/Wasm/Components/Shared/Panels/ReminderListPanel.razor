@@ -61,7 +61,13 @@ else
                     <span style="font-size:11px;color:@(isTriggered ? "var(--cms-danger)" : "var(--cms-text-muted)")">
                         <i class="bi bi-clock"></i> @ToLocalTime(r.RemindAt).ToString("yyyy-MM-dd HH:mm")
                     </span>
-                    @if (r.IsCompleted)
+                    @if (r.EmailFailed)
+                    {
+                        <span class="badge-cms badge-warning" style="font-size:10px" title="@L["UserReminders_EmailFailedHint"]">
+                            <i class="bi bi-envelope-exclamation"></i> @L["UserReminders_EmailFailed"]
+                        </span>
+                    }
+                    else if (r.IsCompleted)
                     {
                         <span class="badge-cms badge-success" style="font-size:10px">@L["UserReminders_StatusCompleted"]</span>
                     }

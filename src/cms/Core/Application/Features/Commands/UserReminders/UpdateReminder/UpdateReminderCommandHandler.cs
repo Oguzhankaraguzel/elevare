@@ -23,6 +23,14 @@ internal sealed record UpdateReminderCommandHandler(ICmsApplicationDbContext Db,
 
         reminder.Title = request.Title;
         reminder.Message = request.Message;
+        // A new time is a new delivery: the e-mail gets its full set of attempts again.
+        if (reminder.RemindAt != request.RemindAt)
+        {
+            reminder.EmailAttempts = 0;
+            reminder.NextEmailAttemptAt = null;
+            reminder.EmailFailed = false;
+        }
+
         reminder.RemindAt = request.RemindAt;
         reminder.Channel = request.Channel;
         reminder.IsCompleted = request.IsCompleted;

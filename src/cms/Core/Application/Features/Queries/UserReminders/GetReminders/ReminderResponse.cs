@@ -12,4 +12,5 @@ public sealed record ReminderResponse(
     ReminderChannel Channel,
     Guid UserId,
     bool IsActive,
-    DateTime CreateDate);
+    DateTime CreateDate,
+    bool EmailFailed);

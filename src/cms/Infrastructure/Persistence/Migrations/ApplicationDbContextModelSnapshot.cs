@@ -1725,6 +1725,12 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                 b.Property<Guid?>("DeleteUserId")
                     .HasColumnType("uuid");
 
+                b.Property<int>("EmailAttempts")
+                    .HasColumnType("integer");
+
+                b.Property<bool>("EmailFailed")
+                    .HasColumnType("boolean");
+
                 b.Property<bool>("IsActive")
                     .ValueGeneratedOnAdd()
                     .HasColumnType("boolean")
@@ -1749,6 +1755,9 @@ partial class ApplicationDbContextModelSnapshot : ModelSnapshot
                     .IsRequired()
                     .HasMaxLength(1000)
                     .HasColumnType("character varying(1000)");
+
+                b.Property<DateTime?>("NextEmailAttemptAt")
+                    .HasColumnType("timestamp with time zone");
 
                 b.Property<DateTime>("RemindAt")
                     .HasColumnType("timestamp with time zone");

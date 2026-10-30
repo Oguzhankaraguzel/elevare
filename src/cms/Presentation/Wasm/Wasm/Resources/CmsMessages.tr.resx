@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
   <!-- 
     Microsoft ResX Schema 
@@ -1424,6 +1424,12 @@
   <data name="UserReminders_StatusDismissed" xml:space="preserve">
     <value>Reddedildi</value>
   </data>
+  <data name="UserReminders_EmailFailed" xml:space="preserve">
+    <value>E-posta gitmedi</value>
+  </data>
+  <data name="UserReminders_EmailFailedHint" xml:space="preserve">
+    <value>Hatırlatma e-postası gönderilemedi: hesabın e-posta adresi yok ya da bütün denemeler başarısız oldu. E-posta ayarlarına bakın.</value>
+  </data>
   <!-- UserTasks extras -->
   <data name="UserTasks_ActionDelete" xml:space="preserve">
     <value>Sil</value>
@@ -2429,7 +2435,7 @@
     <value>Yok</value>
   </data>
   <data name="Dashboard_Period24h" xml:space="preserve">
-    <value>Son 24 saat</value>
+    <value>Bugün</value>
   </data>
   <data name="Dashboard_Period7d" xml:space="preserve">
     <value>Son 7 gün</value>
