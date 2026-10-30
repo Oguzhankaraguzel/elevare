@@ -3,7 +3,12 @@
 // _Layout.cshtml — so a CMS editor testing Draft/Archived content never pollutes
 // real analytics.
 (function () {
-    var started = Date.now(), hitId = 0, reported = false;
+    // Time on page counts only while the tab is in view. It is reported each time
+    // the visitor leaves (switches tab, minimises, closes); the server keeps the
+    // largest value, so a visitor who comes back and reads on is not cut short at
+    // the first time they looked away, as they were when it was reported only once.
+    var visibleMs = 0, visibleSince = document.visibilityState === 'hidden' ? 0 : Date.now();
+    var hitId = 0, reportedMs = -1;
 
     // Whether the visitor allowed analytics in the cookie banner. Read from the
     // banner's own cookie rather than its API, which may not have loaded yet when
@@ -26,10 +31,15 @@
       .then(function (d) { if (d && d.id) hitId = d.id; })
       .catch(function () { /* telemetry must never break the page */ });
 
+    function pause() {
+        if (visibleSince) { visibleMs += Date.now() - visibleSince; visibleSince = 0; }
+    }
+
     function reportDuration() {
-        if (reported || !hitId) return;
-        reported = true;
-        var payload = JSON.stringify({ id: hitId, seconds: Math.round((Date.now() - started) / 1000) });
+        pause();
+        if (!hitId || visibleMs === reportedMs) return;
+        reportedMs = visibleMs;
+        var payload = JSON.stringify({ id: hitId, seconds: Math.round(visibleMs / 1000) });
         if (navigator.sendBeacon) {
             navigator.sendBeacon('/api/track/duration', new Blob([payload], { type: 'application/json' }));
         } else {
@@ -40,5 +50,6 @@
     addEventListener('pagehide', reportDuration);
     addEventListener('visibilitychange', function () {
         if (document.visibilityState === 'hidden') reportDuration();
+        else if (!visibleSince) visibleSince = Date.now();
     });
 })();

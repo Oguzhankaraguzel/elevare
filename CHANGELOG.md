@@ -6,6 +6,19 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.3] - 2026-10-31
+
+### Fixed
+
+- **A form's checkbox group keeps every ticked box.** The public site's form
+  handler kept only the last value of fields sharing a name, so a "pick all that
+  apply" group saved one answer and dropped the rest. All of them are now saved,
+  separated by commas — the same with or without an attached file.
+- **Time on page counts the time the page was actually in view.** It was
+  reported once, the first time the visitor switched tab or minimised the
+  browser, so whatever they read after coming back was lost. Now only the time
+  the tab is visible counts, and it is reported again each time they leave.
+
 ## [1.3.2] - 2026-10-30
 
 ### Fixed

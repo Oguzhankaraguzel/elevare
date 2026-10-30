@@ -110,7 +110,8 @@ public static class FormEndpoints
                 case "pageId": _ = int.TryParse(value, out pageId); break;
                 case "formName": formName = value; break;
                 case "captchaToken": captchaToken = value; break;
-                default: fields[kv.Key] = value; break;
+                // Every ticked box of a checkbox group, written as the JSON path writes it.
+                default: fields[kv.Key] = string.Join(", ", kv.Value.Where(v => !string.IsNullOrEmpty(v))); break;
             }
         }
 
