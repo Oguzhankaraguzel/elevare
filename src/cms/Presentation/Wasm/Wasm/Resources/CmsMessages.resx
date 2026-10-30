@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <root>
 	<!-- 
     Microsoft ResX Schema 
@@ -1424,6 +1424,12 @@
 	<data name="UserReminders_StatusDismissed" xml:space="preserve">
 	 <value>Dismissed</value>
    </data>
+	<data name="UserReminders_EmailFailed" xml:space="preserve">
+	 <value>E-mail not sent</value>
+	</data>
+	<data name="UserReminders_EmailFailedHint" xml:space="preserve">
+	 <value>The reminder e-mail could not be sent: the account has no e-mail address, or every attempt failed. Check the mail settings.</value>
+	</data>
 	<!-- UserTasks extras -->
 	<data name="UserTasks_ActionDelete" xml:space="preserve">
 	 <value>Delete</value>
@@ -2429,7 +2435,7 @@
 	  <value>None</value>
 	</data>
 	<data name="Dashboard_Period24h" xml:space="preserve">
-	  <value>Last 24 hours</value>
+	  <value>Today</value>
 	</data>
 	<data name="Dashboard_Period7d" xml:space="preserve">
 	  <value>Last 7 days</value>

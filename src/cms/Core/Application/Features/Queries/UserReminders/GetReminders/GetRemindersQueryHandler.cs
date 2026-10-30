@@ -37,7 +37,8 @@ internal sealed record GetRemindersQueryHandler(
                 r.Channel,
                 r.UserId,
                 r.IsActive,
-                r.CreateDate))
+                r.CreateDate,
+                r.EmailFailed))
             .ToListAsync(cancellationToken);
 
         return PagedResult<ReminderResponse>.Create(items, items.Count, 1, items.Count);

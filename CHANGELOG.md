@@ -6,6 +6,28 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.2] - 2026-10-30
+
+### Fixed
+
+- **A reminder e-mail that fails is tried again instead of being lost.** The
+  reminder job completed an e-mail reminder whether the e-mail went or not, so a
+  passing mail-server failure dropped it without a trace. A failed send is now
+  retried after 1, 2, 4 and 8 minutes; after five tries, or a day past its time,
+  the reminder is completed and shows "E-mail not sent" in the reminder list, as
+  does one whose user has no e-mail address. Each reminder is saved as soon as it
+  is handled, so a crash halfway through no longer sends the earlier ones twice,
+  and the job no longer runs twice at once. The title and message are escaped in
+  the e-mail, and in-app reminders are no longer logged every minute.
+- **The dashboard's view totals match its daily chart.** The totals counted from
+  "now minus N days", which took in part of a day the chart has no bar for, and
+  a custom range longer than the chart's 366 days was still counted in full.
+  Both now cover the same whole UTC days. The shortest period is therefore
+  "Today" rather than "Last 24 hours".
+- **A reminder can no longer be saved without a time.** The update validator let
+  an unset time through, which was stored as 0001-01-01 and fired at once.
+  Changing a reminder's time also gives its e-mail a fresh set of attempts.
+
 ## [1.3.1] - 2026-10-27
 
 ### Fixed

@@ -120,6 +120,71 @@ public sealed class GetPageViewStatsQueryHandlerTests
     }
 
     [Fact]
+    public async Task The_totals_cover_exactly_the_days_the_chart_shows()
+    {
+        // Late on the day before a 7-day period starts: "now minus 7 days" used to
+        // reach back into that day, counting a view the chart had no bar for.
+        DateTime today = DateTime.UtcNow.Date;
+        using ApplicationDbContext db = CreateFreshDb();
+        db.PageViewHits.AddRange(
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddDays(-7).AddHours(23).AddMinutes(59) },
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddDays(-6) },
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddHours(1) });
+        await db.SaveChangesAsync();
+
+        Result<PageViewStatsResponse> result = await new GetPageViewStatsQueryHandler(db).Handle(
+            new GetPageViewStatsQuery(7), CancellationToken.None);
+
+        result.Value.TotalViews.ShouldBe(2);
+        result.Value.Daily.Sum(d => d.Views).ShouldBe(result.Value.TotalViews);
+        result.Value.Daily[0].Date.ShouldBe(today.AddDays(-6));
+    }
+
+    [Fact]
+    public async Task A_custom_range_counts_whole_days_whatever_times_it_is_given()
+    {
+        // Midnight to midnight still means both days, in full.
+        DateTime today = DateTime.UtcNow.Date;
+        using ApplicationDbContext db = CreateFreshDb();
+        db.PageViewHits.AddRange(
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddDays(-2).AddHours(1) },
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddDays(-1).AddHours(22) });
+        await db.SaveChangesAsync();
+
+        Result<PageViewStatsResponse> result = await new GetPageViewStatsQueryHandler(db).Handle(
+            new GetPageViewStatsQuery(7, today.AddDays(-2).AddHours(12), today.AddDays(-1)), CancellationToken.None);
+
+        result.Value.TotalViews.ShouldBe(2);
+        result.Value.Daily.Count.ShouldBe(2);
+        result.Value.Daily.Sum(d => d.Views).ShouldBe(2);
+    }
+
+    [Fact]
+    public async Task A_custom_range_longer_than_the_chart_is_counted_only_as_far_as_the_chart_goes()
+    {
+        DateTime today = DateTime.UtcNow.Date;
+        using ApplicationDbContext db = CreateFreshDb();
+        db.PageViewHits.AddRange(
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddDays(-500) },
+            new PageViewHit { Path = "/a", VisitorId = Guid.NewGuid(), ViewedAtUtc = today.AddDays(-10) });
+        await db.SaveChangesAsync();
+
+        Result<PageViewStatsResponse> result = await new GetPageViewStatsQueryHandler(db).Handle(
+            new GetPageViewStatsQuery(7, today.AddDays(-600), today), CancellationToken.None);
+
+        result.Value.Daily.Count.ShouldBe(366);
+        result.Value.TotalViews.ShouldBe(1);
+        result.Value.Daily.Sum(d => d.Views).ShouldBe(1);
+    }
+
+    private ApplicationDbContext CreateFreshDb() => new(
+        new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString("N"))
+            .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options,
+        new StatsTestUserContext());
+
+    [Fact]
     public async Task Empty_period_returns_zeroes_not_errors()
     {
         DbContextOptions<ApplicationDbContext> emptyOptions = new DbContextOptionsBuilder<ApplicationDbContext>()
