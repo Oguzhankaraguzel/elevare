@@ -658,7 +658,12 @@
         var hasFiles = false;
         var fields = {};
         data.forEach(function (value, key) {
-            if (typeof value === 'string') { fields[key] = value; return; }
+            // A checkbox group sends one entry per ticked box under the same name;
+            // keeping only the last one used to drop the rest without a word.
+            if (typeof value === 'string') {
+                fields[key] = Object.prototype.hasOwnProperty.call(fields, key) ? fields[key] + ', ' + value : value;
+                return;
+            }
             // A file input left empty still yields a File with no name; that is
             // not an attachment.
             if (value && value.name) hasFiles = true; else data.delete(key);
