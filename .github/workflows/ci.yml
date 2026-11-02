@@ -133,7 +133,16 @@ jobs:
             cd "${{ vars.DEPLOY_PATH }}"
             git fetch origin master
             git reset --hard origin/master
-            docker compose up -d --build
+            # The site waits for the CMS to report healthy. If it never does — once
+            # Docker itself stopped running the healthcheck until the server was
+            # rebooted — compose leaves the site stopped and every page answers 502.
+            # Start the site anyway, then fail the job so the deploy is looked into.
+            if ! docker compose up -d --build; then
+              docker compose up -d --no-deps web
+              docker compose ps
+              docker compose logs --tail 50 cms
+              exit 1
+            fi
             # Every build leaves its intermediate layers behind, and nothing removed
             # them: the server's 90 GB disk filled up after a day of deploys and took
             # the site down with it. The images in use stay; a day of build cache is

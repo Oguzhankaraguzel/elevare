@@ -6,6 +6,19 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-11-03
+
+### Fixed
+
+- **A deploy whose CMS is not reported healthy no longer leaves the site down.**
+  The site's container waits for the CMS's healthcheck, so when the check kept
+  failing the site was never started and every page answered 502, although the
+  CMS itself was working. The deploy now starts the site regardless, prints the
+  containers' state and the CMS's last log lines, and still fails so it gets
+  looked at.
+- The CMS gets five minutes, instead of the image's 90 seconds, to report
+  healthy after it starts.
+
 ## [1.3.4] - 2026-11-02
 
 ### Fixed
