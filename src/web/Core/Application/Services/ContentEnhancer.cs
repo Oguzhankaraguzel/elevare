@@ -53,6 +53,7 @@ public static partial class ContentEnhancer
             FillReadingTimes(document, languageCode);
             BlockTextLocalizer.Apply(document, languageCode);
             DeferHiddenSlides(document);
+            SealSearchTemplates(document);
             return document.Body?.InnerHtml ?? html;
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not OutOfMemoryException)
@@ -64,7 +65,41 @@ public static partial class ContentEnhancer
     private const string SlideClass = "el-slide";
 
     private static bool MayApply(string html) =>
-        BlockTextLocalizer.MayApply(html) || html.Contains(SlideClass, StringComparison.Ordinal);
+        BlockTextLocalizer.MayApply(html)
+        || html.Contains(SlideClass, StringComparison.Ordinal)
+        || html.Contains(SearchTemplatesClass, StringComparison.Ordinal);
+
+    private const string SearchTemplatesClass = "elevare-search-templates";
+
+    // Runs where it stands, before the search box's own script further down the
+    // page looks for the sample rows, and takes itself out again.
+    private const string RestoreSearchTemplatesScript =
+        "(function(s){var t=s.previousElementSibling;if(t&&t.content)t.replaceWith(t.content);s.remove()})(document.currentScript)";
+
+    /// <summary>
+    /// The search box keeps the rows it copies for each result — a sample link with
+    /// <c>href="#"</c> and an <c>&lt;h4&gt;</c> title — hidden in the page. Hidden
+    /// or not, they are in the HTML a crawler reads: the sample <c>&lt;h4&gt;</c> is
+    /// the first heading of every page with the search box in its menu, and its
+    /// <c>href="#"</c> a link that goes nowhere, on every page. Wrapped in a
+    /// <c>&lt;template&gt;</c> they are no part of the page, and a one-line script
+    /// right after puts them back for the box's script, which was saved with each
+    /// page and still looks for them in the document.
+    /// </summary>
+    private static void SealSearchTemplates(IDocument document)
+    {
+        foreach (IElement holder in document.QuerySelectorAll("." + SearchTemplatesClass).ToList())
+        {
+            if (holder.ParentElement is null || holder.Closest("template") is not null)
+                continue;
+            var template = (AngleSharp.Html.Dom.IHtmlTemplateElement)document.CreateElement("template");
+            holder.Replace(template);
+            template.Content.AppendChild(holder);
+            IElement restore = document.CreateElement("script");
+            restore.TextContent = RestoreSearchTemplatesScript;
+            template.After(restore);
+        }
+    }
     private const string DeferredSrc = "data-elevare-src";
     private const string DeferredSrcset = "data-elevare-srcset";
 

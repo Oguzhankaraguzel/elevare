@@ -211,6 +211,15 @@ public sealed class PageListingResolutionBehaviourTests
     }
 
     [Fact]
+    public async Task Without_a_default_tag_all_is_the_plain_listing_address()
+    {
+        // A bare "?tag=" would be a second address for the same list.
+        (IDocument html, _) = await ResolveAsync("tag=csharp");
+
+        html.QuerySelector("[data-elevare-tag-all]")!.GetAttribute("href").ShouldBe("/makaleler");
+    }
+
+    [Fact]
     public async Task Every_published_page_means_this_language_without_system_pages_or_the_listing_itself()
     {
         string block = Block("data-elevare-source=\"all\"").Replace("data-elevare-items-per-page=\"2\"", "data-elevare-items-per-page=\"50\"", StringComparison.Ordinal);
