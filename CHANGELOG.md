@@ -19,6 +19,13 @@ Notable changes to Elevare. The format follows
 - The CMS gets five minutes, instead of the image's 90 seconds, to report
   healthy after it starts.
 
+### Changed
+
+- **The sample text in the page-building blocks follows the page's language.**
+  The hero, features, call-to-action, testimonials, slider, FAQ and contact form
+  blocks were dropped in with Turkish text on every page; on a page in another
+  language their headings, buttons and labels now arrive in English.
+
 ## [1.3.4] - 2026-11-02
 
 ### Fixed
