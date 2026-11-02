@@ -1,4 +1,5 @@
-﻿using Application.Services;
+﻿using AngleSharp;
+using Application.Services;
 using SharedKernel.Content;
 using Shouldly;
 
@@ -171,5 +172,36 @@ public sealed class ContentEnhancerTests
         html.ShouldNotContain(" src=\"/b.jpg\"");
         // The held-back image is not the page's priority either.
         html[html.LastIndexOf("el-slide", StringComparison.Ordinal)..].ShouldNotContain("fetchpriority");
+    }
+    [Fact]
+    public async Task The_search_boxs_sample_rows_are_kept_out_of_the_page()
+    {
+        const string html =
+            "<header><div class=\"elevare-search-box\"><form><input name=\"q\"></form>"
+            + "<div class=\"elevare-search-templates\"><a href=\"#\" data-elevare-search-item-template>"
+            + "<h4 data-elevare-field=\"title\">Örnek</h4></a></div></div></header><main><h1>Sayfa</h1></main>";
+
+        string result = (await ContentEnhancer.EnhanceAsync(html, "tr", CancellationToken.None))!;
+
+        AngleSharp.Dom.IDocument doc = await BrowsingContext.New().OpenAsync(r => r.Content(result));
+        // What a crawler reads: no sample heading, no link that goes nowhere.
+        doc.QuerySelector("h4").ShouldBeNull();
+        doc.QuerySelector("a[href='#']").ShouldBeNull();
+        doc.QuerySelectorAll("h1").Length.ShouldBe(1);
+        // What the search box's script gets back once the page runs.
+        var template = (AngleSharp.Html.Dom.IHtmlTemplateElement)doc.QuerySelector("template")!;
+        template.Content.QuerySelector("[data-elevare-search-item-template] h4").ShouldNotBeNull();
+        template.NextElementSibling!.TagName.ShouldBe("SCRIPT");
+    }
+
+    [Fact]
+    public async Task Sample_rows_already_in_a_template_are_left_alone()
+    {
+        const string html = "<div class=\"elevare-search-box\"><template><div class=\"elevare-search-templates\"><h4>x</h4></div></template></div>";
+
+        string result = (await ContentEnhancer.EnhanceAsync(html, "tr", CancellationToken.None))!;
+
+        result.Split("<template>").Length.ShouldBe(2);
+        result.ShouldNotContain("<script>");
     }
 }

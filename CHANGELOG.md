@@ -6,6 +6,21 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.4] - 2026-11-02
+
+### Fixed
+
+- **The search box's sample rows are no longer part of every page.** The rows
+  the search box copies for its results — a sample link to "#" and an `<h4>`
+  title — sat hidden in the HTML of every page with the search box in its menu.
+  Crawlers read them anyway: the sample `<h4>` was the first heading of the page,
+  ahead of its `<h1>`, and the link went nowhere. The site now wraps them in a
+  `<template>` and puts them back for the search box's own script, so search
+  works as before and the pages saved with the old script need no re-saving.
+- **"All" in a listing's tag filter links to the listing itself.** It linked to
+  `?tag=`, a second address for the same page. The empty tag is kept only when
+  the block has a default tag, which it is there to clear.
+
 ## [1.3.3] - 2026-10-31
 
 ### Fixed

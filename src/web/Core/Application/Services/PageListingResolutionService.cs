@@ -229,7 +229,7 @@ public sealed class PageListingResolutionService(IPublicReadDbContext db, PageCa
             : null;
 
         ResolveSearch(marker, links, keys, texts, showSearch);
-        ResolveTagCloud(marker, tagCloud, tagSlug, links, keys, showTagFilter);
+        ResolveTagCloud(marker, tagCloud, tagSlug, defaultTag is not null, links, keys, showTagFilter);
         ResolveItems(marker, result.Items, new CardDefaults(layout, defaultImage, NullIfBlank(siteImage), request.LanguageCode), itemTagNames, facts);
         ResolvePagination(marker, result, links, keys, texts, paginationStyle, showPagination);
 
@@ -357,7 +357,7 @@ public sealed class PageListingResolutionService(IPublicReadDbContext db, PageCa
     // every element carrying that id, not just the first, so reassigning ids is
     // a safe way to "borrow" a look the user already designed for the other role.
     private static void ResolveTagCloud(
-        IElement marker, List<PublicTag> tags, string? activeSlug, ListingLinks links, ListingKeys keys, bool show)
+        IElement marker, List<PublicTag> tags, string? activeSlug, bool hasDefaultTag, ListingLinks links, ListingKeys keys, bool show)
     {
         IElement? container = marker.QuerySelector(".elevare-listing-tagcloud");
         if (container is null) return;
@@ -373,8 +373,10 @@ public sealed class PageListingResolutionService(IPublicReadDbContext db, PageCa
 
         if (allChip is not null)
         {
-            // An explicit empty tag, so a block's default tag does not come back.
-            allChip.SetAttribute("href", links.Href((keys.Tag, ""), (keys.Page, null)));
+            // An explicit empty tag only when the block has a default one, which would
+            // otherwise come back. Without one it is the plain listing address: a bare
+            // "?tag=" is a second address for the same page.
+            allChip.SetAttribute("href", links.Href((keys.Tag, hasDefaultTag ? "" : null), (keys.Page, null)));
             if (noFilterActive) allChip.SetAttribute("aria-current", "true");
             else if (inactiveLookId is not null) allChip.Id = inactiveLookId;
         }
