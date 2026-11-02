@@ -6,6 +6,26 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.5] - 2026-11-03
+
+### Fixed
+
+- **A deploy whose CMS is not reported healthy no longer leaves the site down.**
+  The site's container waits for the CMS's healthcheck, so when the check kept
+  failing the site was never started and every page answered 502, although the
+  CMS itself was working. The deploy now starts the site regardless, prints the
+  containers' state and the CMS's last log lines, and still fails so it gets
+  looked at.
+- The CMS gets five minutes, instead of the image's 90 seconds, to report
+  healthy after it starts.
+
+### Changed
+
+- **The sample text in the page-building blocks follows the page's language.**
+  The hero, features, call-to-action, testimonials, slider, FAQ and contact form
+  blocks were dropped in with Turkish text on every page; on a page in another
+  language their headings, buttons and labels now arrive in English.
+
 ## [1.3.4] - 2026-11-02
 
 ### Fixed

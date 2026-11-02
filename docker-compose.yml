@@ -67,6 +67,17 @@ services:
     build:
       context: .
       dockerfile: src/cms/Presentation/Wasm/Wasm/Dockerfile
+    # The image's own check gives the CMS 90 seconds to start, and the site waits
+    # for it to pass. A start that ran past that — about three minutes, right
+    # after a build had the server busy — left the CMS "unhealthy" while it was
+    # still starting, and the site was never started at all. Five minutes is
+    # room enough; a CMS that is really down still fails after it.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      start_period: 300s
+      retries: 6
     depends_on:
       db:
         condition: service_healthy

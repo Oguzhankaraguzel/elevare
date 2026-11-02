@@ -1,4 +1,4 @@
-﻿// ==========================================
+// ==========================================
 // ELEVARE UI KIT — Smart Blocks v2.1 (SEO & CWV Optimized)
 //
 // Architecture changes vs v1 & v2.0:
@@ -1179,8 +1179,8 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
     // 1. HERO SECTION (SEO Friendly Links)
     // ==================================================
     const heroBtn = (i) => i === 0
-        ? `<a href="#" style="padding:14px 32px;background-color:${BLUE};color:${ON_PRIMARY};text-decoration:none;border-radius:6px;font-weight:600;font-size:1.1rem;">Projeye Başlayın</a>`
-        : `<a href="#" style="padding:14px 32px;background:transparent;color:${BLUE};text-decoration:none;border-radius:6px;font-weight:600;font-size:1.1rem;border:2px solid ${BLUE};">Detayları İnceleyin</a>`;
+        ? `<a href="#" style="padding:14px 32px;background-color:${BLUE};color:${ON_PRIMARY};text-decoration:none;border-radius:6px;font-weight:600;font-size:1.1rem;">${CT('Projeye Başlayın', 'Get Started')}</a>`
+        : `<a href="#" style="padding:14px 32px;background:transparent;color:${BLUE};text-decoration:none;border-radius:6px;font-weight:600;font-size:1.1rem;border:2px solid ${BLUE};">${CT('Detayları İnceleyin', 'Learn More')}</a>`;
 
     smart({
         id: 'elevare-hero', label: 'Hero Section', icon: 'bi-layout-text-window-reverse',
@@ -1200,8 +1200,8 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         },
         template: (m) => `
             <div class="el-hero-inner" style="max-width:800px;margin:0 auto;text-align:${m.get('alignment')};">
-                <h1 style="font-size:3.5rem;font-weight:800;margin-bottom:24px;line-height:1.2;">Dijital Varlığınızı Bizimle Büyütün</h1>
-                <p style="font-size:1.25rem;color:${TEXT2};margin-bottom:40px;line-height:1.6;">Web sitenizi zahmetsizce yönetin ve ölçeklendirin. Yüksek performans ve esneklik için tasarlanmış yenilikçi mimari.</p>
+                <h1 style="font-size:3.5rem;font-weight:800;margin-bottom:24px;line-height:1.2;">${CT('Dijital Varlığınızı Bizimle Büyütün', 'Grow Your Digital Presence')}</h1>
+                <p style="font-size:1.25rem;color:${TEXT2};margin-bottom:40px;line-height:1.6;">${CT('Web sitenizi zahmetsizce yönetin ve ölçeklendirin. Yüksek performans ve esneklik için tasarlanmış yenilikçi mimari.', 'Effortlessly manage and scale your website. An innovative architecture built for performance and flexibility.')}</p>
                 <div class="el-hero-btns" style="display:flex;gap:16px;justify-content:${m.get('alignment') === 'center' ? 'center' : 'flex-start'};">${rep(m.get('btnCount'), heroBtn)}</div>
             </div>`
     });
@@ -1215,8 +1215,8 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
     const featCard = (i) => `
         <li style="flex:1;min-width:300px;padding:20px;">
             <div style="width:64px;height:64px;background-color:${FEAT_BGS[i % 6]};border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 24px;">${icon(FEAT_ICONS[i % 6], `font-size:2rem;color:${FEAT_COLORS[i % 6]};`)}</div>
-            <h3 style="font-size:1.5rem;font-weight:600;margin-bottom:16px;color:${DARK};">Öne Çıkan Özellik ${i + 1}</h3>
-            <p style="color:${MUTED};line-height:1.6;">Ürününüzün veya hizmetinizin temel faydasını burada vurgulayın. Ziyaretçileriniz için akılda kalıcı bir açıklama girin.</p>
+            <h3 style="font-size:1.5rem;font-weight:600;margin-bottom:16px;color:${DARK};">${CT('Öne Çıkan Özellik', 'Featured Feature')} ${i + 1}</h3>
+            <p style="color:${MUTED};line-height:1.6;">${CT('Ürününüzün veya hizmetinizin temel faydasını burada vurgulayın. Ziyaretçileriniz için akılda kalıcı bir açıklama girin.', 'Highlight a key benefit of your product or service here. Write a memorable description for your visitors.')}</p>
         </li>`;
 
     smart({
@@ -1227,8 +1227,8 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         template: (m) => `
             <div style="max-width:1200px;margin:0 auto;">
                 <div style="text-align:center;margin-bottom:60px;">
-                    <h2 style="font-size:2.5rem;font-weight:700;color:${DARK};margin-bottom:16px;">Neden Bizi Seçmelisiniz?</h2>
-                    <p style="font-size:1.1rem;color:${MUTED};max-width:600px;margin:0 auto;">İşletmenizi çevrimiçi ortamda yönetmek için ihtiyacınız olan her şey tek bir platformda.</p>
+                    <h2 style="font-size:2.5rem;font-weight:700;color:${DARK};margin-bottom:16px;">${CT('Neden Bizi Seçmelisiniz?', 'Why Choose Us?')}</h2>
+                    <p style="font-size:1.1rem;color:${MUTED};max-width:600px;margin:0 auto;">${CT('İşletmenizi çevrimiçi ortamda yönetmek için ihtiyacınız olan her şey tek bir platformda.', 'Everything you need to run your business online, in one platform.')}</p>
                 </div>
                 <ul class="el-feat-grid" style="display:flex;flex-wrap:wrap;gap:40px;text-align:center;list-style:none;margin:0;padding:0;">${rep(m.get('cardCount'), featCard)}</ul>
             </div>`
@@ -1318,9 +1318,9 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         },
         template: () => `
             <div style="max-width:800px;margin:0 auto;text-align:center;">
-                <h2 class="el-cta-title" style="font-size:2.5rem;font-weight:700;margin-bottom:20px;color:#ffffff;">İşletmenizi Zirveye Taşımaya Hazır mısınız?</h2>
-                <p class="el-cta-desc" style="font-size:1.1rem;color:#bfdbfe;margin-bottom:32px;">Dijital varlıklarını dönüştüren binlerce mutlu müşterimiz arasına katılın.</p>
-                <a href="#" class="el-cta-btn" style="display:inline-block;padding:14px 32px;background-color:#ffffff;color:${NAVY};text-decoration:none;border-radius:6px;font-weight:600;font-size:1.1rem;">Ücretsiz Denemeye Başlayın</a>
+                <h2 class="el-cta-title" style="font-size:2.5rem;font-weight:700;margin-bottom:20px;color:#ffffff;">${CT('İşletmenizi Zirveye Taşımaya Hazır mısınız?', 'Ready to Take Your Business to the Top?')}</h2>
+                <p class="el-cta-desc" style="font-size:1.1rem;color:#bfdbfe;margin-bottom:32px;">${CT('Dijital varlıklarını dönüştüren binlerce mutlu müşterimiz arasına katılın.', 'Join thousands of happy customers transforming their digital presence.')}</p>
+                <a href="#" class="el-cta-btn" style="display:inline-block;padding:14px 32px;background-color:#ffffff;color:${NAVY};text-decoration:none;border-radius:6px;font-weight:600;font-size:1.1rem;">${CT('Ücretsiz Denemeye Başlayın', 'Start Your Free Trial')}</a>
             </div>`
     });
 
@@ -1333,12 +1333,12 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
             <div style="color:#fbbf24;margin-bottom:16px;font-size:1.25rem;" aria-label="5 üzerinden 5 yıldız">
                 ${rep(5, () => icon('star-fill'))}
             </div>
-            <blockquote style="margin:0 0 24px;color:${TEXT2};font-size:1.1rem;font-style:italic;line-height:1.6;">Şimdiye kadar kullandığımız en iyi platform. Öğrenme süreci sıfır ve performansı gerçekten olağanüstü.</blockquote>
+            <blockquote style="margin:0 0 24px;color:${TEXT2};font-size:1.1rem;font-style:italic;line-height:1.6;">${CT('Şimdiye kadar kullandığımız en iyi platform. Öğrenme süreci sıfır ve performansı gerçekten olağanüstü.', 'The best platform we have ever used. Zero learning curve and truly outstanding performance.')}</blockquote>
             <figcaption style="display:flex;align-items:center;gap:16px;">
                 <img src="${ph(96, 96, 'Fotoğraf')}" alt="Müşteri ${i + 1} Profil Fotoğrafı" width="48" height="48" loading="${m.get('imageLoading') || 'lazy'}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;">
                 <div>
-                    <h4 style="margin:0;color:${DARK};font-size:1rem;font-weight:600;">Müşteri ${i + 1}</h4>
-                    <span style="color:${MUTED};font-size:0.875rem;">Şirket / Ünvan</span>
+                    <h4 style="margin:0;color:${DARK};font-size:1rem;font-weight:600;">${CT('Müşteri', 'Customer')} ${i + 1}</h4>
+                    <span style="color:${MUTED};font-size:0.875rem;">${CT('Şirket / Ünvan', 'Company / Title')}</span>
                 </div>
             </figcaption>
         </figure>
@@ -1356,7 +1356,7 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         template: (m) => `
             <div style="max-width:1200px;margin:0 auto;">
                 <div style="text-align:center;margin-bottom:60px;">
-                    <h2 style="font-size:2.5rem;font-weight:700;color:${DARK};margin-bottom:16px;">Müşterilerimiz Ne Diyor?</h2>
+                    <h2 style="font-size:2.5rem;font-weight:700;color:${DARK};margin-bottom:16px;">${CT('Müşterilerimiz Ne Diyor?', 'What Our Customers Say')}</h2>
                 </div>
                 <ul class="el-testi-grid" style="display:flex;flex-wrap:wrap;gap:30px;list-style:none;margin:0;padding:0;">${rep(m.get('cardCount'), (i) => testiCard(i, m))}</ul>
             </div>`
@@ -1390,7 +1390,7 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         return `<div class="el-slide" style="width:100%;flex-shrink:0;position:relative;height:500px;background:#000;">
             <img src="${ph(1200, h, 'Slayt görseli')}" alt="Slayt ${i + 1} Görseli" style="width:100%;height:100%;object-fit:cover;opacity:0.6;">
             <div class="el-slide-caption" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none;">
-                <span style="color:#fff;font-size:2rem;font-weight:700;text-align:center;padding:0 24px;">Slayt ${i + 1} Başlığı</span>
+                <span style="color:#fff;font-size:2rem;font-weight:700;text-align:center;padding:0 24px;">${CT('Slayt', 'Slide')} ${i + 1} ${CT('Başlığı', 'Title')}</span>
             </div>
         </div>`;
     };
@@ -1465,8 +1465,8 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
     // it cannot tell search engines the page answers questions it never asked.
     const faqItem = (i) => `
         <details data-elevare-faq-item style="margin-bottom:16px;border:1px solid ${BORDER};border-radius:8px;padding:16px;">
-            <summary data-elevare-faq-question style="font-weight:600;cursor:pointer;">Sıkça Sorulan Soru ${i + 1}?</summary>
-            <p data-elevare-faq-answer style="margin-top:8px;color:${TEXT2};">Sorunun cevabını buraya girin. Kullanıcılarınıza yardımcı olacak net ve doyurucu bilgiler verin.</p>
+            <summary data-elevare-faq-question style="font-weight:600;cursor:pointer;">${CT('Sıkça Sorulan Soru', 'Frequently Asked Question')} ${i + 1}?</summary>
+            <p data-elevare-faq-answer style="margin-top:8px;color:${TEXT2};">${CT('Sorunun cevabını buraya girin. Kullanıcılarınıza yardımcı olacak net ve doyurucu bilgiler verin.', 'Enter the answer here. Give your users clear, helpful information.')}</p>
         </details>`;
 
     smart({
@@ -1477,7 +1477,7 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         repeats: [{ trait: 'itemCount', container: '.el-faq-list', min: 1, max: 10, item: (m, i) => faqItem(i) }],
         template: (m) => `
             <div style="max-width:800px;margin:0 auto;">
-                <h2 style="font-size:2.5rem;font-weight:700;color:${DARK};text-align:center;margin-bottom:40px;">Sıkça Sorulan Sorular</h2>
+                <h2 style="font-size:2.5rem;font-weight:700;color:${DARK};text-align:center;margin-bottom:40px;">${CT('Sıkça Sorulan Sorular', 'Frequently Asked Questions')}</h2>
                 <div class="el-faq-list">${rep(m.get('itemCount'), faqItem)}</div>
             </div>`
     });
@@ -1684,10 +1684,10 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
         id: 'elevare-contact', label: 'Contact Form', icon: 'bi-envelope',
         style: { padding: '80px 20px', 'background-color': WHITE },
         traits: [
-            { type: 'text', name: 'nameLabel', label: 'Name Label', value: 'Adınız Soyadınız', changeProp: 1 },
-            { type: 'text', name: 'emailLabel', label: 'Email Label', value: 'E-posta Adresiniz', changeProp: 1 },
-            { type: 'text', name: 'messageLabel', label: 'Message Label', value: 'Mesajınız', changeProp: 1 },
-            { type: 'text', name: 'buttonText', label: 'Button Text', value: 'Mesaj Gönder', changeProp: 1 }
+            { type: 'text', name: 'nameLabel', label: 'Name Label', value: CT('Adınız Soyadınız', 'Full name'), changeProp: 1 },
+            { type: 'text', name: 'emailLabel', label: 'Email Label', value: CT('E-posta Adresiniz', 'Email address'), changeProp: 1 },
+            { type: 'text', name: 'messageLabel', label: 'Message Label', value: CT('Mesajınız', 'Message'), changeProp: 1 },
+            { type: 'text', name: 'buttonText', label: 'Button Text', value: CT('Mesaj Gönder', 'Send Message'), changeProp: 1 }
         ],
         on: {
             nameLabel: (m, v) => { const t = m.find('.el-c-lbl-name')[0]; if (t && v != null) t.components(v); },
@@ -1699,7 +1699,7 @@ window.grapesElevareBlocks = function (editor, opts = {}) {
             const u = uid();
             return `
             <div style="max-width:600px;margin:0 auto;">
-                <h2 style="text-align:center;margin-bottom:32px;">Bize Ulaşın</h2>
+                <h2 style="text-align:center;margin-bottom:32px;">${CT('Bize Ulaşın', 'Contact Us')}</h2>
                 <form data-elevare-managed-form data-elevare-form-name="İletişim Formu" style="display:flex;flex-direction:column;gap:16px;">
                     <div style="display:flex;flex-direction:column;gap:6px;">
                         <label class="el-c-lbl-name" for="${u}-name" style="font-weight:600;font-size:0.9rem;color:${DARK};">${m.get('nameLabel')}</label>
