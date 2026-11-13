@@ -6,6 +6,17 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.6] - 2026-11-13
+
+### Fixed
+
+- **A reminder's time can be picked again.** The date and time chosen in the
+  reminder form's picker snapped back to the previous value as soon as the
+  picker closed. Blazor sends the field's value with seconds, and the form
+  expected it without them, so the value failed to parse and was thrown away.
+  The form now uses Blazor's own format for the field, and a new reminder's
+  default time is a whole minute.
+
 ## [1.3.5] - 2026-11-03
 
 ### Fixed
