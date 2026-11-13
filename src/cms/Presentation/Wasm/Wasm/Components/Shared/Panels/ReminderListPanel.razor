@@ -102,8 +102,10 @@ else
         <div class="form-row cols-2">
             <div class="form-group">
                 <label class="cms-label">@L["UserReminders_FormRemindAt"] <span style="color:var(--cms-danger)">*</span></label>
+                @* No @bind:format: Blazor sends a datetime-local value with seconds
+                   (it appends ":00"), so a format without them failed to parse and
+                   the picked time snapped back to the old value. *@
                 <input @bind="_form.RemindAt"
-                       @bind:format="yyyy-MM-ddTHH:mm"
                        type="datetime-local"
                        class="cms-input" />
             </div>
@@ -266,7 +268,9 @@ else
     private void OpenCreate()
     {
         _editId = null;
-        DateTime defaultLocal = ToLocalTime(DateTime.UtcNow.AddHours(1));
+        // Whole minutes, so the picker doesn't show a seconds field.
+        DateTime inAnHour = DateTime.UtcNow.AddHours(1);
+        DateTime defaultLocal = ToLocalTime(inAnHour.AddTicks(-(inAnHour.Ticks % TimeSpan.TicksPerMinute)));
         _form = new ReminderFormModel
         {
             RemindAt = defaultLocal
