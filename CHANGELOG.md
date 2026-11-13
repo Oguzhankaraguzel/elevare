@@ -18,6 +18,11 @@ Notable changes to Elevare. The format follows
   only (`REDIS_BIND` changes it); the CMS still reaches Redis on the compose
   network.
 
+### Changed
+
+- CI builds with the .NET 9 SDK it installs. Without a `global.json` the runner
+  used its own newer SDK, whose Razor compiler failed the Sonar checks.
+
 ## [1.3.6] - 2026-11-13
 
 ### Fixed
