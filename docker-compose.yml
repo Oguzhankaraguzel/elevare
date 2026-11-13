@@ -55,8 +55,13 @@ services:
     # than an infrastructure project.
     restart: unless-stopped
     logging: *default-logging
+    # Published on the loopback address only. Docker's published ports bypass a
+    # host firewall such as UFW, and this Redis has no password: on a public
+    # server it was reached from the internet and someone set one, which locked
+    # the CMS out of its own cache. The CMS reaches it as cache:6379 on the
+    # compose network; the host port is only for local tools.
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "${REDIS_BIND:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s

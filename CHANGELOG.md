@@ -6,6 +6,18 @@ Notable changes to Elevare. The format follows
 
 ## [Unreleased]
 
+## [1.3.7] - 2026-11-13
+
+### Security
+
+- **Redis is no longer reachable from outside the server.** The compose file
+  published Redis on every address, and Docker's published ports bypass a host
+  firewall such as UFW. With no password set, anyone on the internet could
+  reach it; on a live server someone set a password, and the CMS could no
+  longer use its cache or sessions. The port is now published on 127.0.0.1
+  only (`REDIS_BIND` changes it); the CMS still reaches Redis on the compose
+  network.
+
 ## [1.3.6] - 2026-11-13
 
 ### Fixed
